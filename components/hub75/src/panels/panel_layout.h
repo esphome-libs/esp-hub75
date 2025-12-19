@@ -113,7 +113,7 @@ class PanelLayoutRemap {
         break;
       }
 
-      case Hub75Hub75PanelLayout::TOP_LEFT_DOWN_ZIGZAG: {
+      case Hub75PanelLayout::TOP_LEFT_DOWN_ZIGZAG: {
         // Zigzag: Start top-left, all panels upright (no Y-inversion)
         // All rows use the same formula (no alternating)
         c.x = ((rows - (row + 1)) * virtual_res_x) + c.x;
@@ -121,7 +121,7 @@ class PanelLayoutRemap {
         break;
       }
 
-      case Hub75Hub75PanelLayout::TOP_RIGHT_DOWN_ZIGZAG: {
+      case Hub75PanelLayout::TOP_RIGHT_DOWN_ZIGZAG: {
         // Zigzag: Start top-right, all panels upright (no Y-inversion)
         // All rows use the same formula (no alternating)
         c.x = ((rows - (row + 1)) * virtual_res_x) + c.x;
@@ -129,7 +129,7 @@ class PanelLayoutRemap {
         break;
       }
 
-      case Hub75Hub75PanelLayout::BOTTOM_LEFT_UP_ZIGZAG: {
+      case Hub75PanelLayout::BOTTOM_LEFT_UP_ZIGZAG: {
         // Zigzag: Start bottom-left, all panels upright (no Y-inversion)
         // All rows use the same formula (no alternating)
         int inverted_row = rows - 1 - row;
@@ -138,7 +138,7 @@ class PanelLayoutRemap {
         break;
       }
 
-      case Hub75Hub75PanelLayout::BOTTOM_RIGHT_UP_ZIGZAG: {
+      case Hub75PanelLayout::BOTTOM_RIGHT_UP_ZIGZAG: {
         // Zigzag: Start bottom-right, all panels upright (no Y-inversion)
         // All rows use the same formula (no alternating)
         int inverted_row = rows - 1 - row;
