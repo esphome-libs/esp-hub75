@@ -32,26 +32,26 @@ static inline Hub75Config getMenuConfigSettings() {
 
   // Scan wiring
 #if defined(CONFIG_HUB75_WIRING_STANDARD)
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 #elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_16PX)
-  config.scan_wiring = ScanPattern::FOUR_SCAN_16PX_HIGH;
+  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_16PX_HIGH;
 #elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_32PX)
-  config.scan_wiring = ScanPattern::FOUR_SCAN_32PX_HIGH;
+  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_32PX_HIGH;
 #elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_64PX)
-  config.scan_wiring = ScanPattern::FOUR_SCAN_64PX_HIGH;
+  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_64PX_HIGH;
 #endif
 
   // Shift driver
 #if defined(CONFIG_HUB75_DRIVER_GENERIC)
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
 #elif defined(CONFIG_HUB75_DRIVER_FM6126A)
-  config.shift_driver = ShiftDriver::FM6126A;
+  config.shift_driver = Hub75ShiftDriver::FM6126A;
 #elif defined(CONFIG_HUB75_DRIVER_FM6124)
-  config.shift_driver = ShiftDriver::FM6124;
+  config.shift_driver = Hub75ShiftDriver::FM6124;
 #elif defined(CONFIG_HUB75_DRIVER_MBI5124)
-  config.shift_driver = ShiftDriver::MBI5124;
+  config.shift_driver = Hub75ShiftDriver::MBI5124;
 #elif defined(CONFIG_HUB75_DRIVER_DP3246)
-  config.shift_driver = ShiftDriver::DP3246;
+  config.shift_driver = Hub75ShiftDriver::DP3246;
 #endif
 
   // Pin configuration (board preset or custom)
@@ -169,23 +169,23 @@ static inline Hub75Config getMenuConfigSettings() {
   config.layout_cols = CONFIG_HUB75_LAYOUT_COLS;
 
 #if defined(CONFIG_HUB75_LAYOUT_HORIZONTAL)
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 #elif defined(CONFIG_HUB75_LAYOUT_TOP_LEFT_DOWN)
-  config.layout = PanelLayout::TOP_LEFT_DOWN;
+  config.layout = Hub75PanelLayout::TOP_LEFT_DOWN;
 #elif defined(CONFIG_HUB75_LAYOUT_TOP_RIGHT_DOWN)
-  config.layout = PanelLayout::TOP_RIGHT_DOWN;
+  config.layout = Hub75PanelLayout::TOP_RIGHT_DOWN;
 #elif defined(CONFIG_HUB75_LAYOUT_BOTTOM_LEFT_UP)
-  config.layout = PanelLayout::BOTTOM_LEFT_UP;
+  config.layout = Hub75PanelLayout::BOTTOM_LEFT_UP;
 #elif defined(CONFIG_HUB75_LAYOUT_BOTTOM_RIGHT_UP)
-  config.layout = PanelLayout::BOTTOM_RIGHT_UP;
+  config.layout = Hub75PanelLayout::BOTTOM_RIGHT_UP;
 #elif defined(CONFIG_HUB75_LAYOUT_TOP_LEFT_DOWN_ZIGZAG)
-  config.layout = PanelLayout::TOP_LEFT_DOWN_ZIGZAG;
+  config.layout = Hub75PanelLayout::TOP_LEFT_DOWN_ZIGZAG;
 #elif defined(CONFIG_HUB75_LAYOUT_TOP_RIGHT_DOWN_ZIGZAG)
-  config.layout = PanelLayout::TOP_RIGHT_DOWN_ZIGZAG;
+  config.layout = Hub75PanelLayout::TOP_RIGHT_DOWN_ZIGZAG;
 #elif defined(CONFIG_HUB75_LAYOUT_BOTTOM_LEFT_UP_ZIGZAG)
-  config.layout = PanelLayout::BOTTOM_LEFT_UP_ZIGZAG;
+  config.layout = Hub75PanelLayout::BOTTOM_LEFT_UP_ZIGZAG;
 #elif defined(CONFIG_HUB75_LAYOUT_BOTTOM_RIGHT_UP_ZIGZAG)
-  config.layout = PanelLayout::BOTTOM_RIGHT_UP_ZIGZAG;
+  config.layout = Hub75PanelLayout::BOTTOM_RIGHT_UP_ZIGZAG;
 #endif
 
   // Bit depth & gamma: Configure via menuconfig
@@ -215,12 +215,6 @@ static inline Hub75Config getMenuConfigSettings() {
   config.double_buffer = true;
 #else
   config.double_buffer = false;
-#endif
-
-#ifdef CONFIG_HUB75_TEMPORAL_DITHER
-  config.temporal_dither = true;
-#else
-  config.temporal_dither = false;
 #endif
 
 #ifdef CONFIG_HUB75_CLK_PHASE_INVERTED

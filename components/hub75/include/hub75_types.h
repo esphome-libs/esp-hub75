@@ -31,14 +31,6 @@ enum class Hub75ColorOrder {
 };
 
 /**
- * @brief Data bus width mode
- */
-enum class Hub75BusWidth {
-  BIT_8 = 8,    // 8-bit mode (6 data pins: R1/G1/B1/R2/G2/B2)
-  BIT_16 = 16,  // 16-bit mode (8 data pins: R1/G1/B1/R2/G2/B2 + 2 more)
-};
-
-/**
  * @brief Output clock speed options
  *
  * Valid speeds that divide evenly from 160MHz base clock.
@@ -67,7 +59,7 @@ enum class Hub75ScanPattern {
  * This determines coordinate remapping for panels with non-standard internal wiring.
  * Most panels use STANDARD_TWO_SCAN (no remapping needed).
  */
-enum class ScanPattern {
+enum class Hub75ScanWiring {
   STANDARD_TWO_SCAN,    // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
   FOUR_SCAN_16PX_HIGH,  // Four-scan 1/4 scan, 16-pixel high panels
   FOUR_SCAN_32PX_HIGH,  // Four-scan 1/8 scan, 32-pixel high panels
@@ -80,7 +72,7 @@ enum class ScanPattern {
  * Determines initialization sequence for LED driver chips.
  * Most panels use GENERIC (no special initialization).
  */
-enum class ShiftDriver {
+enum class Hub75ShiftDriver {
   GENERIC,   // Standard shift register (no special init)
   FM6126A,   // FM6126A / ICN2038S (very common in modern panels!)
   ICN2038S,  // Alias for FM6126A
@@ -98,7 +90,7 @@ enum class ShiftDriver {
  * Non-ZIGZAG variants: Serpentine wiring (alternate rows upside down, saves cable)
  * ZIGZAG variants: All panels upright (requires longer cables between rows)
  */
-enum class PanelLayout {
+enum class Hub75PanelLayout {
   HORIZONTAL,             // Simple left-to-right chain (single row)
   TOP_LEFT_DOWN,          // Serpentine: start top-left, rows top→bottom, left→right
   TOP_RIGHT_DOWN,         // Serpentine: start top-right, rows top→bottom, right→left
@@ -155,10 +147,10 @@ struct Hub75Config {
   Hub75ScanPattern scan_pattern = Hub75ScanPattern::SCAN_1_32;
 
   // Scan wiring pattern (coordinate remapping for non-standard panels)
-  ScanPattern scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
+  Hub75ScanWiring scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 
   // Shift driver chip type (determines initialization sequence)
-  ShiftDriver shift_driver = ShiftDriver::GENERIC;
+  Hub75ShiftDriver shift_driver = Hub75ShiftDriver::GENERIC;
 
   // ========================================
   // Multi-Panel Physical Layout
@@ -171,7 +163,7 @@ struct Hub75Config {
   uint16_t layout_cols = 1;
 
   // How panels are physically chained/wired
-  PanelLayout layout = PanelLayout::HORIZONTAL;
+  Hub75PanelLayout layout = Hub75PanelLayout::HORIZONTAL;
 
   // Virtual display dimensions (computed):
   //   virtual_width = panel_width * layout_cols
@@ -201,7 +193,6 @@ struct Hub75Config {
   // ========================================
 
   bool double_buffer = false;       // Enable double buffering (default: false)
-  bool temporal_dither = false;     // Enable temporal dithering (default: false)
   bool clk_phase_inverted = false;  // Invert clock phase (default: false, needed for MBI5124)
 
   // ========================================
@@ -210,6 +201,15 @@ struct Hub75Config {
 
   uint8_t brightness = 128;  // Initial brightness 0-255 (default: 128)
 };
+
+// ============================================================================
+// Deprecated type aliases for backwards compatibility
+// These will emit compiler warnings when used, guiding users to new names
+// ============================================================================
+
+using ScanPattern [[deprecated("Use Hub75ScanWiring instead")]] = Hub75ScanWiring;
+using ShiftDriver [[deprecated("Use Hub75ShiftDriver instead")]] = Hub75ShiftDriver;
+using PanelLayout [[deprecated("Use Hub75PanelLayout instead")]] = Hub75PanelLayout;
 
 #ifdef __cplusplus
 }

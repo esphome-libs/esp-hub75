@@ -363,7 +363,7 @@ config.panel_width = 64;
 config.panel_height = 64;
 config.layout_rows = 2;
 config.layout_cols = 3;
-config.layout = PanelLayout::TOP_LEFT_DOWN;  // Serpentine
+config.layout = Hub75PanelLayout::TOP_LEFT_DOWN;  // Serpentine
 
 Hub75Driver driver(config);
 driver.begin();

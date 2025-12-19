@@ -129,8 +129,8 @@ class GdmaDma : public PlatformDma {
   const uint16_t dma_width_;       // DMA buffer width: panel_width * layout_rows * layout_cols (row-major chaining)
 
   // Coordinate transformation (immutable, cached from config)
-  const ScanPattern scan_wiring_;
-  const PanelLayout layout_;
+  const Hub75ScanWiring scan_wiring_;
+  const Hub75PanelLayout layout_;
 
   // Optimization flags (immutable, for branch prediction)
   const bool needs_scan_remap_;

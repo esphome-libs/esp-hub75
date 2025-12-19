@@ -89,24 +89,24 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
   uint16_t pixels_per_row = config.panel_width * config.layout_cols;
 
   switch (config.shift_driver) {
-    case ShiftDriver::GENERIC:
+    case Hub75ShiftDriver::GENERIC:
       // No initialization needed
       return ESP_OK;
 
-    case ShiftDriver::FM6126A:
-    case ShiftDriver::ICN2038S:
+    case Hub75ShiftDriver::FM6126A:
+    case Hub75ShiftDriver::ICN2038S:
       fm6126a_init(config.pins, pixels_per_row);
       return ESP_OK;
 
-    case ShiftDriver::DP3246:
+    case Hub75ShiftDriver::DP3246:
       dp3246_init(config.pins, pixels_per_row);
       return ESP_OK;
 
-    case ShiftDriver::MBI5124:
+    case Hub75ShiftDriver::MBI5124:
       ESP_LOGI("DriverInit", "MBI5124: Ensure clk_phase_inverted is set to true");
       return ESP_OK;
 
-    case ShiftDriver::FM6124:
+    case Hub75ShiftDriver::FM6124:
       ESP_LOGW("DriverInit", "FM6124 initialization not yet implemented");
       return ESP_ERR_NOT_SUPPORTED;
 

@@ -29,13 +29,13 @@ static inline Hub75Config getDefaultConfig_ESP32() {
   config.panel_width = 64;
   config.panel_height = 64;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_32;  // 64 rows = 1/32 scan
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
 
   // Single panel layout
   config.layout_rows = 1;
   config.layout_cols = 1;
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // Data pins - Upper half (R1/G1/B1)
   config.pins.r1 = 25;
@@ -66,7 +66,6 @@ static inline Hub75Config getDefaultConfig_ESP32() {
 
   // Features
   config.double_buffer = false;
-  config.temporal_dither = false;
   config.gamma_mode = Hub75GammaMode::CIE1931;
   config.brightness = 255;
 
@@ -83,11 +82,11 @@ static inline Hub75Config getDefaultConfig_32x32() {
   config.panel_width = 32;
   config.panel_height = 32;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_16;  // 32 rows = 1/16 scan
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
   config.layout_cols = 1;
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // Same pin mapping as 64x64, but E pin not needed
   config.pins.r1 = 25;
@@ -118,11 +117,11 @@ static inline Hub75Config getDefaultConfig_ESP32S3() {
   config.panel_width = 64;
   config.panel_height = 64;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
   config.layout_cols = 1;
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // ESP32-S3 can use different pins (avoid 26-37 for flash/PSRAM)
   config.pins.r1 = 1;
@@ -142,7 +141,6 @@ static inline Hub75Config getDefaultConfig_ESP32S3() {
 
   // Enable advanced features (S3 has more RAM)
   config.double_buffer = true;
-  config.temporal_dither = true;
   // Bit depth: Configure via menuconfig (default 8-bit, can set to 10/12)
 
   return config;
@@ -158,11 +156,11 @@ static inline Hub75Config getDefaultConfig_ESP32C6() {
   config.panel_width = 64;
   config.panel_height = 64;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
   config.layout_cols = 1;
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // ESP32-C6 PARLIO pins - check datasheet for valid PARLIO GPIO groups
   config.pins.r1 = 0;
@@ -198,13 +196,13 @@ static inline Hub75Config getDefaultConfig_Chained() {
   config.panel_width = 64;
   config.panel_height = 64;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
 
   // Chained layout (2 panels side-by-side = 128x64 virtual)
   config.layout_rows = 1;
   config.layout_cols = 2;  // 2 panels horizontally
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // Same physical pin mapping as single panel
   config.pins.r1 = 25;
@@ -236,13 +234,13 @@ static inline Hub75Config getUserConfig_ESP32S3_Dual64x64() {
   config.panel_width = 64;
   config.panel_height = 64;
   config.scan_pattern = Hub75ScanPattern::SCAN_1_32;  // 64 rows = 1/32 scan
-  config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;
-  config.shift_driver = ShiftDriver::GENERIC;
+  config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
+  config.shift_driver = Hub75ShiftDriver::GENERIC;
 
   // Chained layout (2 panels side-by-side)
   config.layout_rows = 1;
   config.layout_cols = 2;  // 2 panels chained horizontally
-  config.layout = PanelLayout::HORIZONTAL;
+  config.layout = Hub75PanelLayout::HORIZONTAL;
 
   // User's exact pin mapping (ESP32-S3)
   config.pins.r1 = 1;
@@ -269,7 +267,6 @@ static inline Hub75Config getUserConfig_ESP32S3_Dual64x64() {
   // Bit depth & gamma: Configure via menuconfig (default: 8-bit, CIE1931)
   config.min_refresh_rate = 60;
   config.double_buffer = false;  // Start simple, enable if needed
-  config.temporal_dither = false;
   config.brightness = 255;
 
   return config;

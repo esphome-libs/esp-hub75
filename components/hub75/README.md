@@ -65,8 +65,8 @@ void app_main() {
     config.panel_width = 64;
     config.panel_height = 64;
     config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-    config.scan_wiring = ScanPattern::STANDARD_TWO_SCAN;  // Most panels
-    config.shift_driver = ShiftDriver::FM6126A;            // Or GENERIC
+    config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;  // Most panels
+    config.shift_driver = Hub75ShiftDriver::FM6126A;          // Or GENERIC
 
     // Set GPIO pins
     config.pins.r1 = 25;
@@ -172,13 +172,13 @@ Hub75Config config{};
 config.panel_width = 64;
 config.panel_height = 64;
 config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-config.shift_driver = ShiftDriver::FM6126A;  // Try this if GENERIC doesn't work
+config.shift_driver = Hub75ShiftDriver::FM6126A;  // Try this if GENERIC doesn't work
 ```
 
 **Two panels side-by-side:**
 ```cpp
 config.layout_cols = 2;  // Two panels horizontally
-config.layout = PanelLayout::HORIZONTAL;
+config.layout = Hub75PanelLayout::HORIZONTAL;
 // Virtual display: 128×64
 ```
 
@@ -207,7 +207,7 @@ config.panel_width = 64;
 config.panel_height = 64;
 config.layout_rows = 2;    // Two rows vertically
 config.layout_cols = 3;    // Three panels per row
-config.layout = PanelLayout::TOP_LEFT_DOWN;  // Serpentine wiring
+config.layout = Hub75PanelLayout::TOP_LEFT_DOWN;  // Serpentine wiring
 // Virtual display: 192×128 pixels
 ```
 
@@ -229,7 +229,7 @@ Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4 with platform-specific optimiza
 ## Troubleshooting
 
 **Common quick fixes:**
-- **Black screen** → Try `shift_driver = ShiftDriver::FM6126A` (most modern panels)
+- **Black screen** → Try `shift_driver = Hub75ShiftDriver::FM6126A` (most modern panels)
 - **Wrong colors** → Check R1/G1/B1/R2/G2/B2 pin mapping
 - **Scrambled display** → Verify `scan_pattern` matches panel height (64px = SCAN_1_32)
 

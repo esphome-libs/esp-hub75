@@ -263,9 +263,9 @@ Bit 31      30                 20   19              10   9             0
 
 ---
 
-## Temporal Dithering
+## Temporal Dithering (Not Yet Implemented)
 
-### What is Temporal Dithering?
+> **Note**: Temporal dithering is planned but not yet implemented. This section describes the intended functionality for future reference.
 
 **Technique**: Alternate between two close color values across frames to simulate intermediate colors.
 
@@ -274,37 +274,12 @@ Bit 31      30                 20   19              10   9             0
 - Frame 2: RGB(101, 101, 101)
 - Perceived: RGB(100, 100, 100) average
 
-### When to Enable
-
-**Enable when**:
-- Using 8-bit depth and see banding in gradients
-- Need smoother transitions without increasing bit depth
-- Acceptable slight flicker at low refresh rates
-
-**Disable when**:
-- Using 10/12-bit depth (already smooth)
-- High-speed capture (camera sees dither pattern)
-- Refresh rate < 60 Hz (dither becomes visible)
-
-### Configuration
-
-**Menuconfig**: `Component config → HUB75 → Enable temporal dithering`
-
-**Code**:
-```cpp
-Hub75Config config = {};
-config.temporal_dither = true;
-```
-
-**CPU cost**: Slight overhead during pixel writes (~5-10% slower).
-
 ---
 
 ## Best Practices
 
 ### For General Use
 - Use **8-bit depth** with **CIE 1931 gamma** (default)
-- Enable **temporal dithering** if gradients show banding
 - Target **60 Hz refresh** for smooth visuals
 
 ### For High Quality
@@ -314,7 +289,6 @@ config.temporal_dither = true;
 
 ### For Maximum Performance
 - Use **8-bit depth**
-- Disable temporal dithering
 - Target **120+ Hz refresh** for fast animations
 
 ### For Color Accuracy

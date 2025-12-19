@@ -394,8 +394,7 @@ Not a bug: PSRAM requires cache synchronization
 
 **Solution**:
 1. Increase bit depth (8→10 or 10→12)
-2. Enable temporal dithering
-3. Verify CIE 1931 gamma is enabled (always on by default)
+2. Verify CIE 1931 gamma is enabled (default)
 
 ### Colors Look Wrong
 

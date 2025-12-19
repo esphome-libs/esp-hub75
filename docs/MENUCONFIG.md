@@ -24,12 +24,11 @@ Or: **HUB75 Display Configuration** (panel/pin configuration)
 - **Memory impact**: Doubles framebuffer memory (e.g., 64×64 = +16 KB)
 - **Use when**: Frequent full-screen updates or complex animations
 
-### HUB75_TEMPORAL_DITHER
+### HUB75_TEMPORAL_DITHER (Not Yet Implemented)
 - **Type**: bool
 - **Default**: No
-- **Description**: Improves color depth perception through temporal dithering
-- **CPU impact**: Slight overhead during pixel writes
-- **Use when**: Using lower bit depths (8-bit) and want smoother gradients
+- **Description**: Planned feature - currently has no effect
+- **Status**: Not yet implemented
 
 ### HUB75_IRAM_OPTIMIZATION
 - **Type**: bool
@@ -296,7 +295,6 @@ HUB75_LAYOUT_TOP_LEFT_DOWN = y  # Serpentine
 ```
 HUB75_BIT_DEPTH_10 = y
 HUB75_DOUBLE_BUFFER = y
-HUB75_TEMPORAL_DITHER = y
 HUB75_MIN_REFRESH_RATE = 90
 ```
 

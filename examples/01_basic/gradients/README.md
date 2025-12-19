@@ -97,7 +97,7 @@ float brightness = 1.0 - (distance / max_distance);
 
 ### Visible Banding in Gradients
 - Increase bit depth to 10 or 12-bit in menuconfig
-- Enable temporal dithering: `Component config` → `HUB75` → `Enable temporal dithering`
+- Verify CIE 1931 gamma is enabled (default)
 
 ### Choppy Animation
 - Refresh rate too low - driver is already optimizing BCM timing

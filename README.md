@@ -23,7 +23,6 @@ High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ES
 - ✅ **Double buffering** - Tear-free animation with `flipBuffer()`
 - ✅ **Ghosting prevention** - LSB bit plane previous row address technique
 - ✅ **PSRAM support** - ESP32-P4 PARLIO uses PSRAM for large buffers (frees internal SRAM)
-- ⏳ **Temporal dithering** - Planned
 
 ## Installation
 
@@ -189,7 +188,7 @@ For architecture, platform specifics, and advanced topics, see [docs/](docs/):
 This driver combines best practices from:
 
 - [mrcodetastic/ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) - Native CIE LUTs, GDMA, multi-platform
-- [JuPfu/hub75](https://github.com/JuPfu/hub75) - Temporal dithering, dual-mode brightness
+- [JuPfu/hub75](https://github.com/JuPfu/hub75) - Dual-mode brightness inspiration
 - [liebman/esp-hub75](https://github.com/liebman/esp-hub75) - Rust patterns, IRAM optimization
 - [Espressif PARLIO Example](https://github.com/espressif/esp-idf/tree/v5.4.1/examples/peripherals/parlio) - ESP32-C6/P4 PARLIO
 
