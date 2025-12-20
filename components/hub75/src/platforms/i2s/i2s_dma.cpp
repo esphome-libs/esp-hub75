@@ -68,15 +68,14 @@ constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
 // ESP32 I2S TX FIFO position adjustment
 // In 16-bit parallel mode with tx_fifo_mod=1, the FIFO outputs 16-bit words in swapped pairs.
 // The FIFO reads 32-bit words from memory and outputs them as two 16-bit chunks in reversed order.
-// This compensates by storing pixels at swapped positions in the buffer.
-// ESP32-S2 has different FIFO ordering and doesn't need this adjustment.
-#if defined(CONFIG_IDF_TARGET_ESP32)
-HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) { return (x & 1U) ? (x - 1) : (x + 1); }
-#else
+// XOR with 1 swaps odd/even pairs (0↔1, 2↔3, etc.). ESP32-S2 doesn't need adjustment.
 HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
-  return x;  // No adjustment for ESP32-S2
-}
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  return x ^ 1;
+#else
+  return x;
 #endif
+}
 
 // ============================================================================
 // Constructor / Destructor
@@ -621,12 +620,13 @@ void I2sDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       }
 
       // Fill all pixels with control bits (RGB=0, row address, OE=HIGH)
+      // FIFO adjustment required on ESP32 for correct output ordering
       for (uint16_t x = 0; x < dma_width_; x++) {
-        buf[x] = (addr_for_buffer << ADDR_SHIFT) | (1 << OE_BIT);
+        buf[fifo_adjust_x(x)] = (addr_for_buffer << ADDR_SHIFT) | (1 << OE_BIT);
       }
 
-      // Set LAT bit on last pixel
-      buf[dma_width_ - 1] |= (1 << LAT_BIT);
+      // Set LAT bit on last pixel (with FIFO adjustment for ESP32)
+      buf[fifo_adjust_x(dma_width_ - 1)] |= (1 << LAT_BIT);
     }
   }
 }
@@ -658,9 +658,9 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
     for (int row = 0; row < num_rows_; row++) {
       for (int bit = 0; bit < bit_depth_; bit++) {
         uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
-        // Blank all pixels: set OE bit HIGH
+        // Blank all pixels: set OE bit HIGH (with FIFO adjustment for ESP32)
         for (int x = 0; x < dma_width_; x++) {
-          buf[x] |= (1 << OE_BIT);
+          buf[fifo_adjust_x(x)] |= (1 << OE_BIT);
         }
       }
     }
@@ -694,30 +694,31 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
       const int x_max = (dma_width_ + display_pixels) / 2;
 
       // Set OE bits: LOW in center (display), HIGH elsewhere (blanked)
+      // FIFO adjustment required on ESP32 for correct output ordering
       for (int x = 0; x < dma_width_; x++) {
         if (x >= x_min && x < x_max) {
           // Enable display: clear OE bit
-          buf[x] &= OE_CLEAR_MASK;
+          buf[fifo_adjust_x(x)] &= OE_CLEAR_MASK;
         } else {
           // Keep blanked: set OE bit
-          buf[x] |= (1 << OE_BIT);
+          buf[fifo_adjust_x(x)] |= (1 << OE_BIT);
         }
       }
 
       // CRITICAL: Latch blanking to prevent ghosting
       const int last_pixel = dma_width_ - 1;
 
-      // Blank LAT pixel itself
-      buf[last_pixel] |= (1 << OE_BIT);
+      // Blank LAT pixel itself (with FIFO adjustment)
+      buf[fifo_adjust_x(last_pixel)] |= (1 << OE_BIT);
 
-      // Blank latch_blanking pixels BEFORE LAT
+      // Blank latch_blanking pixels BEFORE LAT (with FIFO adjustment)
       for (int i = 1; i <= latch_blanking && (last_pixel - i) >= 0; i++) {
-        buf[last_pixel - i] |= (1 << OE_BIT);
+        buf[fifo_adjust_x(last_pixel - i)] |= (1 << OE_BIT);
       }
 
-      // Blank latch_blanking pixels at START of buffer
+      // Blank latch_blanking pixels at START of buffer (with FIFO adjustment)
       for (int i = 0; i < latch_blanking && i < dma_width_; i++) {
-        buf[i] |= (1 << OE_BIT);
+        buf[fifo_adjust_x(i)] |= (1 << OE_BIT);
       }
     }
   }
@@ -959,13 +960,14 @@ void I2sDma::clear() {
   }
 
   // Clear RGB bits in all buffers (preserve control bits)
+  // FIFO adjustment required on ESP32 for correct output ordering
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
       uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
 
       for (uint16_t x = 0; x < dma_width_; x++) {
         // Clear RGB bits, preserve control bits
-        buf[x] &= ~RGB_MASK;
+        buf[fifo_adjust_x(x)] &= ~RGB_MASK;
       }
     }
   }
