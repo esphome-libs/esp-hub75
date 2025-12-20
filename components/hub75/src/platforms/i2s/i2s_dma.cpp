@@ -620,12 +620,11 @@ void I2sDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       }
 
       // Fill all pixels with control bits (RGB=0, row address, OE=HIGH)
-      // FIFO adjustment required on ESP32 for correct output ordering
       for (uint16_t x = 0; x < dma_width_; x++) {
         buf[fifo_adjust_x(x)] = (addr_for_buffer << ADDR_SHIFT) | (1 << OE_BIT);
       }
 
-      // Set LAT bit on last pixel (with FIFO adjustment for ESP32)
+      // Set LAT bit on last pixel
       buf[fifo_adjust_x(dma_width_ - 1)] |= (1 << LAT_BIT);
     }
   }
@@ -658,7 +657,7 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
     for (int row = 0; row < num_rows_; row++) {
       for (int bit = 0; bit < bit_depth_; bit++) {
         uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
-        // Blank all pixels: set OE bit HIGH (with FIFO adjustment for ESP32)
+        // Blank all pixels: set OE bit HIGH
         for (int x = 0; x < dma_width_; x++) {
           buf[fifo_adjust_x(x)] |= (1 << OE_BIT);
         }
@@ -694,7 +693,6 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
       const int x_max = (dma_width_ + display_pixels) / 2;
 
       // Set OE bits: LOW in center (display), HIGH elsewhere (blanked)
-      // FIFO adjustment required on ESP32 for correct output ordering
       for (int x = 0; x < dma_width_; x++) {
         if (x >= x_min && x < x_max) {
           // Enable display: clear OE bit
@@ -708,15 +706,15 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
       // CRITICAL: Latch blanking to prevent ghosting
       const int last_pixel = dma_width_ - 1;
 
-      // Blank LAT pixel itself (with FIFO adjustment)
+      // Blank LAT pixel itself
       buf[fifo_adjust_x(last_pixel)] |= (1 << OE_BIT);
 
-      // Blank latch_blanking pixels BEFORE LAT (with FIFO adjustment)
+      // Blank latch_blanking pixels BEFORE LAT
       for (int i = 1; i <= latch_blanking && (last_pixel - i) >= 0; i++) {
         buf[fifo_adjust_x(last_pixel - i)] |= (1 << OE_BIT);
       }
 
-      // Blank latch_blanking pixels at START of buffer (with FIFO adjustment)
+      // Blank latch_blanking pixels at START of buffer
       for (int i = 0; i < latch_blanking && i < dma_width_; i++) {
         buf[fifo_adjust_x(i)] |= (1 << OE_BIT);
       }
@@ -901,7 +899,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       auto transformed =
           transform_coordinate(px, py, needs_layout_remap_, needs_scan_remap_, layout_, scan_wiring_, panel_width_,
                                panel_height_, layout_rows_, layout_cols_, dma_width_, num_rows_);
-      px = fifo_adjust_x(transformed.x);  // Apply I2S FIFO position adjustment for ESP32
+      px = fifo_adjust_x(transformed.x);
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;
 
@@ -960,7 +958,6 @@ void I2sDma::clear() {
   }
 
   // Clear RGB bits in all buffers (preserve control bits)
-  // FIFO adjustment required on ESP32 for correct output ordering
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
       uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
