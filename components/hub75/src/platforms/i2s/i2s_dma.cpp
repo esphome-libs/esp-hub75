@@ -979,29 +979,27 @@ void I2sDma::flip_buffer() {
     return;
   }
 
-  // Swap indices (front ↔ active)
+  // Seamless descriptor chain redirection (no stop/start!)
+  //
+  // DMA is continuously traversing a circular descriptor chain (front buffer).
+  // To switch buffers without stopping DMA:
+  //   1. Redirect old front's last descriptor to new buffer's first descriptor
+  //   2. Restore new buffer's circularity (so it loops forever when active)
+  //   3. DMA seamlessly transitions at next frame boundary
+  //
+  // This matches the GDMA implementation and reference library approach.
+  // No stop, no start, no visual glitch!
+
+  // Step 1: Redirect current front's last descriptor to new buffer's first descriptor
+  descriptors_[front_idx_][descriptor_count_ - 1].qe.stqe_next = &descriptors_[active_idx_][0];
+
+  // Step 2: Restore new buffer's circularity (for when it becomes old front later)
+  descriptors_[active_idx_][descriptor_count_ - 1].qe.stqe_next = &descriptors_[active_idx_][0];
+
+  // Step 3: Swap indices (after descriptor manipulation)
   std::swap(front_idx_, active_idx_);
 
-  // Stop current DMA transfer
-  i2s_dev_->conf.tx_start = 0;
-  i2s_dev_->out_link.stop = 1;
-  i2s_dev_->out_link.start = 0;
-
-  // Wait for stop to complete
-  esp_rom_delay_us(100);
-
-  // Configure DMA burst mode
-  i2s_dev_->lc_conf.val = I2S_OUT_DATA_BURST_EN | I2S_OUTDSCR_BURST_EN;
-
-  // Set address of new front buffer's descriptor chain
-  i2s_dev_->out_link.addr = (uint32_t) &descriptors_[front_idx_][0];
-
-  // Start DMA with new chain
-  i2s_dev_->out_link.stop = 0;
-  i2s_dev_->out_link.start = 1;
-
-  // Start I2S transmission with new buffer
-  i2s_dev_->conf.tx_start = 1;
+  // DMA seamlessly transitions at next frame boundary - no interruption!
 }
 
 // ============================================================================
