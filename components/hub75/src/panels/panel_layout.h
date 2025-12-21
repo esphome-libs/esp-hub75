@@ -160,16 +160,17 @@ class PanelLayoutRemap {
 };
 
 // ============================================================================
-// Compile-Time Validation
+// Compile-Time Validation (ESP-IDF 5.x only - requires consteval/GCC 9+)
 // ============================================================================
 
+#if ESP_IDF_VERSION_MAJOR >= 5
 namespace {  // Anonymous namespace for compile-time validation
 
 // Helper: Check if two coordinates are equal
-constexpr bool coords_equal(Coords a, Coords b) { return (a.x == b.x) && (a.y == b.y); }
+consteval bool coords_equal(Coords a, Coords b) { return (a.x == b.x) && (a.y == b.y); }
 
 // Test HORIZONTAL layout (identity transform)
-constexpr bool test_horizontal_identity() {
+consteval bool test_horizontal_identity() {
   constexpr Coords input = {32, 16};
   constexpr Coords output = PanelLayoutRemap::remap(input, Hub75PanelLayout::HORIZONTAL, 64, 32, 1, 1);
   return coords_equal(output, input);
@@ -177,7 +178,7 @@ constexpr bool test_horizontal_identity() {
 
 // Test TOP_LEFT_DOWN serpentine (2x2 grid)
 // Even rows: reversed X, inverted Y | Odd rows: normal X, normal Y
-constexpr bool test_top_left_down_2x2() {
+consteval bool test_top_left_down_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -200,7 +201,7 @@ constexpr bool test_top_left_down_2x2() {
 
 // Test TOP_RIGHT_DOWN serpentine (2x2 grid)
 // Odd rows: reversed X, inverted Y | Even rows: normal X, normal Y
-constexpr bool test_top_right_down_2x2() {
+consteval bool test_top_right_down_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -223,7 +224,7 @@ constexpr bool test_top_right_down_2x2() {
 
 // Test BOTTOM_LEFT_UP serpentine (2x2 grid)
 // Odd inverted rows: normal X, normal Y | Even inverted rows: reversed X, inverted Y
-constexpr bool test_bottom_left_up_2x2() {
+consteval bool test_bottom_left_up_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -246,7 +247,7 @@ constexpr bool test_bottom_left_up_2x2() {
 
 // Test BOTTOM_RIGHT_UP serpentine (2x2 grid)
 // Even inverted rows: normal X, normal Y | Odd inverted rows: reversed X, inverted Y
-constexpr bool test_bottom_right_up_2x2() {
+consteval bool test_bottom_right_up_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -269,7 +270,7 @@ constexpr bool test_bottom_right_up_2x2() {
 
 // Test TOP_LEFT_DOWN_ZIGZAG (2x2 grid)
 // All rows: x = ((rows - (row + 1)) * virtual_res_x) + x
-constexpr bool test_top_left_down_zigzag_2x2() {
+consteval bool test_top_left_down_zigzag_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -292,7 +293,7 @@ constexpr bool test_top_left_down_zigzag_2x2() {
 
 // Test TOP_RIGHT_DOWN_ZIGZAG (2x2 grid)
 // All rows: same formula as TOP_LEFT_DOWN_ZIGZAG
-constexpr bool test_top_right_down_zigzag_2x2() {
+consteval bool test_top_right_down_zigzag_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -312,7 +313,7 @@ constexpr bool test_top_right_down_zigzag_2x2() {
 
 // Test BOTTOM_LEFT_UP_ZIGZAG (2x2 grid)
 // All rows: inverted_row, then same formula
-constexpr bool test_bottom_left_up_zigzag_2x2() {
+consteval bool test_bottom_left_up_zigzag_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -335,7 +336,7 @@ constexpr bool test_bottom_left_up_zigzag_2x2() {
 
 // Test BOTTOM_RIGHT_UP_ZIGZAG (2x2 grid)
 // All rows: same formula as BOTTOM_LEFT_UP_ZIGZAG
-constexpr bool test_bottom_right_up_zigzag_2x2() {
+consteval bool test_bottom_right_up_zigzag_2x2() {
   constexpr uint16_t panel_w = 64, panel_h = 32;
   constexpr uint16_t rows = 2, cols = 2;
 
@@ -358,7 +359,7 @@ constexpr bool test_bottom_right_up_zigzag_2x2() {
 // ============================================================================
 
 // Test BOTTOM_RIGHT_UP vertical stack (would have caught the original bug!)
-constexpr bool test_bottom_right_up_vertical_2x1() {
+consteval bool test_bottom_right_up_vertical_2x1() {
   constexpr uint16_t panel_w = 64, panel_h = 64;
   constexpr uint16_t rows = 2, cols = 1;
   constexpr uint16_t dma_width = panel_w * rows * cols;  // 128
@@ -378,7 +379,7 @@ constexpr bool test_bottom_right_up_vertical_2x1() {
 }
 
 // Test TOP_LEFT_DOWN vertical stack
-constexpr bool test_top_left_down_vertical_2x1() {
+consteval bool test_top_left_down_vertical_2x1() {
   constexpr uint16_t panel_w = 64, panel_h = 64;
   constexpr uint16_t rows = 2, cols = 1;
   constexpr uint16_t dma_width = panel_w * rows * cols;  // 128
@@ -394,7 +395,7 @@ constexpr bool test_top_left_down_vertical_2x1() {
 }
 
 // Test TOP_RIGHT_DOWN vertical stack
-constexpr bool test_top_right_down_vertical_2x1() {
+consteval bool test_top_right_down_vertical_2x1() {
   constexpr uint16_t panel_w = 64, panel_h = 64;
   constexpr uint16_t rows = 2, cols = 1;
   constexpr uint16_t dma_width = panel_w * rows * cols;
@@ -411,7 +412,7 @@ constexpr bool test_top_right_down_vertical_2x1() {
 }
 
 // Test BOTTOM_LEFT_UP vertical stack
-constexpr bool test_bottom_left_up_vertical_2x1() {
+consteval bool test_bottom_left_up_vertical_2x1() {
   constexpr uint16_t panel_w = 64, panel_h = 64;
   constexpr uint16_t rows = 2, cols = 1;
   constexpr uint16_t dma_width = panel_w * rows * cols;
@@ -445,5 +446,6 @@ static_assert(test_top_right_down_vertical_2x1(), "TOP_RIGHT_DOWN vertical stack
 static_assert(test_bottom_left_up_vertical_2x1(), "BOTTOM_LEFT_UP vertical stack exceeds DMA buffer bounds");
 
 }  // namespace
+#endif  // ESP_IDF_VERSION_MAJOR >= 5
 
 }  // namespace hub75

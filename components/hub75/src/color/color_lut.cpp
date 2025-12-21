@@ -6,15 +6,17 @@
 
 #include "color_lut.h"
 #include <cstddef>
+#include <esp_idf_version.h>
 
 // ============================================================================
-// Compile-Time Validation
+// Compile-Time Validation (ESP-IDF 5.x only - requires consteval/GCC 9+)
 // ============================================================================
 
+#if ESP_IDF_VERSION_MAJOR >= 5
 namespace {
 
 // Validate LUT monotonicity (gamma curves should be non-decreasing)
-constexpr bool validate_lut_monotonic() {
+consteval bool validate_lut_monotonic() {
   for (size_t i = 1; i < 256; ++i) {
     if (hub75::LUT[i] < hub75::LUT[i - 1]) {
       return false;
@@ -24,7 +26,7 @@ constexpr bool validate_lut_monotonic() {
 }
 
 // Validate LUT bounds (values don't exceed bit depth max)
-constexpr bool validate_lut_bounds() {
+consteval bool validate_lut_bounds() {
   constexpr uint16_t max_val = (1 << HUB75_BIT_DEPTH) - 1;
   for (size_t i = 0; i < 256; ++i) {
     if (hub75::LUT[i] > max_val) {
@@ -35,7 +37,7 @@ constexpr bool validate_lut_bounds() {
 }
 
 // Validate endpoints (black=0, white=max)
-constexpr bool validate_lut_endpoints() {
+consteval bool validate_lut_endpoints() {
   constexpr uint16_t max_val = (1 << HUB75_BIT_DEPTH) - 1;
   return (hub75::LUT[0] == 0) && (hub75::LUT[255] == max_val);
 }
@@ -46,3 +48,4 @@ static_assert(validate_lut_bounds(), "LUT values exceed bit depth max");
 static_assert(validate_lut_endpoints(), "LUT endpoints incorrect (should be 0 and max)");
 
 }  // namespace
+#endif  // ESP_IDF_VERSION_MAJOR >= 5

@@ -84,5 +84,5 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 )
 
 # Require C++20 for [[likely]]/[[unlikely]] and other modern features
-# Note: Using constexpr instead of consteval for GCC 8.x compatibility (ESP-IDF 4.4)
+# Note: consteval validation is skipped on ESP-IDF 4.x (GCC 8.x) via version guards
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_20)
