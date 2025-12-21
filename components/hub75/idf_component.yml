@@ -32,5 +32,27 @@ tags:
   - dma
   - rgb
 
+# TODO: When dropping ESP-IDF 4.4 support, replace with: files: { use_gitignore: true }
 files:
-  use_gitignore: true
+  exclude:
+    - "build/**"
+    - "dist/**"
+    - "*.o"
+    - "*.a"
+    - "*.so"
+    - "*.lib"
+    - "sdkconfig"
+    - "sdkconfig.old"
+    - "managed_components/**"
+    - "dependencies.lock"
+    - "*.elf"
+    - "*.bin"
+    - "*.map"
+    - ".vscode/**"
+    - ".idea/**"
+    - "*.swp"
+    - "*.swo"
+    - "*~"
+    - ".DS_Store"
+    - "Thumbs.db"
+    - "docs/_build/**"
