@@ -14,7 +14,7 @@
 namespace {
 
 // Validate LUT monotonicity (gamma curves should be non-decreasing)
-consteval bool validate_lut_monotonic() {
+constexpr bool validate_lut_monotonic() {
   for (size_t i = 1; i < 256; ++i) {
     if (hub75::LUT[i] < hub75::LUT[i - 1]) {
       return false;
@@ -24,7 +24,7 @@ consteval bool validate_lut_monotonic() {
 }
 
 // Validate LUT bounds (values don't exceed bit depth max)
-consteval bool validate_lut_bounds() {
+constexpr bool validate_lut_bounds() {
   constexpr uint16_t max_val = (1 << HUB75_BIT_DEPTH) - 1;
   for (size_t i = 0; i < 256; ++i) {
     if (hub75::LUT[i] > max_val) {
@@ -35,7 +35,7 @@ consteval bool validate_lut_bounds() {
 }
 
 // Validate endpoints (black=0, white=max)
-consteval bool validate_lut_endpoints() {
+constexpr bool validate_lut_endpoints() {
   constexpr uint16_t max_val = (1 << HUB75_BIT_DEPTH) - 1;
   return (hub75::LUT[0] == 0) && (hub75::LUT[255] == max_val);
 }

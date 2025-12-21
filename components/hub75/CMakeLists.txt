@@ -2,13 +2,14 @@
 # CMakeLists.txt for ESP-IDF component
 
 # Build REQUIRES list conditionally (esp_mm only exists in ESP-IDF 5.x for P4/C6)
+# Use IDF_TARGET (CMake variable) not CONFIG_IDF_TARGET_* (Kconfig, not yet available)
 set(HUB75_REQUIRES
     driver
     esp_timer
     esp_hw_support
     freertos
 )
-if(CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32C6)
+if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
     list(APPEND HUB75_REQUIRES esp_mm)
 endif()
 
@@ -82,5 +83,6 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LOG_LOCAL_LEVEL=ESP_LOG_DEBUG
 )
 
-# Require C++20 for [[likely]]/[[unlikely]], consteval, and other modern features
+# Require C++20 for [[likely]]/[[unlikely]] and other modern features
+# Note: Using constexpr instead of consteval for GCC 8.x compatibility (ESP-IDF 4.4)
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_20)

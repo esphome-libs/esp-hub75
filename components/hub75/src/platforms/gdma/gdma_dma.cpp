@@ -1058,35 +1058,35 @@ void GdmaDma::calculate_bcm_timings() {
 namespace {
 
 // Validate BCM calculations produce exact expected counts
-consteval bool test_bcm_12bit_transition0() {
+constexpr bool test_bcm_12bit_transition0() {
   // Worst case: 12-bit depth, transition=0
   // 12 + (1+2+4+8+16+32+64+128+256+512+1024) = 12 + 2047 = 2059
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(12, 0);
   return transmissions == 2059;
 }
 
-consteval bool test_bcm_10bit_transition0() {
+constexpr bool test_bcm_10bit_transition0() {
   // 10-bit depth, transition=0
   // 10 + (1+2+4+8+16+32+64+128+256) = 10 + 511 = 521
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(10, 0);
   return transmissions == 521;
 }
 
-consteval bool test_bcm_8bit_transition0() {
+constexpr bool test_bcm_8bit_transition0() {
   // 8-bit depth, transition=0
   // 8 + (1+2+4+8+16+32+64) = 8 + 127 = 135
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 0);
   return transmissions == 135;
 }
 
-consteval bool test_bcm_8bit_transition1() {
+constexpr bool test_bcm_8bit_transition1() {
   // 8-bit, transition=1: bits 0-1 shown 1× each, bits 2-7 get BCM weighting
   // 8 + (1+2+4+8+16+32) = 8 + 63 = 71
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 1);
   return transmissions == 71;
 }
 
-consteval bool test_bcm_8bit_transition2() {
+constexpr bool test_bcm_8bit_transition2() {
   // 8-bit, transition=2: bits 0-2 shown 1× each, bits 3-7 get BCM weighting
   // 8 + (1+2+4+8+16) = 8 + 31 = 39
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 2);
