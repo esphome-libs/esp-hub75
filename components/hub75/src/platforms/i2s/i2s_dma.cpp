@@ -7,6 +7,7 @@
 // Self-contained I2S+DMA with BCM, following GDMA architecture
 
 #include <sdkconfig.h>
+#include <esp_idf_version.h>
 
 // Only compile for ESP32 and ESP32-S2
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
@@ -21,7 +22,12 @@
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <esp_rom_gpio.h>
+// Header location changed in ESP-IDF 5.0
+#if (ESP_IDF_VERSION_MAJOR >= 5)
 #include <esp_private/periph_ctrl.h>
+#else
+#include <driver/periph_ctrl.h>
+#endif
 #include <soc/gpio_sig_map.h>
 #include <soc/i2s_periph.h>
 #include <esp_heap_caps.h>

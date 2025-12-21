@@ -21,7 +21,7 @@ targets:
 
 dependencies:
   idf:
-    version: ">=5.4.0"
+    version: ">=4.4.0"
   # All other dependencies (driver, esp_timer, freertos) are part of ESP-IDF core
 
 tags:
