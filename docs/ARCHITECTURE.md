@@ -264,18 +264,41 @@ Functions marked with `HUB75_IRAM` (wraps `IRAM_ATTR`) are placed in IRAM to avo
 
 **CPU Role**: None during refresh (except when updating pixels in framebuffer)
 
+### Coordinate Transform Pipeline
+
+When drawing pixels, coordinates pass through multiple transform stages:
+
+```
+1. User coordinates (x, y)
+   ↓
+2. Rotation transform (first!) - 0°, 90°, 180°, 270°
+   ↓
+3. Panel layout remap - Multi-panel grid → DMA chain position
+   ↓
+4. Scan pattern remap - Four-scan coordinate adjustment
+   ↓
+5. Physical DMA buffer coordinates
+```
+
+**Rotation is applied FIRST** before any panel layout or scan pattern remapping. This means:
+- User always works in rotated coordinate space
+- Panel layout handles the physical panel chain
+- For 90°/270° rotation, `get_width()` and `get_height()` return swapped values
+
 ### Pixel Update Flow
 
 ```
 1. Application: driver.set_pixel(x, y, r, g, b)
    ↓
-2. Convert RGB888 → native format (with gamma LUT)
+2. Apply coordinate transforms (rotation → layout → scan)
    ↓
-3. Write to framebuffer[y][x]
+3. Convert RGB888 → native format (with gamma LUT)
    ↓
-4. Copy framebuffer row → all 8 bit-plane buffers for that row
+4. Write to framebuffer[y][x]
    ↓
-5. Hardware DMA automatically picks up changes in next refresh cycle
+5. Copy framebuffer row → all 8 bit-plane buffers for that row
+   ↓
+6. Hardware DMA automatically picks up changes in next refresh cycle
 ```
 
 **Latency**: Changes visible within 1-2 refresh cycles (~8-16ms at 60-120 Hz)

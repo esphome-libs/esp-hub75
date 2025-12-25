@@ -309,6 +309,30 @@ menu "HUB75 RGB LED Matrix Driver"
 
                 Lower brightness reduces power consumption and heat.
 
+        choice HUB75_ROTATION
+            prompt "Display Rotation"
+            default HUB75_ROTATE_0
+            help
+                Display rotation angle (clockwise).
+
+                For 90° and 270° rotations, get_width() and get_height()
+                return swapped values compared to physical panel dimensions.
+
+                Can be changed at runtime via driver.set_rotation().
+
+            config HUB75_ROTATE_0
+                bool "0° (No Rotation)"
+
+            config HUB75_ROTATE_90
+                bool "90° Clockwise"
+
+            config HUB75_ROTATE_180
+                bool "180°"
+
+            config HUB75_ROTATE_270
+                bool "270° Clockwise (90° Counter-Clockwise)"
+        endchoice
+
     endmenu
 
     # ========================================

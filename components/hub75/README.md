@@ -10,6 +10,7 @@ ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP3
 - Multi-platform support: GDMA (S3), I2S (ESP32/S2), PARLIO (P4/C6)
 - CIE 1931 gamma correction with native bit-depth LUTs (6-12 bit)
 - Multi-panel layouts with serpentine and zigzag chaining
+- Display rotation (0°, 90°, 180°, 270°) - runtime configurable
 - Double buffering for tear-free animation
 - Multiple pixel formats: RGB888, RGB888_32, RGB565
 
@@ -135,6 +136,21 @@ When double buffering is enabled, drawing operations (`clear()`, `set_pixel()`, 
 
 Double buffering doubles memory usage but enables tear-free animation. PARLIO uses ~5× more memory than GDMA/I2S, but allocates from PSRAM (typically 8-16 MB available) rather than scarce internal SRAM (~500 KB total). Larger panels scale linearly: 128×128 uses ~4× memory (PARLIO: ~1.1 MB, GDMA: ~228 KB).
 
+### Rotation
+
+- `void set_rotation(Hub75Rotation rotation)` - Set display rotation (0°, 90°, 180°, 270° clockwise)
+- `Hub75Rotation get_rotation()` - Get current rotation
+
+**Available rotations:**
+- `Hub75Rotation::ROTATE_0` - No rotation (default)
+- `Hub75Rotation::ROTATE_90` - 90° clockwise
+- `Hub75Rotation::ROTATE_180` - 180°
+- `Hub75Rotation::ROTATE_270` - 270° clockwise (90° counter-clockwise)
+
+For 90° and 270° rotations, `get_width()` and `get_height()` return swapped values.
+
+**Note:** Rotation changes take effect immediately. Content is NOT automatically rotated - the coordinate mapping changes. Clear and redraw after changing rotation if needed.
+
 ### Brightness & Color Control
 
 - `void set_brightness(uint8_t brightness)` - Set display brightness (0-255)
@@ -158,9 +174,11 @@ Configure via:
 
 ### Information
 
-- `uint16_t get_width()` - Get display width in pixels (panel_width × layout_cols)
-- `uint16_t get_height()` - Get display height in pixels (panel_height × layout_rows)
+- `uint16_t get_width()` - Get display width in pixels (accounts for rotation)
+- `uint16_t get_height()` - Get display height in pixels (accounts for rotation)
 - `bool is_running()` - Check if refresh loop is active
+
+**Note:** For 90° and 270° rotations, `get_width()` and `get_height()` return swapped values compared to the physical panel dimensions.
 
 ## Configuration Options
 
@@ -188,6 +206,13 @@ config.layout = Hub75PanelLayout::HORIZONTAL;
 // (idf.py menuconfig → HUB75 → Panel Settings → Bit Depth)
 config.double_buffer = true;   // Tear-free updates
 config.min_refresh_rate = 90;  // Smoother for cameras
+```
+
+**Rotated display (portrait mode):**
+```cpp
+config.rotation = Hub75Rotation::ROTATE_90;  // 90° clockwise
+// For 64×64 panel: get_width()=64, get_height()=64 (same for square)
+// For 64×32 panel: get_width()=32, get_height()=64 (swapped!)
 ```
 
 **Bit Depth Configuration:**

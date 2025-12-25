@@ -16,6 +16,7 @@ High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ES
   - Serpentine: Alternate rows upside down (saves cable length)
   - Zigzag: All panels upright (longer cables)
   - Row-major traversal (matches ESP32-HUB75-MatrixPanel-DMA reference)
+- ✅ **Display rotation** - 0°, 90°, 180°, 270° rotation support (runtime configurable)
 - ✅ **CIE 1931 gamma correction** - Native bit-depth LUTs (6-12 bit)
 - ✅ **Dual-mode brightness** - Basis (1-255) + intensity (0.0-1.0) control
 - ✅ **Multiple pixel formats** - RGB888, RGB888_32, RGB565 input

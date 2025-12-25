@@ -171,6 +171,17 @@ Choose which example to build in main/:
 - **Description**: Initial display brightness
 - **Runtime**: Can be changed via `driver.set_brightness()`
 
+### HUB75_ROTATION
+- **Type**: choice
+- **Default**: ROTATE_0
+- **Options**:
+  - `ROTATE_0` - No rotation (default)
+  - `ROTATE_90` - 90° clockwise
+  - `ROTATE_180` - 180°
+  - `ROTATE_270` - 270° clockwise (90° counter-clockwise)
+- **Runtime**: Can be changed via `driver.set_rotation()`
+- **Note**: For 90°/270°, `get_width()` and `get_height()` return swapped values
+
 ---
 
 ## Multi-Panel Layout
@@ -296,6 +307,14 @@ HUB75_LAYOUT_TOP_LEFT_DOWN = y  # Serpentine
 HUB75_BIT_DEPTH_10 = y
 HUB75_DOUBLE_BUFFER = y
 HUB75_MIN_REFRESH_RATE = 90
+```
+
+### Rotated Display (Portrait Mode)
+```
+HUB75_PANEL_WIDTH = 64
+HUB75_PANEL_HEIGHT = 32
+HUB75_ROTATION_90 = y  # 90° clockwise
+# Result: get_width()=32, get_height()=64 (swapped)
 ```
 
 ---

@@ -188,6 +188,17 @@ static inline Hub75Config getMenuConfigSettings() {
   config.layout = Hub75PanelLayout::BOTTOM_RIGHT_UP_ZIGZAG;
 #endif
 
+  // Display rotation
+#if defined(CONFIG_HUB75_ROTATE_0)
+  config.rotation = Hub75Rotation::ROTATE_0;
+#elif defined(CONFIG_HUB75_ROTATE_90)
+  config.rotation = Hub75Rotation::ROTATE_90;
+#elif defined(CONFIG_HUB75_ROTATE_180)
+  config.rotation = Hub75Rotation::ROTATE_180;
+#elif defined(CONFIG_HUB75_ROTATE_270)
+  config.rotation = Hub75Rotation::ROTATE_270;
+#endif
+
   // Bit depth & gamma: Configure via menuconfig
   // (idf.py menuconfig → HUB75 → Panel Settings / Color)
   // Or CMake override: -DHUB75_BIT_DEPTH=10 -DHUB75_GAMMA_MODE=0
