@@ -61,6 +61,11 @@ class GdmaDma : public PlatformDma {
    */
   void set_intensity(float intensity) override;
 
+  /**
+   * @brief Set display rotation (override base class)
+   */
+  void set_rotation(Hub75Rotation rotation) override;
+
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
   // ============================================================================
@@ -135,6 +140,9 @@ class GdmaDma : public PlatformDma {
   // Optimization flags (immutable, for branch prediction)
   const bool needs_scan_remap_;
   const bool needs_layout_remap_;
+
+  // Display rotation (mutable, can change at runtime)
+  Hub75Rotation rotation_;
 
   const uint16_t num_rows_;  // Computed: panel_height / 2
 

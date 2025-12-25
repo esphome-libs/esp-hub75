@@ -16,6 +16,7 @@
 #include "../color/color_lut.h"
 #include "../panels/scan_patterns.h"  // For Coords and ScanPatternRemap
 #include "../panels/panel_layout.h"   // For PanelLayoutRemap
+#include "../panels/rotation.h"       // For RotationTransform
 #include <stdint.h>
 #include <stddef.h>
 
@@ -56,11 +57,14 @@ class PlatformDma {
   /**
    * @brief Transform virtual coordinates to physical DMA buffer coordinates
    *
-   * Applies panel layout remapping and scan pattern remapping, then calculates
-   * row index and upper/lower half.
+   * Applies rotation, panel layout remapping, and scan pattern remapping,
+   * then calculates row index and upper/lower half.
    *
-   * @param px Input X coordinate (virtual display space)
-   * @param py Input Y coordinate (virtual display space)
+   * Pipeline: Rotation → Panel Layout → Scan Pattern
+   *
+   * @param px Input X coordinate (virtual display space, rotated)
+   * @param py Input Y coordinate (virtual display space, rotated)
+   * @param rotation Display rotation
    * @param needs_layout_remap Whether layout remapping is needed
    * @param needs_scan_remap Whether scan pattern remapping is needed
    * @param layout Panel layout type
@@ -69,24 +73,32 @@ class PlatformDma {
    * @param panel_height Single panel height
    * @param layout_rows Number of panel rows (layout_rows)
    * @param layout_cols Number of panel columns (layout_cols)
+   * @param phys_width Physical (unrotated) display width
+   * @param phys_height Physical (unrotated) display height
    * @param dma_width DMA buffer width
    * @param num_rows Number of row pairs (panel_height / 2)
    * @return Transformed coordinates with row index and half indicator
    */
-  static HUB75_IRAM inline TransformedCoords transform_coordinate(uint16_t px, uint16_t py, bool needs_layout_remap,
-                                                                  bool needs_scan_remap, Hub75PanelLayout layout,
-                                                                  Hub75ScanWiring scan_wiring, uint16_t panel_width,
-                                                                  uint16_t panel_height, uint16_t layout_rows,
-                                                                  uint16_t layout_cols, uint16_t dma_width,
-                                                                  uint16_t num_rows) {
+  static HUB75_IRAM inline TransformedCoords transform_coordinate(uint16_t px, uint16_t py, Hub75Rotation rotation,
+                                                                  bool needs_layout_remap, bool needs_scan_remap,
+                                                                  Hub75PanelLayout layout, Hub75ScanWiring scan_wiring,
+                                                                  uint16_t panel_width, uint16_t panel_height,
+                                                                  uint16_t layout_rows, uint16_t layout_cols,
+                                                                  uint16_t phys_width, uint16_t phys_height,
+                                                                  uint16_t dma_width, uint16_t num_rows) {
     Coords c = {.x = px, .y = py};
 
-    // Step 1: Panel layout remapping (if multi-panel grid)
+    // Step 1: Rotation transform (FIRST - convert rotated user coords to physical)
+    if (rotation != Hub75Rotation::ROTATE_0) {
+      c = RotationTransform::apply(c, rotation, phys_width, phys_height);
+    }
+
+    // Step 2: Panel layout remapping (if multi-panel grid)
     if (needs_layout_remap) {
       c = PanelLayoutRemap::remap(c, layout, panel_width, panel_height, layout_rows, layout_cols);
     }
 
-    // Step 2: Scan pattern remapping (if non-standard panel)
+    // Step 3: Scan pattern remapping (if non-standard panel)
     if (needs_scan_remap) {
       c = ScanPatternRemap::remap(c, scan_wiring, panel_width);
     }
@@ -134,6 +146,18 @@ class PlatformDma {
    * @param intensity Intensity multiplier (0.0-1.0, where 1.0 is maximum)
    */
   virtual void set_intensity(float intensity) = 0;
+
+  /**
+   * @brief Set display rotation (runtime update)
+   *
+   * Updates the rotation used for coordinate transformation. Platforms that
+   * cache rotation must override this to update their cached value.
+   *
+   * @param rotation New rotation angle
+   */
+  virtual void set_rotation(Hub75Rotation rotation) {
+    // Default: no-op (platforms override if they cache rotation)
+  }
 
   // ============================================================================
   // Pixel API (for platforms that support direct DMA buffer writes)

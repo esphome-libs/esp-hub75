@@ -41,6 +41,7 @@ class ParlioDma : public PlatformDma {
   void stop_transfer() override;
   void set_basis_brightness(uint8_t brightness) override;
   void set_intensity(float intensity) override;
+  void set_rotation(Hub75Rotation rotation) override;
 
   void draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *buffer, Hub75PixelFormat format,
                    Hub75ColorOrder color_order, bool big_endian) override;
@@ -90,6 +91,9 @@ class ParlioDma : public PlatformDma {
   // Optimization flags (immutable, for branch prediction)
   const bool needs_scan_remap_;
   const bool needs_layout_remap_;
+
+  // Display rotation (mutable, can change at runtime)
+  Hub75Rotation rotation_;
 
   const uint16_t num_rows_;  // Computed: panel_height / 2
 

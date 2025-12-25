@@ -165,6 +165,7 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       layout_(config.layout),
       needs_scan_remap_(config.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN),
       needs_layout_remap_(config.layout != Hub75PanelLayout::HORIZONTAL),
+      rotation_(config.rotation),
       num_rows_(config.panel_height / 2),
       dma_buffers_{nullptr, nullptr},
       row_buffers_{nullptr, nullptr},
@@ -846,6 +847,8 @@ void ParlioDma::set_intensity(float intensity) {
   }
 }
 
+void ParlioDma::set_rotation(Hub75Rotation rotation) { rotation_ = rotation; }
+
 HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *buffer,
                                        Hub75PixelFormat format, Hub75ColorOrder color_order, bool big_endian) {
   // Always write to active buffer (CPU drawing buffer)
@@ -855,17 +858,21 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     return;
   }
 
-  // Bounds check
-  if (x >= virtual_width_ || y >= virtual_height_) [[unlikely]] {
+  // Calculate rotated dimensions (user-facing coordinates)
+  const uint16_t rotated_width = RotationTransform::get_rotated_width(virtual_width_, virtual_height_, rotation_);
+  const uint16_t rotated_height = RotationTransform::get_rotated_height(virtual_width_, virtual_height_, rotation_);
+
+  // Bounds check against rotated (user-facing) display size
+  if (x >= rotated_width || y >= rotated_height) [[unlikely]] {
     return;
   }
 
   // Clip to display bounds
-  if (x + w > virtual_width_) [[unlikely]] {
-    w = virtual_width_ - x;
+  if (x + w > rotated_width) [[unlikely]] {
+    w = rotated_width - x;
   }
-  if (y + h > virtual_height_) [[unlikely]] {
-    h = virtual_height_ - y;
+  if (y + h > rotated_height) [[unlikely]] {
+    h = rotated_height - y;
   }
 
   // Process each pixel based on format
@@ -875,10 +882,10 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
       uint16_t py = y + dy;
       const size_t pixel_idx = (dy * w) + dx;
 
-      // Coordinate transformation pipeline (layout + scan remapping)
-      auto transformed =
-          transform_coordinate(px, py, needs_layout_remap_, needs_scan_remap_, layout_, scan_wiring_, panel_width_,
-                               panel_height_, layout_rows_, layout_cols_, dma_width_, num_rows_);
+      // Coordinate transformation pipeline (rotation + layout + scan remapping)
+      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
       px = transformed.x;
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;

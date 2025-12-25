@@ -116,6 +116,26 @@ class Hub75Driver {
   void flip_buffer();
 
   // ========================================================================
+  // Display Rotation
+  // ========================================================================
+
+  /**
+   * @brief Set display rotation
+   * @param rotation Rotation angle (0°, 90°, 180°, or 270° clockwise)
+   *
+   * @note Takes effect immediately. Content is NOT rotated - the coordinate
+   *       mapping changes. Clear and redraw after changing rotation if needed.
+   * @note For 90° and 270° rotations, get_width() and get_height() swap values.
+   */
+  void set_rotation(Hub75Rotation rotation);
+
+  /**
+   * @brief Get current display rotation
+   * @return Current rotation angle
+   */
+  Hub75Rotation get_rotation() const;
+
+  // ========================================================================
   // Color Configuration
   // ========================================================================
 
@@ -177,11 +197,6 @@ class Hub75Driver {
 
   // Platform-specific DMA engine
   hub75::PlatformDma *dma_;
-
-  HUB75_IRAM inline size_t get_pixel_offset_(uint16_t x, uint16_t y) const {
-    // Total width includes all panels in layout
-    return (y * (config_.panel_width * config_.layout_cols)) + x;
-  }
 };
 
 #endif  // __cplusplus

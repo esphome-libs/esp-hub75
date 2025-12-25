@@ -8,6 +8,7 @@
 #include "../color/color_lut.h"
 #include "../color/color_convert.h"
 #include "../drivers/driver_init.h"
+#include "../panels/rotation.h"
 #include "../platforms/platform_dma.h"
 #include "../platforms/platform_detect.h"
 
@@ -160,6 +161,19 @@ void Hub75Driver::flip_buffer() {
 }
 
 // ============================================================================
+// Display Rotation
+// ============================================================================
+
+void Hub75Driver::set_rotation(Hub75Rotation rotation) {
+  config_.rotation = rotation;
+  if (dma_) {
+    dma_->set_rotation(rotation);
+  }
+}
+
+Hub75Rotation Hub75Driver::get_rotation() const { return config_.rotation; }
+
+// ============================================================================
 // Color Configuration
 // ============================================================================
 
@@ -185,13 +199,17 @@ void Hub75Driver::set_intensity(float intensity) {
 // ============================================================================
 
 uint16_t Hub75Driver::get_width() const {
-  // Return virtual width (panel width × layout columns)
-  return config_.panel_width * config_.layout_cols;
+  // Return virtual width with rotation applied
+  uint16_t phys_w = config_.panel_width * config_.layout_cols;
+  uint16_t phys_h = config_.panel_height * config_.layout_rows;
+  return RotationTransform::get_rotated_width(phys_w, phys_h, config_.rotation);
 }
 
 uint16_t Hub75Driver::get_height() const {
-  // Return virtual height (panel height × layout rows)
-  return config_.panel_height * config_.layout_rows;
+  // Return virtual height with rotation applied
+  uint16_t phys_w = config_.panel_width * config_.layout_cols;
+  uint16_t phys_h = config_.panel_height * config_.layout_rows;
+  return RotationTransform::get_rotated_height(phys_w, phys_h, config_.rotation);
 }
 
 bool Hub75Driver::is_running() const { return running_; }

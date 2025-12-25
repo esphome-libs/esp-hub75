@@ -103,6 +103,20 @@ enum class Hub75PanelLayout {
 };
 
 /**
+ * @brief Display rotation angle
+ *
+ * Rotation is applied FIRST in the coordinate transform pipeline,
+ * before panel layout and scan pattern remapping. For 90° and 270°
+ * rotations, the effective display width and height are swapped.
+ */
+enum class Hub75Rotation : uint16_t {
+  ROTATE_0 = 0,      // No rotation (default)
+  ROTATE_90 = 90,    // 90° clockwise
+  ROTATE_180 = 180,  // 180°
+  ROTATE_270 = 270   // 270° clockwise (90° counter-clockwise)
+};
+
+/**
  * @brief Pin configuration for HUB75 interface
  */
 struct Hub75Pins {
@@ -164,6 +178,9 @@ struct Hub75Config {
 
   // How panels are physically chained/wired
   Hub75PanelLayout layout = Hub75PanelLayout::HORIZONTAL;
+
+  // Display rotation (applied first in coordinate transform pipeline)
+  Hub75Rotation rotation = Hub75Rotation::ROTATE_0;
 
   // Virtual display dimensions (computed):
   //   virtual_width = panel_width * layout_cols
