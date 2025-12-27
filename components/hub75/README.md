@@ -151,6 +151,8 @@ For 90° and 270° rotations, `get_width()` and `get_height()` return swapped va
 
 **Note:** Rotation changes take effect immediately. Content is NOT automatically rotated - the coordinate mapping changes. Clear and redraw after changing rotation if needed.
 
+**Multi-Panel Note:** When using rotation with multi-panel layouts, configure `layout_rows`/`layout_cols` based on **physical panel wiring**. Rotation transforms the virtual coordinate space after layout remapping. See [Multi-Panel Guide](../../docs/MULTI_PANEL.md#using-rotation-with-multi-panel-layouts) for details.
+
 ### Brightness & Color Control
 
 - `void set_brightness(uint8_t brightness)` - Set display brightness (0-255)

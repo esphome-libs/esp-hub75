@@ -32,16 +32,16 @@ class RotationTransform {
         return c;
 
       case Hub75Rotation::ROTATE_90:
-        // 90° CW: (x,y) -> (y, w-1-x)
-        return {c.y, static_cast<uint16_t>(phys_w - 1 - c.x)};
+        // 90° CW: (x,y) -> (y, h-1-x)
+        return {c.y, static_cast<uint16_t>(phys_h - 1 - c.x)};
 
       case Hub75Rotation::ROTATE_180:
         // 180°: (x,y) -> (w-1-x, h-1-y)
         return {static_cast<uint16_t>(phys_w - 1 - c.x), static_cast<uint16_t>(phys_h - 1 - c.y)};
 
       case Hub75Rotation::ROTATE_270:
-        // 270° CW: (x,y) -> (h-1-y, x)
-        return {static_cast<uint16_t>(phys_h - 1 - c.y), c.x};
+        // 270° CW: (x,y) -> (w-1-y, x)
+        return {static_cast<uint16_t>(phys_w - 1 - c.y), c.x};
 
       default:
         return c;

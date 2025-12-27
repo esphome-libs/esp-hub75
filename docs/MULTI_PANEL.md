@@ -10,6 +10,7 @@ Complete guide to chaining multiple HUB75 panels for larger displays.
 - [Coordinate Remapping](#coordinate-remapping)
 - [Physical Wiring](#physical-wiring)
 - [Configuration](#configuration)
+- [Using Rotation with Multi-Panel Layouts](#using-rotation-with-multi-panel-layouts)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -209,7 +210,7 @@ Wiring (longer cables):
 
 ### Virtual → Physical Transformation
 
-**Pipeline**: Virtual (x,y) → Layout remap → Scan pattern remap → Physical DMA buffer
+**Pipeline**: Virtual (x,y) → **Rotation** → Layout remap → Scan pattern remap → Physical DMA buffer
 
 ### HORIZONTAL (No remapping)
 
@@ -380,6 +381,75 @@ Driver validates configuration:
 - Zigzag → Requires `layout_rows > 1 AND layout_cols > 1`
 
 **For troubleshooting multi-panel issues** (panels showing same content, black panels, scrambled display, wrong order, etc.), see **[Troubleshooting Guide](TROUBLESHOOTING.md#multi-panel-issues)**.
+
+---
+
+## Using Rotation with Multi-Panel Layouts
+
+When combining rotation with multi-panel layouts, configure the layout based on **physical panel arrangement**, then apply rotation to transform the virtual coordinate space.
+
+### Key Principle
+
+- `layout_rows` and `layout_cols` describe how panels are **physically wired**
+- `rotation` transforms the **user-facing coordinate system**
+
+### Example: Portrait Display from Horizontal Panels
+
+Two 64×64 panels wired horizontally, displayed as portrait (64×128):
+
+```
+Physical Wiring:          User Sees (after 90° rotation):
+┌───────┬───────┐         ┌───────┐
+│ Panel │ Panel │   →     │       │
+│   0   │   1   │         │ 64w   │
+└───────┴───────┘         │       │
+   128×64 physical        │ 128h  │
+                          │       │
+                          └───────┘
+                           64×128 virtual
+```
+
+**Configuration:**
+```cpp
+config.panel_width = 64;
+config.panel_height = 64;
+config.layout_rows = 1;   // Physical: 1 row
+config.layout_cols = 2;   // Physical: 2 columns (horizontal chain)
+config.layout = Hub75PanelLayout::HORIZONTAL;
+config.rotation = Hub75Rotation::ROTATE_90;
+
+// Result:
+// - Physical display: 128×64
+// - get_width() returns: 64
+// - get_height() returns: 128
+```
+
+### Common Mistake
+
+❌ **Wrong**: Setting `layout_rows=2` because you want 128 height
+```cpp
+// DON'T DO THIS if panels are physically horizontal!
+config.layout_rows = 2;   // Implies vertical stacking
+config.layout_cols = 1;
+```
+
+✅ **Correct**: Configure layout for physical wiring, use rotation for orientation
+```cpp
+config.layout_rows = 1;   // Panels are in 1 physical row
+config.layout_cols = 2;   // 2 panels horizontally
+config.rotation = Hub75Rotation::ROTATE_90;  // Rotate to portrait
+```
+
+### Transform Order
+
+Coordinates transform in this order:
+
+1. **User draws** at virtual coordinates (0,0) to (63,127) for portrait
+2. **Rotation applied**: (x,y) → rotated coordinates
+3. **Layout remapped**: Rotated coords → physical panel chain position
+4. **Scan pattern**: Final pixel location in DMA buffer
+
+This means rotation happens **before** layout remapping, so layout configuration always matches physical wiring regardless of display orientation.
 
 ---
 
