@@ -129,8 +129,14 @@ bool GdmaDma::init() {
 
   // Allocate GDMA channel
   ESP_EARLY_LOGI("GDMA", "About to allocate GDMA channel");
-  gdma_channel_alloc_config_t dma_alloc_config = {
-      .sibling_chan = nullptr, .direction = GDMA_CHANNEL_DIRECTION_TX, .flags = {.reserve_sibling = 0}};
+  gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
+                                                  .direction = GDMA_CHANNEL_DIRECTION_TX,
+                                                  .flags = {.reserve_sibling = 0
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+                                                            ,
+                                                            .isr_cache_safe = 0
+#endif
+                                                  }};
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
   esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_);
@@ -150,7 +156,13 @@ bool GdmaDma::init() {
   // Configure GDMA strategy
   // owner_check = false: Static descriptors, no dynamic ownership handshaking needed
   // auto_update_desc = false: No descriptor writeback - prevents corruption with infinite ring
-  gdma_strategy_config_t strategy_config = {.owner_check = false, .auto_update_desc = false};
+  gdma_strategy_config_t strategy_config = {.owner_check = false,
+                                            .auto_update_desc = false
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+                                            ,
+                                            .eof_till_data_popped = false
+#endif
+  };
   gdma_apply_strategy(dma_chan_, &strategy_config);
 
   ESP_LOGI(TAG, "GDMA strategy configured: owner_check=false, auto_update_desc=false");

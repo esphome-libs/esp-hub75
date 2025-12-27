@@ -75,7 +75,7 @@ constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
 // In 16-bit parallel mode with tx_fifo_mod=1, the FIFO outputs 16-bit words in swapped pairs.
 // The FIFO reads 32-bit words from memory and outputs them as two 16-bit chunks in reversed order.
 // XOR with 1 swaps odd/even pairs (0↔1, 2↔3, etc.). ESP32-S2 doesn't need adjustment.
-HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
+static HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return x ^ 1;
 #else
@@ -646,9 +646,9 @@ void I2sDma::initialize_blank_buffers() {
   }
 
   ESP_LOGI(TAG, "Initializing blank DMA buffers with control bits...");
-  for (int i = 0; i < 2; i++) {
-    if (row_buffers_[i]) {
-      initialize_buffer_internal(row_buffers_[i]);
+  for (auto &row_buffer : row_buffers_) {
+    if (row_buffer) {
+      initialize_buffer_internal(row_buffer);
     }
   }
   ESP_LOGI(TAG, "Blank buffers initialized");
@@ -743,9 +743,9 @@ void I2sDma::set_brightness_oe() {
   ESP_LOGI(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
 
   // Update OE bits in all allocated buffers
-  for (int i = 0; i < 2; i++) {
-    if (row_buffers_[i]) {
-      set_brightness_oe_internal(row_buffers_[i], brightness);
+  for (auto &row_buffer : row_buffers_) {
+    if (row_buffer) {
+      set_brightness_oe_internal(row_buffer, brightness);
     }
   }
 
@@ -831,10 +831,10 @@ bool I2sDma::build_descriptor_chain() {
   ESP_LOGI(TAG, "  Allocating %zu bytes per descriptor array", total_descriptor_bytes);
 
   // Free existing descriptors if already allocated (prevent leak on retry)
-  for (int i = 0; i < 2; i++) {
-    if (descriptors_[i]) {
-      heap_caps_free(descriptors_[i]);
-      descriptors_[i] = nullptr;
+  for (auto &descriptor : descriptors_) {
+    if (descriptor) {
+      heap_caps_free(descriptor);
+      descriptor = nullptr;
     }
   }
 
