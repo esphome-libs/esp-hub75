@@ -137,7 +137,8 @@ bool I2sDma::init() {
   i2s_dev_ = (ESP32_I2S_DEVICE == 0) ? &I2S0 : &I2S1;
 #endif
 
-  // Reset and enable I2S peripheral
+  // Reset and enable I2S peripheral (IDF < 6.0 only - auto-managed in 6.0+)
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
   if (ESP32_I2S_DEVICE == 0) {
     periph_module_reset(PERIPH_I2S0_MODULE);
     periph_module_enable(PERIPH_I2S0_MODULE);
@@ -147,6 +148,7 @@ bool I2sDma::init() {
     periph_module_enable(PERIPH_I2S1_MODULE);
 #endif
   }
+#endif
 
   // Configure GPIO pins
   configure_gpio();
@@ -475,8 +477,9 @@ void I2sDma::shutdown() {
 
   descriptor_count_ = 0;
 
-  // Disable I2S peripheral
+  // Disable I2S peripheral (IDF < 6.0 only - auto-managed in 6.0+)
   if (i2s_dev_) {
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
     if (ESP32_I2S_DEVICE == 0) {
       periph_module_disable(PERIPH_I2S0_MODULE);
     } else {
@@ -484,6 +487,7 @@ void I2sDma::shutdown() {
       periph_module_disable(PERIPH_I2S1_MODULE);
 #endif
     }
+#endif
     i2s_dev_ = nullptr;
   }
 
