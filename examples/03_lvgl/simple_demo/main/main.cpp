@@ -155,17 +155,15 @@ extern "C" void app_main() {
     return;
   }
 
-  // Allocate draw buffer (RGB565 = 2 bytes per pixel)
-  const size_t buf_size = driver.get_width() * driver.get_height();
-  const size_t buf_bytes = buf_size * sizeof(uint16_t);
-  void *buf1 = heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL);
-  if (buf1 == nullptr) {
-    ESP_LOGE(TAG, "Failed to allocate LVGL draw buffer!");
+  // Set color format and create draw buffer (LVGL manages memory)
+  lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+  lv_draw_buf_t *draw_buf = lv_draw_buf_create(driver.get_width(), driver.get_height(), LV_COLOR_FORMAT_RGB565, 0);
+  if (draw_buf == nullptr) {
+    ESP_LOGE(TAG, "Failed to create LVGL draw buffer!");
     return;
   }
-
-  lv_display_set_buffers(disp, buf1, nullptr, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
-  lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+  lv_display_set_draw_buffers(disp, draw_buf, nullptr);
+  lv_display_set_render_mode(disp, LV_DISPLAY_RENDER_MODE_PARTIAL);
   lv_display_set_flush_cb(disp, lvgl_flush_cb);
 
   ESP_LOGI(TAG, "LVGL initialized");
