@@ -55,7 +55,7 @@ extern "C" {
 #endif
 
 /**
- * Bit depth configuration (6-12 bits)
+ * Bit depth configuration (4-12 bits)
  * Set via menuconfig or override: -DHUB75_BIT_DEPTH=10
  */
 #ifndef HUB75_BIT_DEPTH

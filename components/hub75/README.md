@@ -204,7 +204,7 @@ config.layout = Hub75PanelLayout::HORIZONTAL;
 
 **Higher quality display:**
 ```cpp
-// Bit depth: Configure via menuconfig (6-12 bit available)
+// Bit depth: Configure via menuconfig (4-12 bit available)
 // (idf.py menuconfig → HUB75 → Panel Settings → Bit Depth)
 config.double_buffer = true;   // Tear-free updates
 config.min_refresh_rate = 90;  // Smoother for cameras
@@ -218,7 +218,7 @@ config.rotation = Hub75Rotation::ROTATE_90;  // 90° clockwise
 ```
 
 **Bit Depth Configuration:**
-Bit depth is **compile-time only** (6-12 bits supported):
+Bit depth is **compile-time only** (4-12 bits supported):
 - Configure via `idf.py menuconfig` → HUB75 → Panel Settings → Bit Depth
 - Or CMake: `target_compile_definitions(app PRIVATE HUB75_BIT_DEPTH=10)`
 - Changes require full rebuild (regenerates LUT at compile time)

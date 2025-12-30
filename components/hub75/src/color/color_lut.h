@@ -112,11 +112,11 @@ constexpr double cie1931(double lightness) {
 
 /**
  * @brief Generate CIE 1931 lookup table at compile time
- * @tparam BitDepth Target bit depth (6-12)
+ * @tparam BitDepth Target bit depth (4-12)
  * @return std::array of 256 values scaled to BitDepth range
  */
 template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_cie1931_lut() {
-  static_assert(BitDepth >= 6 && BitDepth <= 12, "Bit depth must be 6-12");
+  static_assert(BitDepth >= 4 && BitDepth <= 12, "Bit depth must be 4-12");
 
   constexpr uint16_t max_val = (1 << BitDepth) - 1;
   std::array<uint16_t, 256> lut{};
@@ -138,7 +138,7 @@ template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_cie1931_
  * @brief Generate Gamma 2.2 lookup table at compile time
  */
 template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_gamma22_lut() {
-  static_assert(BitDepth >= 6 && BitDepth <= 12, "Bit depth must be 6-12");
+  static_assert(BitDepth >= 4 && BitDepth <= 12, "Bit depth must be 4-12");
 
   constexpr uint16_t max_val = (1 << BitDepth) - 1;
   std::array<uint16_t, 256> lut{};
@@ -158,7 +158,7 @@ template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_gamma22_
  * @brief Generate Linear lookup table at compile time
  */
 template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_linear_lut() {
-  static_assert(BitDepth >= 6 && BitDepth <= 12, "Bit depth must be 6-12");
+  static_assert(BitDepth >= 4 && BitDepth <= 12, "Bit depth must be 4-12");
 
   constexpr uint16_t max_val = (1 << BitDepth) - 1;
   std::array<uint16_t, 256> lut{};

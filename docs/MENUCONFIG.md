@@ -141,6 +141,9 @@ Choose which example to build in main/:
 - **Type**: choice
 - **Default**: 8-bit
 - **Options**:
+  - `4-bit` - 16 levels/channel (maximum refresh, limited colors)
+  - `5-bit` - 32 levels/channel (very fast refresh)
+  - `6-bit` - 64 levels/channel (fast refresh)
   - `8-bit` - 256 levels/channel (good balance)
   - `10-bit` - 1024 levels/channel (better gradients)
   - `12-bit` - 4096 levels/channel (best quality)
