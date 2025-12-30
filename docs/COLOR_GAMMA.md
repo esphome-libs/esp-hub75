@@ -80,9 +80,12 @@ Driver uses **CIE 1931** by default (better for LEDs). Future: configurable gamm
 
 | Depth | Colors | Levels/Channel | Gradient Quality | Memory | Refresh Rate |
 |-------|--------|----------------|------------------|--------|--------------|
-| **8-bit** | 16.7M | 256 | Good | Baseline | Fast |
-| **10-bit** | 1.07B | 1024 | Better | +25% | Medium |
-| **12-bit** | 68.7B | 4096 | Best | +50% | Slower |
+| **4-bit** | 4K | 16 | Limited | -50% | Maximum |
+| **5-bit** | 32K | 32 | Basic | -37% | Very Fast |
+| **6-bit** | 262K | 64 | Acceptable | -25% | Fast |
+| **8-bit** | 16.7M | 256 | Good | Baseline | Medium |
+| **10-bit** | 1.07B | 1024 | Better | +25% | Slower |
+| **12-bit** | 68.7B | 4096 | Best | +50% | Slowest |
 
 ### Trade-offs
 
@@ -95,6 +98,17 @@ Driver uses **CIE 1931** by default (better for LEDs). Future: configurable gamm
 **Driver auto-adjusts** `lsbMsbTransitionBit` to meet `min_refresh_rate` target.
 
 ### When to Use Each Depth
+
+**4-bit / 5-bit**:
+- Very large panel arrays where refresh rate is critical
+- Simple graphics, text displays, status indicators
+- Visible banding in gradients is expected
+- Maximum refresh rate for smooth animations on large displays
+
+**6-bit**:
+- Large multi-panel setups needing high refresh
+- Gaming displays, fast animations
+- Acceptable gradient quality with CIE 1931 correction
 
 **8-bit**:
 - General use, animations, gaming displays
