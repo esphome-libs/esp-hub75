@@ -8,7 +8,7 @@ ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP3
 
 - Static circular DMA refresh (no CPU intervention after initialization)
 - Multi-platform support: GDMA (S3), I2S (ESP32/S2), PARLIO (P4/C6)
-- CIE 1931 gamma correction with native bit-depth LUTs (6-12 bit)
+- CIE 1931 gamma correction with native bit-depth LUTs (4-12 bit)
 - Multi-panel layouts with serpentine and zigzag chaining
 - Display rotation (0°, 90°, 180°, 270°) - runtime configurable
 - Double buffering for tear-free animation
