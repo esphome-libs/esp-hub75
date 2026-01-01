@@ -28,7 +28,7 @@ extern "C" void app_main() {
   // Print configuration summary
   ESP_LOGI(TAG, "Configuration:");
   ESP_LOGI(TAG, "  Panel: %dx%d pixels (%d-bit, %d Hz min refresh)", config.panel_width, config.panel_height,
-           config.bit_depth, config.min_refresh_rate);
+           HUB75_BIT_DEPTH, config.min_refresh_rate);
   ESP_LOGI(TAG, "  Layout: %dx%d panels (total %dx%d display)", config.layout_cols, config.layout_rows,
            config.panel_width * config.layout_cols, config.panel_height * config.layout_rows);
 
