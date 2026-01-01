@@ -81,6 +81,11 @@ class I2sDma : public PlatformDma {
   void clear() override;
 
   /**
+   * @brief Fill a rectangular region with a solid color
+   */
+  void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) override;
+
+  /**
    * @brief Swap front and back buffers (double buffer mode only)
    */
   void flip_buffer() override;

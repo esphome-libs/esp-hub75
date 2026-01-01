@@ -87,6 +87,7 @@ void app_main() {
     Hub75Driver driver(config);
     driver.begin();
     driver.set_pixel(10, 10, 255, 0, 0);  // Red pixel at (10,10)
+    driver.fill(0, 0, 32, 32, 0, 0, 255); // Blue 32x32 rectangle at (0,0)
 }
 ```
 

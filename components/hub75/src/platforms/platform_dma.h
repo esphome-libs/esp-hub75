@@ -193,6 +193,23 @@ class PlatformDma {
   }
 
   /**
+   * @brief Fill a rectangular region with a solid color
+   * @param x X coordinate (top-left)
+   * @param y Y coordinate (top-left)
+   * @param w Width in pixels
+   * @param h Height in pixels
+   * @param r Red component (0-255)
+   * @param g Green component (0-255)
+   * @param b Blue component (0-255)
+   *
+   * Optimized for solid color fills - color conversion and bit pattern
+   * calculation are done once for the entire region.
+   */
+  virtual void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
+    // Default: no-op
+  }
+
+  /**
    * @brief Swap front and back buffers (double buffer mode only)
    *
    * In single-buffer mode: No-op

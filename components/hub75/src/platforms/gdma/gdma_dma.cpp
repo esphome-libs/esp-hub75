@@ -612,6 +612,79 @@ void GdmaDma::clear() {
   }
 }
 
+HUB75_IRAM void GdmaDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
+  // Always write to active buffer (CPU drawing buffer)
+  RowBitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
+
+  if (!target_buffers || !lut_) [[unlikely]] {
+    return;
+  }
+
+  // Calculate rotated dimensions (user-facing coordinates)
+  const uint16_t rotated_width = RotationTransform::get_rotated_width(virtual_width_, virtual_height_, rotation_);
+  const uint16_t rotated_height = RotationTransform::get_rotated_height(virtual_width_, virtual_height_, rotation_);
+
+  // Bounds check against rotated (user-facing) display size
+  if (x >= rotated_width || y >= rotated_height) [[unlikely]] {
+    return;
+  }
+
+  // Clip to display bounds
+  if (x + w > rotated_width) [[unlikely]] {
+    w = rotated_width - x;
+  }
+  if (y + h > rotated_height) [[unlikely]] {
+    h = rotated_height - y;
+  }
+
+  // Pre-compute LUT-corrected color values (ONCE for entire fill)
+  const uint16_t r_corrected = lut_[r];
+  const uint16_t g_corrected = lut_[g];
+  const uint16_t b_corrected = lut_[b];
+
+  // Pre-compute bit patterns for all bit planes (ONCE for entire fill)
+  // This eliminates per-pixel bit extraction and conditional logic
+  uint16_t upper_patterns[HUB75_BIT_DEPTH];
+  uint16_t lower_patterns[HUB75_BIT_DEPTH];
+  for (int bit = 0; bit < bit_depth_; bit++) {
+    const uint16_t mask = (1 << bit);
+    upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) | ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B1_BIT) : 0);
+    lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) | ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B2_BIT) : 0);
+  }
+
+  // Fill loop - coordinate transforms still needed per-pixel
+  for (uint16_t dy = 0; dy < h; dy++) {
+    for (uint16_t dx = 0; dx < w; dx++) {
+      uint16_t px = x + dx;
+      uint16_t py = y + dy;
+
+      // Coordinate transformation pipeline (rotation + layout + scan remapping)
+      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
+      px = transformed.x;
+      const uint16_t row = transformed.row;
+      const bool is_lower = transformed.is_lower;
+
+      // Update all bit planes using pre-computed patterns
+      for (int bit = 0; bit < bit_depth_; bit++) {
+        uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
+        uint16_t word = buf[px];  // Read existing word (preserves control bits)
+
+        if (is_lower) {
+          word = (word & ~RGB_LOWER_MASK) | lower_patterns[bit];
+        } else {
+          word = (word & ~RGB_UPPER_MASK) | upper_patterns[bit];
+        }
+
+        buf[px] = word;
+      }
+    }
+  }
+}
+
 void GdmaDma::flip_buffer() {
   // Single buffer mode: no-op (both indices point to buffer 0)
   if (!row_buffers_[1] || !descriptors_[1]) {

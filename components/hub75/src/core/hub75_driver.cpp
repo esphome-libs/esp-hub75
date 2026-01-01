@@ -142,6 +142,13 @@ void Hub75Driver::clear() {
   }
 }
 
+HUB75_IRAM void Hub75Driver::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
+  // Forward to platform DMA layer
+  if (dma_) {
+    dma_->fill(x, y, w, h, r, g, b);
+  }
+}
+
 // ============================================================================
 // Double Buffering
 // ============================================================================
