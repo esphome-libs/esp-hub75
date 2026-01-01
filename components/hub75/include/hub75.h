@@ -105,6 +105,23 @@ class Hub75Driver {
    */
   void clear();
 
+  /**
+   * @brief Fill a rectangular region with a solid color
+   * @param x X coordinate (top-left)
+   * @param y Y coordinate (top-left)
+   * @param w Width in pixels
+   * @param h Height in pixels
+   * @param r Red component (0-255)
+   * @param g Green component (0-255)
+   * @param b Blue component (0-255)
+   *
+   * More efficient than calling set_pixel() in a loop because color conversion
+   * and bit pattern calculation are done once for the entire fill region.
+   *
+   * In double-buffer mode: Fills the back buffer (requires flip_buffer() to display).
+   */
+  void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b);
+
   // ========================================================================
   // Double Buffering API (if enabled in config)
   // ========================================================================
