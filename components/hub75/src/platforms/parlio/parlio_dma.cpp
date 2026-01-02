@@ -875,6 +875,11 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     h = rotated_height - y;
   }
 
+  // Cache for consecutive identical pixels - avoids redundant LUT lookups and bit extraction
+  uint8_t prev_r8 = 0, prev_g8 = 0, prev_b8 = 0;
+  uint16_t upper_patterns[HUB75_BIT_DEPTH] = {0};
+  uint16_t lower_patterns[HUB75_BIT_DEPTH] = {0};
+
   // Process each pixel based on format
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
@@ -895,43 +900,39 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
       // Extract RGB888 from pixel format
       extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
 
-      // Apply LUT correction
-      const uint16_t r_corrected = lut_[r8];
-      const uint16_t g_corrected = lut_[g8];
-      const uint16_t b_corrected = lut_[b8];
+      // Only recompute patterns if color changed from previous pixel
+      if (r8 != prev_r8 || g8 != prev_g8 || b8 != prev_b8) {
+        const uint16_t r_corrected = lut_[r8];
+        const uint16_t g_corrected = lut_[g8];
+        const uint16_t b_corrected = lut_[b8];
 
-      // Update all bit planes for this pixel
+        // Pre-compute bit patterns for all bit planes
+        for (int bit = 0; bit < bit_depth_; bit++) {
+          const uint16_t mask = (1 << bit);
+          upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) |
+                                ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
+                                ((b_corrected & mask) ? (1 << B1_BIT) : 0);
+          lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) |
+                                ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
+                                ((b_corrected & mask) ? (1 << B2_BIT) : 0);
+        }
+        prev_r8 = r8;
+        prev_g8 = g8;
+        prev_b8 = b8;
+      }
+
+      // Update all bit planes using cached patterns
       // PARLIO bit layout: [CLK_GATE(15)|ADDR(14-11)|--|LAT(9)|OE(8)|--|--|R2(4)|R1(5)|G2(2)|G1(3)|B2(0)|B1(1)]
-      // Based on pin mapping in configure_parlio:
-      // data_pins[0] = B2, [1] = B1, [2] = G2, [3] = G1, [4] = R2, [5] = R1
       for (int bit = 0; bit < bit_depth_; bit++) {
         int idx = (row * bit_depth_) + bit;
         BitPlaneBuffer &bp = target_buffers[idx];
         uint16_t *buf = bp.data;
-
-        const uint16_t mask = (1 << bit);
         uint16_t word = buf[px];  // Read existing word (preserves control bits)
 
-        // Clear and update RGB bits for appropriate half
-        // IMPORTANT: Only modify RGB bits (0-5), preserve control bits (8-15)
         if (is_lower) {
-          // Lower half: R2, G2, B2
-          word &= ~RGB_LOWER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R2_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G2_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B2_BIT);
+          word = (word & ~RGB_LOWER_MASK) | lower_patterns[bit];
         } else {
-          // Upper half: R1, G1, B1
-          word &= ~RGB_UPPER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R1_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G1_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B1_BIT);
+          word = (word & ~RGB_UPPER_MASK) | upper_patterns[bit];
         }
 
         buf[px] = word;
