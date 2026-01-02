@@ -114,7 +114,7 @@ class ParlioDma : public PlatformDma {
 
   // Pixel pattern cache for consecutive identical pixels optimization
   // Persists across draw_pixels() calls to benefit single-pixel APIs
-  uint8_t cached_r8_ = 0, cached_g8_ = 0, cached_b8_ = 0;
+  uint32_t cached_raw_pixel_ = 0;  // Raw source bytes packed into uint32_t
   uint16_t cached_upper_patterns_[HUB75_BIT_DEPTH] = {0};
   uint16_t cached_lower_patterns_[HUB75_BIT_DEPTH] = {0};
 };

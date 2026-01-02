@@ -902,6 +902,11 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
     h = rotated_height - y;
   }
 
+  // Calculate bytes per pixel for pointer arithmetic
+  const size_t bytes_per_pixel = (format == Hub75PixelFormat::RGB565)   ? 2
+                                 : (format == Hub75PixelFormat::RGB888) ? 3
+                                                                        : 4;
+
   // Process each pixel based on format
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
@@ -917,13 +922,23 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       const bool is_lower = transformed.is_lower;
 
       const size_t pixel_idx = (dy * w) + dx;
-      uint8_t r8 = 0, g8 = 0, b8 = 0;
+      const uint8_t *current_pixel = buffer + (pixel_idx * bytes_per_pixel);
 
-      // Extract RGB888 from pixel format
-      extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
+      // Pack raw pixel bytes into uint32_t for fast comparison
+      uint32_t current_raw;
+      if (format == Hub75PixelFormat::RGB565) {
+        current_raw = *reinterpret_cast<const uint16_t *>(current_pixel);
+      } else if (format == Hub75PixelFormat::RGB888) {
+        current_raw = current_pixel[0] | (current_pixel[1] << 8) | (current_pixel[2] << 16);
+      } else {
+        current_raw = *reinterpret_cast<const uint32_t *>(current_pixel);
+      }
 
-      // Only recompute patterns if color changed (uses class member cache for cross-call persistence)
-      if (r8 != cached_r8_ || g8 != cached_g8_ || b8 != cached_b8_) {
+      // Compare raw pixel - skip extraction if identical to cached
+      if (current_raw != cached_raw_pixel_) {
+        uint8_t r8 = 0, g8 = 0, b8 = 0;
+        extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
+
         const uint16_t r_corrected = lut_[r8];
         const uint16_t g_corrected = lut_[g8];
         const uint16_t b_corrected = lut_[b8];
@@ -938,9 +953,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
                                         ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
                                         ((b_corrected & mask) ? (1 << B2_BIT) : 0);
         }
-        cached_r8_ = r8;
-        cached_g8_ = g8;
-        cached_b8_ = b8;
+        cached_raw_pixel_ = current_raw;
       }
 
       // Update all bit planes using cached patterns
