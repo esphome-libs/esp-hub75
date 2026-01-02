@@ -875,11 +875,6 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     h = rotated_height - y;
   }
 
-  // Cache for consecutive identical pixels - avoids redundant LUT lookups and bit extraction
-  uint8_t prev_r8 = 0, prev_g8 = 0, prev_b8 = 0;
-  uint16_t upper_patterns[HUB75_BIT_DEPTH] = {0};
-  uint16_t lower_patterns[HUB75_BIT_DEPTH] = {0};
-
   // Process each pixel based on format
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
@@ -900,8 +895,8 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
       // Extract RGB888 from pixel format
       extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
 
-      // Only recompute patterns if color changed from previous pixel
-      if (r8 != prev_r8 || g8 != prev_g8 || b8 != prev_b8) {
+      // Only recompute patterns if color changed (uses class member cache for cross-call persistence)
+      if (r8 != cached_r8_ || g8 != cached_g8_ || b8 != cached_b8_) {
         const uint16_t r_corrected = lut_[r8];
         const uint16_t g_corrected = lut_[g8];
         const uint16_t b_corrected = lut_[b8];
@@ -909,16 +904,16 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
         // Pre-compute bit patterns for all bit planes
         for (int bit = 0; bit < bit_depth_; bit++) {
           const uint16_t mask = (1 << bit);
-          upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) |
-                                ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
-                                ((b_corrected & mask) ? (1 << B1_BIT) : 0);
-          lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) |
-                                ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
-                                ((b_corrected & mask) ? (1 << B2_BIT) : 0);
+          cached_upper_patterns_[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) |
+                                        ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
+                                        ((b_corrected & mask) ? (1 << B1_BIT) : 0);
+          cached_lower_patterns_[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) |
+                                        ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
+                                        ((b_corrected & mask) ? (1 << B2_BIT) : 0);
         }
-        prev_r8 = r8;
-        prev_g8 = g8;
-        prev_b8 = b8;
+        cached_r8_ = r8;
+        cached_g8_ = g8;
+        cached_b8_ = b8;
       }
 
       // Update all bit planes using cached patterns
@@ -930,9 +925,9 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
         uint16_t word = buf[px];  // Read existing word (preserves control bits)
 
         if (is_lower) {
-          word = (word & ~RGB_LOWER_MASK) | lower_patterns[bit];
+          word = (word & ~RGB_LOWER_MASK) | cached_lower_patterns_[bit];
         } else {
-          word = (word & ~RGB_UPPER_MASK) | upper_patterns[bit];
+          word = (word & ~RGB_UPPER_MASK) | cached_upper_patterns_[bit];
         }
 
         buf[px] = word;

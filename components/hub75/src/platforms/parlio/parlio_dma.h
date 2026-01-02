@@ -111,6 +111,12 @@ class ParlioDma : public PlatformDma {
   uint8_t basis_brightness_;
   float intensity_;
   bool transfer_started_;
+
+  // Pixel pattern cache for consecutive identical pixels optimization
+  // Persists across draw_pixels() calls to benefit single-pixel APIs
+  uint8_t cached_r8_ = 0, cached_g8_ = 0, cached_b8_ = 0;
+  uint16_t cached_upper_patterns_[HUB75_BIT_DEPTH] = {0};
+  uint16_t cached_lower_patterns_[HUB75_BIT_DEPTH] = {0};
 };
 
 }  // namespace hub75
