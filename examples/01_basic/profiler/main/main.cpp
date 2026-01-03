@@ -46,10 +46,10 @@ static uint8_t *g_buffer_rgb888_32 = nullptr;
 // Performance counter configuration for cycles and instructions
 // Each pair is: (select, mask) - we'll measure cycles and overflow
 static const uint32_t perf_select_mask[] = {
-    XTPERF_CNT_CYCLES, XTPERF_MASK_CYCLES,           // CPU cycles
-    XTPERF_CNT_INSN, XTPERF_MASK_INSN_ALL,           // Instructions executed
-    XTPERF_CNT_D_LOAD_U1, XTPERF_MASK_D_LOAD_LOCAL,  // Data loads
-    XTPERF_CNT_D_STORE_U1, XTPERF_MASK_D_STORE_LOCAL // Data stores
+    XTPERF_CNT_CYCLES,     XTPERF_MASK_CYCLES,        // CPU cycles
+    XTPERF_CNT_INSN,       XTPERF_MASK_INSN_ALL,      // Instructions executed
+    XTPERF_CNT_D_LOAD_U1,  XTPERF_MASK_D_LOAD_LOCAL,  // Data loads
+    XTPERF_CNT_D_STORE_U1, XTPERF_MASK_D_STORE_LOCAL  // Data stores
 };
 
 // Result storage
@@ -100,9 +100,7 @@ static void test_set_pixel_loop(void *params) {
 }
 
 // Test: Fill a rectangle using fill() - optimized path
-static void test_fill(void *params) {
-  g_driver->fill(0, 0, TEST_RECT_WIDTH, TEST_RECT_HEIGHT, 255, 128, 64);
-}
+static void test_fill(void *params) { g_driver->fill(0, 0, TEST_RECT_WIDTH, TEST_RECT_HEIGHT, 255, 128, 64); }
 
 // Test: Draw pixels using RGB888 format
 static void test_draw_pixels_rgb888(void *params) {
@@ -208,8 +206,7 @@ static void print_results() {
   printf("================================================================================\n");
   printf("                         HUB75 Drawing API Profile Results\n");
   printf("================================================================================\n");
-  printf("Test area: %dx%d pixels (%d total)\n", TEST_RECT_WIDTH, TEST_RECT_HEIGHT,
-         TEST_RECT_WIDTH * TEST_RECT_HEIGHT);
+  printf("Test area: %dx%d pixels (%d total)\n", TEST_RECT_WIDTH, TEST_RECT_HEIGHT, TEST_RECT_WIDTH * TEST_RECT_HEIGHT);
   printf("Iterations per test: %d\n", PROFILE_REPEAT_COUNT);
   printf("Values shown are averages per iteration\n");
   printf("\n");
