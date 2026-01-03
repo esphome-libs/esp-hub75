@@ -24,16 +24,21 @@ jobs:
         with:
           ssh-key: ${{ secrets.DEPLOY_KEY }}
 
+      - uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7
+
       - name: Update version files
         run: |
           sed -i "s/\"version\": .*/\"version\": \"${{ steps.drafter.outputs.resolved_version }}\",/g" library.json
           sed -i "s/^version = .*/version = \"${{ steps.drafter.outputs.resolved_version }}\"/" pyproject.toml
+
+      - name: Regenerate lockfile
+        run: uv lock
 
       - name: Commit changes
         run: |
           if ! git diff --quiet; then
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -am "Bump version to ${{ steps.drafter.outputs.resolved_version }}"
+            git commit -am "Bump version to ${{ steps.drafter.outputs.resolved_version }} [skip ci]"
             git push
           fi

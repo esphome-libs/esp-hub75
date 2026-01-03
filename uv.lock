@@ -47,7 +47,7 @@ wheels = [
 
 [[package]]
 name = "esp-hub75"
-version = "0.1.7"
+version = "0.2.2"
 source = { virtual = "." }
 
 [package.dev-dependencies]
