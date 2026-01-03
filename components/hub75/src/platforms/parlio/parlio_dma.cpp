@@ -8,6 +8,7 @@
 // to embed BCM timing directly in buffer data, eliminating descriptor repetition.
 
 #include <sdkconfig.h>
+#include <esp_idf_version.h>
 #include <soc/soc_caps.h>  // For SOC_PARLIO_SUPPORTED and SOC_PARLIO_TX_CLK_SUPPORT_GATING
 
 // Uncomment to enable brightness OE validation (compile-time and runtime checks)
@@ -324,7 +325,9 @@ void ParlioDma::configure_parlio() {
 #else
           .clk_gate_en = 0,  // Clock gating not supported on this chip
 #endif
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
           .io_loop_back = 0,
+#endif
           .allow_pd = 0,
           .invert_valid_out = 0}};
 
