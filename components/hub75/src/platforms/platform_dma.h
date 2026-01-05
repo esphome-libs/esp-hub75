@@ -22,6 +22,94 @@
 
 namespace hub75 {
 
+// ============================================================================
+// Coordinate Transformation - Templated for compile-time optimization
+// ============================================================================
+
+/**
+ * @brief Result of coordinate transformation
+ */
+struct TransformedCoords {
+  uint16_t x, y, row;
+  bool is_lower;
+};
+
+/**
+ * @brief Virtual base class for coordinate transformation
+ *
+ * Stores precomputed values (phys_width, phys_height, num_rows) and config reference.
+ * Derived templated classes provide compile-time optimized transform logic.
+ */
+class TransformBase {
+ protected:
+  const uint16_t phys_width_;
+  const uint16_t phys_height_;
+  const uint16_t num_rows_;
+  const Hub75Config &config_;
+
+ public:
+  TransformBase(uint16_t phys_width, uint16_t phys_height, uint16_t num_rows, const Hub75Config &config)
+      : phys_width_(phys_width), phys_height_(phys_height), num_rows_(num_rows), config_(config) {}
+  virtual ~TransformBase() = default;
+
+  // Pure virtual - just (px, py), no other params needed
+  virtual HUB75_IRAM TransformedCoords transform(uint16_t px, uint16_t py) const = 0;
+};
+
+/**
+ * @brief Templated coordinate transform with compile-time optimization
+ *
+ * Uses if constexpr to eliminate unused code paths at compile time.
+ * Pipeline: Rotation → Panel Layout → Scan Pattern
+ *
+ * @tparam Layout Panel layout type (9 values)
+ * @tparam ScanWiring Scan wiring pattern (4 values)
+ * @tparam Rotation Display rotation (4 values)
+ */
+template<Hub75PanelLayout Layout, Hub75ScanWiring ScanWiring, Hub75Rotation Rotation>
+class Transform : public TransformBase {
+ public:
+  using TransformBase::TransformBase;  // Inherit constructor
+
+  HUB75_IRAM TransformedCoords transform(uint16_t px, uint16_t py) const override {
+    Coords c = {.x = px, .y = py};
+
+    // Step 1: Rotation (compile-time - eliminated if ROTATE_0)
+    if constexpr (Rotation != Hub75Rotation::ROTATE_0) {
+      c = RotationTransform::apply(c, Rotation, phys_width_, phys_height_);
+    }
+
+    // Step 2: Layout remap (compile-time - eliminated if HORIZONTAL)
+    if constexpr (Layout != Hub75PanelLayout::HORIZONTAL) {
+      c = PanelLayoutRemap::remap(c, Layout, config_.panel_width, config_.panel_height, config_.layout_rows,
+                                  config_.layout_cols);
+    }
+
+    // Step 3: Scan pattern remap (compile-time - eliminated if STANDARD_TWO_SCAN)
+    if constexpr (ScanWiring != Hub75ScanWiring::STANDARD_TWO_SCAN) {
+      c = ScanPatternRemap::remap(c, ScanWiring, config_.panel_width);
+    }
+
+    return {.x = c.x, .y = c.y, .row = static_cast<uint16_t>(c.y % num_rows_), .is_lower = (c.y >= num_rows_)};
+  }
+};
+
+/**
+ * @brief Factory function to create the correct Transform instance
+ *
+ * Uses layered template dispatch: 17 case statements (9 layouts + 4 scans + 4 rotations)
+ * instead of 144. Called once at initialization and when rotation changes.
+ *
+ * @param rotation Display rotation
+ * @param config Hub75 configuration
+ * @return Pointer to newly allocated Transform instance (caller owns)
+ */
+TransformBase *create_transform(Hub75Rotation rotation, const Hub75Config &config);
+
+// ============================================================================
+// Platform DMA Interface
+// ============================================================================
+
 /**
  * @brief Platform-agnostic DMA interface
  *
@@ -30,81 +118,24 @@ namespace hub75 {
  */
 class PlatformDma {
  public:
-  virtual ~PlatformDma() = default;
+  virtual ~PlatformDma();
 
  protected:
   /**
-   * @brief Protected constructor - initializes LUT based on config
+   * @brief Protected constructor - initializes LUT and transform based on config
    * @param config Hub75 configuration with gamma mode and bit depth
    */
   PlatformDma(const Hub75Config &config);
 
+  TransformBase *transform_;  // Owns the transform instance
   const Hub75Config &config_;
   const uint16_t *lut_;
 
-  // ============================================================================
-  // Coordinate Transformation Helper
-  // ============================================================================
-
   /**
-   * @brief Result of coordinate transformation
+   * @brief Update transform when rotation changes
+   * @param rotation New rotation angle
    */
-  struct TransformedCoords {
-    uint16_t x, y, row;
-    bool is_lower;
-  };
-
-  /**
-   * @brief Transform virtual coordinates to physical DMA buffer coordinates
-   *
-   * Applies rotation, panel layout remapping, and scan pattern remapping,
-   * then calculates row index and upper/lower half.
-   *
-   * Pipeline: Rotation → Panel Layout → Scan Pattern
-   *
-   * @param px Input X coordinate (virtual display space, rotated)
-   * @param py Input Y coordinate (virtual display space, rotated)
-   * @param rotation Display rotation
-   * @param needs_layout_remap Whether layout remapping is needed
-   * @param needs_scan_remap Whether scan pattern remapping is needed
-   * @param layout Panel layout type
-   * @param scan_wiring Scan wiring pattern
-   * @param panel_width Single panel width
-   * @param panel_height Single panel height
-   * @param layout_rows Number of panel rows (layout_rows)
-   * @param layout_cols Number of panel columns (layout_cols)
-   * @param phys_width Physical (unrotated) display width
-   * @param phys_height Physical (unrotated) display height
-   * @param dma_width DMA buffer width
-   * @param num_rows Number of row pairs (panel_height / 2)
-   * @return Transformed coordinates with row index and half indicator
-   */
-  static HUB75_IRAM inline TransformedCoords transform_coordinate(uint16_t px, uint16_t py, Hub75Rotation rotation,
-                                                                  bool needs_layout_remap, bool needs_scan_remap,
-                                                                  Hub75PanelLayout layout, Hub75ScanWiring scan_wiring,
-                                                                  uint16_t panel_width, uint16_t panel_height,
-                                                                  uint16_t layout_rows, uint16_t layout_cols,
-                                                                  uint16_t phys_width, uint16_t phys_height,
-                                                                  uint16_t dma_width, uint16_t num_rows) {
-    Coords c = {.x = px, .y = py};
-
-    // Step 1: Rotation transform (FIRST - convert rotated user coords to physical)
-    if (rotation != Hub75Rotation::ROTATE_0) {
-      c = RotationTransform::apply(c, rotation, phys_width, phys_height);
-    }
-
-    // Step 2: Panel layout remapping (if multi-panel grid)
-    if (needs_layout_remap) {
-      c = PanelLayoutRemap::remap(c, layout, panel_width, panel_height, layout_rows, layout_cols);
-    }
-
-    // Step 3: Scan pattern remapping (if non-standard panel)
-    if (needs_scan_remap) {
-      c = ScanPatternRemap::remap(c, scan_wiring, panel_width);
-    }
-
-    return {.x = c.x, .y = c.y, .row = static_cast<uint16_t>(c.y % num_rows), .is_lower = (c.y >= num_rows)};
-  }
+  void update_transform(Hub75Rotation rotation);
 
  public:
   /**

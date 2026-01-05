@@ -499,7 +499,10 @@ void GdmaDma::set_intensity(float intensity) {
   set_brightness_oe();
 }
 
-void GdmaDma::set_rotation(Hub75Rotation rotation) { rotation_ = rotation; }
+void GdmaDma::set_rotation(Hub75Rotation rotation) {
+  rotation_ = rotation;
+  update_transform(rotation);
+}
 
 // ============================================================================
 // Pixel API (Direct DMA Buffer Writes)
@@ -538,9 +541,7 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
       uint16_t py = y + dy;
 
       // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
+      auto transformed = transform_->transform(px, py);
       px = transformed.x;
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;
@@ -661,9 +662,7 @@ HUB75_IRAM void GdmaDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
       uint16_t py = y + dy;
 
       // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
+      auto transformed = transform_->transform(px, py);
       px = transformed.x;
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;
