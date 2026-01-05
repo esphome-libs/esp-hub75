@@ -1,6 +1,9 @@
 # ESP-IDF default configuration for profiler example
 # NOTE: This example only works on Xtensa chips (ESP32, ESP32-S2, ESP32-S3)
 
+# Use performance optimization for accurate profiling (-O2)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
 # HUB75 Panel Settings (typical 64x64 panel)
 CONFIG_HUB75_PANEL_WIDTH=64
 CONFIG_HUB75_PANEL_HEIGHT=64
@@ -14,7 +17,7 @@ CONFIG_HUB75_LAYOUT_COLS=1
 CONFIG_HUB75_LAYOUT_HORIZONTAL=y
 
 # Performance settings
-CONFIG_HUB75_BIT_DEPTH_8=y
+CONFIG_DEPTH_8=y
 CONFIG_HUB75_CLK_10MHZ=y
 CONFIG_HUB75_MIN_REFRESH_RATE=60
 CONFIG_HUB75_BRIGHTNESS=255

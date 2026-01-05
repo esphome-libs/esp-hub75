@@ -28,6 +28,14 @@
 #include <cstdio>
 #include <cstring>
 
+// Section profiling functions (defined in i2s_dma.cpp when HUB75_PROFILE_SECTIONS is enabled)
+#ifdef HUB75_PROFILE_SECTIONS
+namespace hub75 {
+extern void reset_section_profile();
+extern void print_section_profile();
+}  // namespace hub75
+#endif
+
 static const char *const TAG = "profiler";
 
 // Global driver pointer for use in profiled functions
@@ -46,10 +54,10 @@ static uint8_t *g_buffer_rgb888_32 = nullptr;
 // Performance counter configuration for cycles and instructions
 // Each pair is: (select, mask) - we'll measure cycles and overflow
 static const uint32_t perf_select_mask[] = {
-    XTPERF_CNT_CYCLES,     XTPERF_MASK_CYCLES,        // CPU cycles
-    XTPERF_CNT_INSN,       XTPERF_MASK_INSN_ALL,      // Instructions executed
-    XTPERF_CNT_D_LOAD_U1,  XTPERF_MASK_D_LOAD_LOCAL,  // Data loads
-    XTPERF_CNT_D_STORE_U1, XTPERF_MASK_D_STORE_LOCAL  // Data stores
+    XTPERF_CNT_CYCLES,     XTPERF_MASK_CYCLES,            // CPU cycles
+    XTPERF_CNT_INSN,       XTPERF_MASK_INSN_ALL,          // Instructions executed
+    XTPERF_CNT_D_LOAD_U1,  XTPERF_MASK_D_LOAD_LOCAL_MEM,  // Data loads
+    XTPERF_CNT_D_STORE_U1, XTPERF_MASK_D_STORE_LOCAL_MEM  // Data stores
 };
 
 // Result storage
@@ -153,6 +161,10 @@ static void run_profile(const char *name, void (*test_func)(void *)) {
     if (err != ESP_OK) {
       ESP_LOGW(TAG, "  Profiling returned error: %s", esp_err_to_name(err));
     }
+
+    // Yield to prevent task watchdog timeout - perfmon_exec runs 100 iterations
+    // without yielding, which can starve the IDLE task
+    vTaskDelay(1);
   }
 }
 
@@ -283,6 +295,25 @@ extern "C" void app_main() {
 
   // Print results
   print_results();
+
+  // Section profiling: measure time spent in each sub-section of draw_pixels
+#ifdef HUB75_PROFILE_SECTIONS
+  ESP_LOGI(TAG, "");
+  ESP_LOGI(TAG, "Running section profiling (draw_pixels breakdown)...");
+
+  hub75::reset_section_profile();
+
+  // Run draw_pixels many times to accumulate section timings
+  const int section_iterations = 100;
+  for (int i = 0; i < section_iterations; i++) {
+    g_driver->draw_pixels(0, 0, TEST_RECT_WIDTH, TEST_RECT_HEIGHT, g_buffer_rgb888, Hub75PixelFormat::RGB888);
+    if ((i % 25) == 24) {
+      vTaskDelay(1);  // Yield periodically to prevent watchdog
+    }
+  }
+
+  hub75::print_section_profile();
+#endif
 
   // Cleanup
   free_test_buffers();

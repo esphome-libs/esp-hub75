@@ -11,6 +11,9 @@ cmake_minimum_required(VERSION 3.16)
 # Add hub75 component from repository root
 set(EXTRA_COMPONENT_DIRS "../../../components")
 
+# Enable section profiling in hub75 component (adds CCOUNT timing instrumentation)
+add_compile_definitions(HUB75_PROFILE_SECTIONS)
+
 # Include ESP-IDF build system
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
