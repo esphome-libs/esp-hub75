@@ -79,13 +79,11 @@ class PlatformDma {
    * @param num_rows Number of row pairs (panel_height / 2)
    * @return Transformed coordinates with row index and half indicator
    */
-  static HUB75_IRAM inline TransformedCoords transform_coordinate(uint16_t px, uint16_t py, Hub75Rotation rotation,
-                                                                  bool needs_layout_remap, bool needs_scan_remap,
-                                                                  Hub75PanelLayout layout, Hub75ScanWiring scan_wiring,
-                                                                  uint16_t panel_width, uint16_t panel_height,
-                                                                  uint16_t layout_rows, uint16_t layout_cols,
-                                                                  uint16_t phys_width, uint16_t phys_height,
-                                                                  uint16_t dma_width, uint16_t num_rows) {
+  __attribute__((always_inline)) static inline TransformedCoords transform_coordinate(
+      uint16_t px, uint16_t py, Hub75Rotation rotation, bool needs_layout_remap, bool needs_scan_remap,
+      Hub75PanelLayout layout, Hub75ScanWiring scan_wiring, uint16_t panel_width, uint16_t panel_height,
+      uint16_t layout_rows, uint16_t layout_cols, uint16_t phys_width, uint16_t phys_height, uint16_t dma_width,
+      uint16_t num_rows) {
     Coords c = {.x = px, .y = py};
 
     // Step 1: Rotation transform (FIRST - convert rotated user coords to physical)

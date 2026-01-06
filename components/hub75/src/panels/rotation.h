@@ -25,8 +25,8 @@ class RotationTransform {
   // @param phys_w Physical (unrotated) display width
   // @param phys_h Physical (unrotated) display height
   // @return Coordinates in unrotated (physical) space
-  static HUB75_CONST HUB75_IRAM constexpr Coords apply(Coords c, Hub75Rotation rotation, uint16_t phys_w,
-                                                       uint16_t phys_h) {
+  __attribute__((always_inline)) HUB75_CONST static constexpr Coords apply(Coords c, Hub75Rotation rotation,
+                                                                           uint16_t phys_w, uint16_t phys_h) {
     switch (rotation) {
       case Hub75Rotation::ROTATE_0:
         return c;
@@ -51,7 +51,7 @@ class RotationTransform {
   // Check if rotation swaps width and height (90° or 270°)
   // @param rotation Rotation angle
   // @return true if dimensions are swapped
-  static HUB75_CONST constexpr bool swaps_dimensions(Hub75Rotation rotation) {
+  __attribute__((always_inline)) HUB75_CONST static constexpr bool swaps_dimensions(Hub75Rotation rotation) {
     return rotation == Hub75Rotation::ROTATE_90 || rotation == Hub75Rotation::ROTATE_270;
   }
 
@@ -60,7 +60,9 @@ class RotationTransform {
   // @param phys_h Physical (unrotated) height
   // @param rotation Current rotation
   // @return User-facing width after rotation
-  static HUB75_CONST constexpr uint16_t get_rotated_width(uint16_t phys_w, uint16_t phys_h, Hub75Rotation rotation) {
+  __attribute__((always_inline)) HUB75_CONST static constexpr uint16_t get_rotated_width(uint16_t phys_w,
+                                                                                         uint16_t phys_h,
+                                                                                         Hub75Rotation rotation) {
     return swaps_dimensions(rotation) ? phys_h : phys_w;
   }
 
@@ -69,7 +71,9 @@ class RotationTransform {
   // @param phys_h Physical (unrotated) height
   // @param rotation Current rotation
   // @return User-facing height after rotation
-  static HUB75_CONST constexpr uint16_t get_rotated_height(uint16_t phys_w, uint16_t phys_h, Hub75Rotation rotation) {
+  __attribute__((always_inline)) HUB75_CONST static constexpr uint16_t get_rotated_height(uint16_t phys_w,
+                                                                                          uint16_t phys_h,
+                                                                                          Hub75Rotation rotation) {
     return swaps_dimensions(rotation) ? phys_w : phys_h;
   }
 };
