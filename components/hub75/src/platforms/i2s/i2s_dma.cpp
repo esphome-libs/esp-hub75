@@ -970,16 +970,11 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
 
       // Update all bit planes using pre-computed patterns (is_lower hoisted outside loop)
       uint8_t *base_ptr = target_buffers[row].data;
-      if (is_lower) {
-        for (int bit = 0; bit < bit_depth_; bit++) {
-          uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
-          buf[px] = (buf[px] & ~RGB_LOWER_MASK) | lower_patterns[bit];
-        }
-      } else {
-        for (int bit = 0; bit < bit_depth_; bit++) {
-          uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
-          buf[px] = (buf[px] & ~RGB_UPPER_MASK) | upper_patterns[bit];
-        }
+      const uint16_t clear_mask = is_lower ? ~RGB_LOWER_MASK : ~RGB_UPPER_MASK;
+      const uint16_t *patterns = is_lower ? lower_patterns : upper_patterns;
+      for (int bit = 0; bit < bit_depth_; bit++) {
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
+        buf[px] = (buf[px] & clear_mask) | patterns[bit];
       }
     }
   }
