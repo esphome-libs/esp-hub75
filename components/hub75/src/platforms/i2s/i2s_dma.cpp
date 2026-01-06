@@ -79,7 +79,7 @@ static constexpr uint16_t BCM_BIT_MASKS[12] = {0x0001, 0x0002, 0x0004, 0x0008, 0
 // In 16-bit parallel mode with tx_fifo_mod=1, the FIFO outputs 16-bit words in swapped pairs.
 // The FIFO reads 32-bit words from memory and outputs them as two 16-bit chunks in reversed order.
 // XOR with 1 swaps odd/even pairs (0↔1, 2↔3, etc.). ESP32-S2 doesn't need adjustment.
-static HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
+__attribute__((always_inline)) HUB75_CONST static inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return x ^ 1;
 #else
@@ -1038,39 +1038,52 @@ HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
   uint16_t upper_patterns[HUB75_BIT_DEPTH];
   uint16_t lower_patterns[HUB75_BIT_DEPTH];
   for (int bit = 0; bit < bit_depth_; bit++) {
-    const uint16_t mask = (1 << bit);
+    const uint16_t mask = BCM_BIT_MASKS[bit];
     upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) | ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
                           ((b_corrected & mask) ? (1 << B1_BIT) : 0);
     lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) | ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
                           ((b_corrected & mask) ? (1 << B2_BIT) : 0);
   }
 
-  // Fill loop - coordinate transforms still needed per-pixel
+  // Pre-compute values for inner loop
+  const size_t bit_plane_stride = dma_width_ * 2;
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Fill loop
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
 
-      // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
-      px = fifo_adjust_x(transformed.x);
-      const uint16_t row = transformed.row;
-      const bool is_lower = transformed.is_lower;
-
-      // Update all bit planes using pre-computed patterns
-      for (int bit = 0; bit < bit_depth_; bit++) {
-        uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
-        uint16_t word = buf[px];  // Read existing word (preserves control bits)
-
-        if (is_lower) {
-          word = (word & ~RGB_LOWER_MASK) | lower_patterns[bit];
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
         } else {
-          word = (word & ~RGB_UPPER_MASK) | upper_patterns[bit];
+          row = py - num_rows_;
+          is_lower = true;
         }
+        px = fifo_adjust_x(px);
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = fifo_adjust_x(transformed.x);
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
 
-        buf[px] = word;
+      // Update all bit planes using pre-computed patterns (is_lower hoisted outside loop)
+      uint8_t *base_ptr = target_buffers[row].data;
+      const uint16_t clear_mask = is_lower ? ~RGB_LOWER_MASK : ~RGB_UPPER_MASK;
+      const uint16_t *patterns = is_lower ? lower_patterns : upper_patterns;
+      for (int bit = 0; bit < bit_depth_; bit++) {
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
+        buf[px] = (buf[px] & clear_mask) | patterns[bit];
       }
     }
   }
