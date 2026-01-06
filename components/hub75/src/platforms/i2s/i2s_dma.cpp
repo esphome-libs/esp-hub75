@@ -948,7 +948,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       }
 
       // Extract RGB888 from pixel format (always_inline will inline the switch)
-      uint8_t r8, g8, b8;
+      uint8_t r8 = 0, g8 = 0, b8 = 0;
       extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
       pixel_ptr += pixel_stride;
 
