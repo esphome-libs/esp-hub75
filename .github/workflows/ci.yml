@@ -16,12 +16,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_target: [esp32, esp32s2, esp32s3, esp32p4]
+        idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
         idf_ver: [v4.4.8, v5.5.2, v6.0-dev]
         # v4.4.8: Latest 4.4 bugfix release (legacy support)
         # v5.5.2: Current stable release
         # v6.0-dev: Development branch (may have breaking changes)
         exclude:
+          # ESP32-C6 only supported on ESP-IDF 5.x+
+          - idf_target: esp32c6
+            idf_ver: v4.4.8
           # ESP32-P4 only supported on ESP-IDF 5.x+
           - idf_target: esp32p4
             idf_ver: v4.4.8
