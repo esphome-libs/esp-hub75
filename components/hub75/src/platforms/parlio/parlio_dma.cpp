@@ -268,6 +268,8 @@ void ParlioDma::shutdown() {
       row_buffers_[i] = nullptr;
     }
   }
+
+  ESP_LOGI(TAG, "Shutdown complete");
 }
 
 void ParlioDma::configure_parlio() {
@@ -801,15 +803,15 @@ bool ParlioDma::build_transaction_queue() {
     return false;
   }
 
-  ESP_LOGI(TAG, "Starting loop transmission...");
+  ESP_LOGD(TAG, "Starting loop transmission...");
 
   // Use cached buffer size (computed once in allocate_row_buffers)
   size_t total_words = total_buffer_bytes_ / sizeof(uint16_t);
   size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
 
-  ESP_LOGI(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
+  ESP_LOGD(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
            total_bits);
-  ESP_LOGI(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
+  ESP_LOGD(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
 
   // Start loop transmission with front buffer (ESP-IDF example calls transmit ONCE with loop_transmission=true)
   esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
@@ -820,7 +822,6 @@ bool ParlioDma::build_transaction_queue() {
   }
 
   ESP_LOGI(TAG, "Loop transmission started successfully");
-  ESP_LOGI(TAG, "Buffer will repeat continuously (loop_transmission=true)");
 
   return true;
 }
@@ -843,6 +844,7 @@ void ParlioDma::set_intensity(float intensity) {
   intensity = std::clamp(intensity, 0.0f, 1.0f);
   if (intensity != intensity_) {
     intensity_ = intensity;
+    ESP_LOGD(TAG, "Intensity set to %.2f", intensity);
     set_brightness_oe();
   }
 }

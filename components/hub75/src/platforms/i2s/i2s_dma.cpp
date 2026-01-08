@@ -981,8 +981,6 @@ void I2sDma::clear() {
       }
     }
   }
-
-  ESP_LOGD(TAG, "Display cleared");
 }
 
 HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
