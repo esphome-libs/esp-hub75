@@ -527,29 +527,54 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
     h = rotated_height - y;
   }
 
-  // Process each pixel based on format
+  // Pre-compute pixel stride for pointer arithmetic (avoids multiply per pixel)
+  const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
+                              : (format == Hub75PixelFormat::RGB565) ? 2
+                                                                     : /* RGB888_32 */ 4;
+
+  // Check if we can use identity fast path (no coordinate transforms needed)
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Pre-compute bit plane stride (bytes between bit planes)
+  const size_t bit_plane_stride = dma_width_ * 2;
+
+  // Process each pixel
+  const uint8_t *pixel_ptr = buffer;
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
 
       HUB75_PROFILE_BEGIN();
 
-      // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
-      px = transformed.x;
-      const uint16_t row = transformed.row;
-      const bool is_lower = transformed.is_lower;
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        // Simple row/half calculation without modulo (subtraction is cheaper)
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = transformed.x;
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
 
       HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
 
-      const size_t pixel_idx = (dy * w) + dx;
+      // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
-
-      // Extract RGB888 from pixel format
-      extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
+      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      pixel_ptr += pixel_stride;
 
       HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
 
@@ -560,35 +585,22 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
 
       HUB75_PROFILE_STAGE(PROFILE_LUT);
 
-      // Update all bit planes for this pixel
+      // Branchless bit-plane update using shift+and (avoids ternary branches on Xtensa)
+      uint8_t *base_ptr = target_buffers[row].data;
       for (int bit = 0; bit < bit_depth_; bit++) {
-        uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
 
-        const uint16_t mask = (1 << bit);
-        uint16_t word = buf[px];  // Read existing word (preserves control bits)
+        // Extract single bits (0 or 1) without branches using shift+and
+        const uint16_t r_bit = (r_corrected >> bit) & 1;
+        const uint16_t g_bit = (g_corrected >> bit) & 1;
+        const uint16_t b_bit = (b_corrected >> bit) & 1;
 
-        // Clear and update RGB bits for appropriate half
-        // IMPORTANT: Only modify RGB bits (0-5), preserve control bits (6-12)
+        uint16_t word = buf[px];
         if (is_lower) {
-          // Lower half: R2, G2, B2
-          word &= ~RGB_LOWER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R2_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G2_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B2_BIT);
+          word = (word & ~RGB_LOWER_MASK) | (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
         } else {
-          // Upper half: R1, G1, B1
-          word &= ~RGB_UPPER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R1_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G1_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B1_BIT);
+          word = (word & ~RGB_UPPER_MASK) | (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
         }
-
         buf[px] = word;
       }
 
@@ -661,23 +673,41 @@ HUB75_IRAM void GdmaDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
                           ((b_corrected & mask) ? (1 << B2_BIT) : 0);
   }
 
-  // Fill loop - coordinate transforms still needed per-pixel
+  // Pre-compute values for inner loop
+  const size_t bit_plane_stride = dma_width_ * 2;
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Fill loop
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
 
-      // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
-      px = transformed.x;
-      const uint16_t row = transformed.row;
-      const bool is_lower = transformed.is_lower;
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = transformed.x;
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
 
       // Update all bit planes using pre-computed patterns
+      uint8_t *base_ptr = target_buffers[row].data;
       for (int bit = 0; bit < bit_depth_; bit++) {
-        uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
         uint16_t word = buf[px];  // Read existing word (preserves control bits)
 
         if (is_lower) {
