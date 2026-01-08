@@ -28,13 +28,8 @@
 #include <cstdio>
 #include <cstring>
 
-// Section profiling functions (defined in i2s_dma.cpp when HUB75_PROFILE_SECTIONS is enabled)
-#ifdef HUB75_PROFILE_SECTIONS
-namespace hub75 {
-extern void reset_section_profile();
-extern void print_section_profile();
-}  // namespace hub75
-#endif
+// Drawing profiling utility (provides macros when HUB75_PROFILE_DRAWING is enabled)
+#include "util/drawing_profiler.h"
 
 static const char *const TAG = "profiler";
 
@@ -296,23 +291,23 @@ extern "C" void app_main() {
   // Print results
   print_results();
 
-  // Section profiling: measure time spent in each sub-section of draw_pixels
-#ifdef HUB75_PROFILE_SECTIONS
+  // Drawing pipeline profiling: measure time spent in each stage of draw_pixels
+#ifdef HUB75_PROFILE_DRAWING
   ESP_LOGI(TAG, "");
-  ESP_LOGI(TAG, "Running section profiling (draw_pixels breakdown)...");
+  ESP_LOGI(TAG, "Running drawing profiling (draw_pixels breakdown)...");
 
-  hub75::reset_section_profile();
+  HUB75_PROFILE_RESET();
 
-  // Run draw_pixels many times to accumulate section timings
-  const int section_iterations = 100;
-  for (int i = 0; i < section_iterations; i++) {
+  // Run draw_pixels many times to accumulate stage timings
+  const int profile_iterations = 100;
+  for (int i = 0; i < profile_iterations; i++) {
     g_driver->draw_pixels(0, 0, TEST_RECT_WIDTH, TEST_RECT_HEIGHT, g_buffer_rgb888, Hub75PixelFormat::RGB888);
     if ((i % 25) == 24) {
       vTaskDelay(1);  // Yield periodically to prevent watchdog
     }
   }
 
-  hub75::print_section_profile();
+  HUB75_PROFILE_PRINT(TAG);
 #endif
 
   // Cleanup

@@ -13,9 +13,10 @@
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 
 #include "i2s_dma.h"
-#include "../../color/color_convert.h"   // For RGB565 scaling utilities
-#include "../../panels/scan_patterns.h"  // For scan pattern remapping
-#include "../../panels/panel_layout.h"   // For panel layout remapping
+#include "../../color/color_convert.h"    // For RGB565 scaling utilities
+#include "../../panels/scan_patterns.h"   // For scan pattern remapping
+#include "../../panels/panel_layout.h"    // For panel layout remapping
+#include "../../util/drawing_profiler.h"  // For drawing profiling macros
 #include <cassert>
 #include <cstring>
 #include <algorithm>
@@ -42,46 +43,6 @@ static const char *const TAG = "I2sDma";
 #endif
 
 namespace hub75 {
-
-// ============================================================================
-// Section Profiling (Xtensa only, compile-time enabled)
-// ============================================================================
-
-#ifdef HUB75_PROFILE_SECTIONS
-#include <esp_cpu.h>  // For esp_cpu_get_cycle_count()
-
-// Section timing accumulators (reset between profile runs)
-static uint64_t g_cycles_transform = 0;
-static uint64_t g_cycles_extract = 0;
-static uint64_t g_cycles_lut = 0;
-static uint64_t g_cycles_bitplane = 0;
-static uint32_t g_profile_pixel_count = 0;
-
-void reset_section_profile() {
-  g_cycles_transform = 0;
-  g_cycles_extract = 0;
-  g_cycles_lut = 0;
-  g_cycles_bitplane = 0;
-  g_profile_pixel_count = 0;
-}
-
-void print_section_profile() {
-  if (g_profile_pixel_count == 0) {
-    ESP_LOGI(TAG, "No pixels profiled");
-    return;
-  }
-  ESP_LOGI(TAG, "");
-  ESP_LOGI(TAG, "=== Section Profile (per pixel avg) ===");
-  ESP_LOGI(TAG, "  Transform:  %.1f cycles", (double) g_cycles_transform / g_profile_pixel_count);
-  ESP_LOGI(TAG, "  Extract:    %.1f cycles", (double) g_cycles_extract / g_profile_pixel_count);
-  ESP_LOGI(TAG, "  LUT:        %.1f cycles", (double) g_cycles_lut / g_profile_pixel_count);
-  ESP_LOGI(TAG, "  Bit-plane:  %.1f cycles", (double) g_cycles_bitplane / g_profile_pixel_count);
-  uint64_t total = g_cycles_transform + g_cycles_extract + g_cycles_lut + g_cycles_bitplane;
-  ESP_LOGI(TAG, "  ---");
-  ESP_LOGI(TAG, "  Total:      %.1f cycles", (double) total / g_profile_pixel_count);
-  ESP_LOGI(TAG, "  Pixels:     %" PRIu32, g_profile_pixel_count);
-}
-#endif  // HUB75_PROFILE_SECTIONS
 
 // HUB75 16-bit word layout for I2S peripheral (same as LCD_CAM)
 // Bit layout: [--|--|OE|LAT|ADDR(5-bit)|R2|G2|B2|R1|G1|B1]
@@ -948,9 +909,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       uint16_t px = x + dx;
       uint16_t py = y + dy;
 
-#ifdef HUB75_PROFILE_SECTIONS
-      uint32_t t0 = esp_cpu_get_cycle_count();
-#endif
+      HUB75_PROFILE_BEGIN();
 
       // Coordinate transformation pipeline (rotation + layout + scan remapping)
       auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
@@ -960,10 +919,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;
 
-#ifdef HUB75_PROFILE_SECTIONS
-      uint32_t t1 = esp_cpu_get_cycle_count();
-      g_cycles_transform += (t1 - t0);
-#endif
+      HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
 
       const size_t pixel_idx = (dy * w) + dx;
       uint8_t r8 = 0, g8 = 0, b8 = 0;
@@ -971,20 +927,14 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       // Extract RGB888 from pixel format
       extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
 
-#ifdef HUB75_PROFILE_SECTIONS
-      uint32_t t2 = esp_cpu_get_cycle_count();
-      g_cycles_extract += (t2 - t1);
-#endif
+      HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
 
       // Apply LUT correction
       const uint16_t r_corrected = lut_[r8];
       const uint16_t g_corrected = lut_[g8];
       const uint16_t b_corrected = lut_[b8];
 
-#ifdef HUB75_PROFILE_SECTIONS
-      uint32_t t3 = esp_cpu_get_cycle_count();
-      g_cycles_lut += (t3 - t2);
-#endif
+      HUB75_PROFILE_STAGE(PROFILE_LUT);
 
       // Update all bit planes for this pixel
       for (int bit = 0; bit < bit_depth_; bit++) {
@@ -1018,11 +968,8 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
         buf[px] = word;
       }
 
-#ifdef HUB75_PROFILE_SECTIONS
-      uint32_t t4 = esp_cpu_get_cycle_count();
-      g_cycles_bitplane += (t4 - t3);
-      g_profile_pixel_count++;
-#endif
+      HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
+      HUB75_PROFILE_PIXEL();
     }
   }
 }
