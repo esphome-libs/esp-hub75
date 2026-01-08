@@ -966,24 +966,23 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
 
       HUB75_PROFILE_STAGE(PROFILE_LUT);
 
-      // Pre-compute bit patterns for all bit planes (eliminates 24 branches in bit loop)
-      uint16_t upper_patterns[HUB75_BIT_DEPTH];
-      uint16_t lower_patterns[HUB75_BIT_DEPTH];
-      for (int bit = 0; bit < bit_depth_; bit++) {
-        const uint16_t mask = BCM_BIT_MASKS[bit];
-        upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) | ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
-                              ((b_corrected & mask) ? (1 << B1_BIT) : 0);
-        lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) | ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
-                              ((b_corrected & mask) ? (1 << B2_BIT) : 0);
-      }
-
-      // Update all bit planes using pre-computed patterns (is_lower hoisted outside loop)
+      // Branchless bit-plane update using shift+and (avoids ternary branches on Xtensa)
       uint8_t *base_ptr = target_buffers[row].data;
-      const uint16_t clear_mask = is_lower ? ~RGB_LOWER_MASK : ~RGB_UPPER_MASK;
-      const uint16_t *patterns = is_lower ? lower_patterns : upper_patterns;
       for (int bit = 0; bit < bit_depth_; bit++) {
         uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
-        buf[px] = (buf[px] & clear_mask) | patterns[bit];
+
+        // Extract single bits (0 or 1) without branches using shift+and
+        const uint16_t r_bit = (r_corrected >> bit) & 1;
+        const uint16_t g_bit = (g_corrected >> bit) & 1;
+        const uint16_t b_bit = (b_corrected >> bit) & 1;
+
+        uint16_t word = buf[px];
+        if (is_lower) {
+          word = (word & ~RGB_LOWER_MASK) | (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
+        } else {
+          word = (word & ~RGB_UPPER_MASK) | (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
+        }
+        buf[px] = word;
       }
 
       HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
