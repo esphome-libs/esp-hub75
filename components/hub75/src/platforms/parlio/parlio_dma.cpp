@@ -764,7 +764,7 @@ void ParlioDma::set_brightness_oe() {
   // Calculate effective brightness (0-255)
   const uint8_t brightness = (uint8_t) ((float) basis_brightness_ * intensity_);
 
-  ESP_LOGI(TAG, "Setting brightness OE: brightness=%u (basis=%u × intensity=%.2f)", brightness, basis_brightness_,
+  ESP_LOGD(TAG, "Setting brightness OE: brightness=%u (basis=%u × intensity=%.2f)", brightness, basis_brightness_,
            intensity_);
 
   // Update all allocated buffers
@@ -777,7 +777,7 @@ void ParlioDma::set_brightness_oe() {
   // Flush cache after brightness update
   flush_cache_to_dma();
 
-  ESP_LOGI(TAG, "Brightness OE updated");
+  ESP_LOGD(TAG, "Brightness OE updated");
 }
 
 void ParlioDma::flush_cache_to_dma() {
@@ -832,7 +832,7 @@ void ParlioDma::set_basis_brightness(uint8_t brightness) {
     if (brightness == 0) {
       ESP_LOGI(TAG, "Brightness set to 0 (display off)");
     } else {
-      ESP_LOGI(TAG, "Basis brightness set to %u", (unsigned) brightness);
+      ESP_LOGD(TAG, "Basis brightness set to %u", (unsigned) brightness);
     }
 
     set_brightness_oe();
