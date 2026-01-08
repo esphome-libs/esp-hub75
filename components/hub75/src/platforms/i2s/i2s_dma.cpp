@@ -500,7 +500,7 @@ void I2sDma::set_basis_brightness(uint8_t brightness) {
   if (brightness == 0) {
     ESP_LOGI(TAG, "Brightness set to 0 (display off)");
   } else {
-    ESP_LOGI(TAG, "Basis brightness set to %u", (unsigned) brightness);
+    ESP_LOGD(TAG, "Basis brightness set to %u", (unsigned) brightness);
   }
 
   // Apply brightness change immediately by updating OE bits in DMA buffers
@@ -516,7 +516,7 @@ void I2sDma::set_intensity(float intensity) {
   }
 
   intensity_ = intensity;
-  ESP_LOGI(TAG, "Intensity set to %.2f", intensity);
+  ESP_LOGD(TAG, "Intensity set to %.2f", intensity);
 
   // Apply intensity change immediately by updating OE bits in DMA buffers
   set_brightness_oe();
@@ -740,7 +740,7 @@ void I2sDma::set_brightness_oe() {
   // Calculate brightness scaling (0-255 maps to 0-255)
   const uint8_t brightness = (uint8_t) ((float) basis_brightness_ * intensity_);
 
-  ESP_LOGI(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
+  ESP_LOGD(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
 
   // Update OE bits in all allocated buffers
   for (auto &row_buffer : row_buffers_) {
@@ -749,7 +749,7 @@ void I2sDma::set_brightness_oe() {
     }
   }
 
-  ESP_LOGI(TAG, "Brightness OE configuration complete");
+  ESP_LOGD(TAG, "Brightness OE configuration complete");
 }
 
 // ============================================================================
@@ -981,8 +981,6 @@ void I2sDma::clear() {
       }
     }
   }
-
-  ESP_LOGI(TAG, "Display cleared");
 }
 
 HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
