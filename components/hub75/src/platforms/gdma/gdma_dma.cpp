@@ -103,7 +103,6 @@ GdmaDma::GdmaDma(const Hub75Config &config)
 GdmaDma::~GdmaDma() { GdmaDma::shutdown(); }
 
 bool GdmaDma::init() {
-  ESP_EARLY_LOGI("GdmaDma", "*** GDMA INIT() CALLED ***");
   ESP_LOGI(TAG, "Initializing LCD_CAM peripheral with GDMA...");
   ESP_LOGI(TAG, "Pin config: R1=%d G1=%d B1=%d R2=%d G2=%d B2=%d", config_.pins.r1, config_.pins.g1, config_.pins.b1,
            config_.pins.r2, config_.pins.g2, config_.pins.b2);
@@ -128,7 +127,6 @@ bool GdmaDma::init() {
   configure_gpio();
 
   // Allocate GDMA channel
-  ESP_EARLY_LOGI("GDMA", "About to allocate GDMA channel");
   gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
                                                   .direction = GDMA_CHANNEL_DIRECTION_TX,
                                                   .flags = {.reserve_sibling = 0
@@ -144,11 +142,9 @@ bool GdmaDma::init() {
   esp_err_t err = gdma_new_channel(&dma_alloc_config, &dma_chan_);
 #endif
   if (err != ESP_OK) {
-    ESP_EARLY_LOGE("GDMA", "FAILED to allocate GDMA channel: 0x%x", err);
     ESP_LOGE(TAG, "Failed to allocate GDMA channel: %s", esp_err_to_name(err));
     return false;
   }
-  ESP_EARLY_LOGI("GDMA", "GDMA channel allocated successfully");
 
   // Connect GDMA to LCD peripheral
   gdma_connect(dma_chan_, GDMA_MAKE_TRIGGER(GDMA_TRIG_PERIPH_LCD, 0));
@@ -200,7 +196,6 @@ bool GdmaDma::init() {
   ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d, DMA: %dx%d", panel_width_, panel_height_,
            layout_cols_, layout_rows_, virtual_width_, virtual_height_, dma_width_, panel_height_);
 
-  ESP_EARLY_LOGI("GDMA", "*** GDMA INIT COMPLETE ***");
   ESP_LOGI(TAG, "LCD_CAM + GDMA initialized successfully");
   ESP_LOGI(TAG, "Clock: %u MHz", (unsigned int) (static_cast<uint32_t>(config_.output_clock_speed) / 1000000));
 
@@ -476,7 +471,7 @@ void GdmaDma::set_basis_brightness(uint8_t brightness) {
   if (brightness == 0) {
     ESP_LOGI(TAG, "Brightness set to 0 (display off)");
   } else {
-    ESP_LOGI(TAG, "Basis brightness set to %u", (unsigned) brightness);
+    ESP_LOGD(TAG, "Basis brightness set to %u", (unsigned) brightness);
   }
 
   // Apply brightness change immediately by updating OE bits in DMA buffers
@@ -493,7 +488,7 @@ void GdmaDma::set_intensity(float intensity) {
 
   intensity_ = intensity;
 
-  ESP_LOGI(TAG, "Intensity set to %.2f", intensity);
+  ESP_LOGD(TAG, "Intensity set to %.2f", intensity);
 
   // Apply intensity change immediately by updating OE bits in DMA buffers
   set_brightness_oe();
@@ -937,7 +932,7 @@ void GdmaDma::set_brightness_oe() {
   // Calculate brightness scaling (0-255 maps to 0-255)
   const uint8_t brightness = (uint8_t) ((float) basis_brightness_ * intensity_);
 
-  ESP_LOGI(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
+  ESP_LOGD(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
 
   // Update OE bits in all allocated buffers
   for (auto &row_buffer : row_buffers_) {
@@ -946,7 +941,7 @@ void GdmaDma::set_brightness_oe() {
     }
   }
 
-  ESP_LOGI(TAG, "Brightness OE configuration complete");
+  ESP_LOGD(TAG, "Brightness OE configuration complete");
 }
 
 bool GdmaDma::build_descriptor_chain_internal(RowBitPlaneBuffer *buffers, dma_descriptor_t *descriptors) {
