@@ -14,10 +14,11 @@
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 
 #include "gdma_dma.h"
-#include "../../color/color_convert.h"   // For RGB565 scaling utilities
-#include "../../panels/scan_patterns.h"  // For scan pattern remapping
-#include "../../panels/panel_layout.h"   // For panel layout remapping
-#include <cassert>                       // NOLINT(readability-simplify-boolean-expr)
+#include "../../color/color_convert.h"    // For RGB565 scaling utilities
+#include "../../panels/scan_patterns.h"   // For scan pattern remapping
+#include "../../panels/panel_layout.h"    // For panel layout remapping
+#include "../../util/drawing_profiler.h"  // For drawing profiling macros
+#include <cassert>                        // NOLINT(readability-simplify-boolean-expr)
 #include <cstring>
 #include <algorithm>
 #include <esp_log.h>
@@ -532,6 +533,8 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
       uint16_t px = x + dx;
       uint16_t py = y + dy;
 
+      HUB75_PROFILE_BEGIN();
+
       // Coordinate transformation pipeline (rotation + layout + scan remapping)
       auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
                                               scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
@@ -540,16 +543,22 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
       const uint16_t row = transformed.row;
       const bool is_lower = transformed.is_lower;
 
+      HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
+
       const size_t pixel_idx = (dy * w) + dx;
       uint8_t r8 = 0, g8 = 0, b8 = 0;
 
       // Extract RGB888 from pixel format
       extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
 
+      HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
+
       // Apply LUT correction
       const uint16_t r_corrected = lut_[r8];
       const uint16_t g_corrected = lut_[g8];
       const uint16_t b_corrected = lut_[b8];
+
+      HUB75_PROFILE_STAGE(PROFILE_LUT);
 
       // Update all bit planes for this pixel
       for (int bit = 0; bit < bit_depth_; bit++) {
@@ -582,6 +591,9 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
 
         buf[px] = word;
       }
+
+      HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
+      HUB75_PROFILE_PIXEL();
     }
   }
 }

@@ -13,9 +13,10 @@
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 
 #include "i2s_dma.h"
-#include "../../color/color_convert.h"   // For RGB565 scaling utilities
-#include "../../panels/scan_patterns.h"  // For scan pattern remapping
-#include "../../panels/panel_layout.h"   // For panel layout remapping
+#include "../../color/color_convert.h"    // For RGB565 scaling utilities
+#include "../../panels/scan_patterns.h"   // For scan pattern remapping
+#include "../../panels/panel_layout.h"    // For panel layout remapping
+#include "../../util/drawing_profiler.h"  // For drawing profiling macros
 #include <cassert>
 #include <cstring>
 #include <algorithm>
@@ -926,6 +927,8 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       uint16_t row;
       bool is_lower;
 
+      HUB75_PROFILE_BEGIN();
+
       // Fast path: identity transform (no rotation, standard layout, standard scan)
       if (identity_transform) {
         // Simple row/half calculation without modulo (subtraction is cheaper)
@@ -947,15 +950,21 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
         is_lower = transformed.is_lower;
       }
 
+      HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
+
       // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
       extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
       pixel_ptr += pixel_stride;
 
+      HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
+
       // Apply LUT correction
       const uint16_t r_corrected = lut_[r8];
       const uint16_t g_corrected = lut_[g8];
       const uint16_t b_corrected = lut_[b8];
+
+      HUB75_PROFILE_STAGE(PROFILE_LUT);
 
       // Pre-compute bit patterns for all bit planes (eliminates 24 branches in bit loop)
       uint16_t upper_patterns[HUB75_BIT_DEPTH];
@@ -976,6 +985,9 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
         uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
         buf[px] = (buf[px] & clear_mask) | patterns[bit];
       }
+
+      HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
+      HUB75_PROFILE_PIXEL();
     }
   }
 }
