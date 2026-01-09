@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        idf_target: [esp32, esp32s2, esp32s3, esp32p4]
+        idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
 
     container:
       image: espressif/idf:v5.5.2
