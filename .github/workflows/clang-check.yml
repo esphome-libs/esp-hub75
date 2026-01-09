@@ -54,7 +54,7 @@ jobs:
         if: always()
         run: |
           if [ -f warnings.txt ] && [ -s warnings.txt ]; then
-            ./clang-tidy-sarif -o results.sarif warnings.txt
+            ./clang-tidy-sarif -o results.sarif -i warnings.txt
           else
             echo '{"version":"2.1.0","runs":[]}' > results.sarif
           fi
