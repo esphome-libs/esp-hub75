@@ -48,8 +48,8 @@ jobs:
           # Build multiple targets to analyze all platform-specific code
           # esp32s3: gdma_dma.cpp, esp32: i2s_dma.cpp, esp32p4: parlio_dma.cpp
           for target in esp32 esp32s3 esp32p4; do
-            idf.py set-target $target
-            idf.py build
+            idf.py -B build_$target set-target $target
+            idf.py -B build_$target build
           done
 
       - name: Perform CodeQL Analysis
