@@ -297,6 +297,8 @@ void I2sDma::configure_i2s_timing() {
       bck_div = 2;
       actual_freq = 8;
       break;
+    default:
+      __builtin_unreachable();
   }
   dev->clkm_conf.clkm_div_num = clkm_div;
   dev->clkm_conf.clk_en = 1;
@@ -332,6 +334,8 @@ void I2sDma::configure_i2s_timing() {
       bck_div = 5;
       actual_freq = 8;
       break;
+    default:
+      __builtin_unreachable();
   }
   dev->clkm_conf.clkm_div_num = clkm_div;
   dev->sample_rate_conf.tx_bck_div_num = bck_div;
