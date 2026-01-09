@@ -4,6 +4,8 @@ Complete API documentation and configuration reference for the HUB75 DMA driver 
 
 ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+). Tested with 4.4.8, 5.5.2, and 6.0-beta1.
+
 ## Key Features
 
 - Static circular DMA refresh (no CPU intervention after initialization)

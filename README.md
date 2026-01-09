@@ -5,6 +5,8 @@
 
 High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+). Tested with 4.4.8, 5.5.2, and 6.0-beta1.
+
 ## Features
 
 - ✅ **Static circular DMA refresh** - No interrupts, no CPU intervention after `begin()`
