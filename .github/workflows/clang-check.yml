@@ -30,8 +30,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install clang toolchain
+        run: |
+          . $IDF_PATH/export.sh
+          $IDF_PATH/tools/idf_tools.py --non-interactive install esp-clang
+          pip install pyclang~=0.2.0
+
       - name: Configure and run clang-check
         run: |
+          # Re-source export.sh to pick up newly installed esp-clang
           . $IDF_PATH/export.sh
           idf.py set-target ${{ matrix.idf_target }}
           idf.py clang-check --run-clang-tidy-options ""
