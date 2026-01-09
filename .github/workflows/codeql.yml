@@ -20,7 +20,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, c-cpp]
+        include:
+          - language: actions
+            build-mode: none
+          - language: c-cpp
+            build-mode: manual
 
     container:
       image: ${{ matrix.language == 'c-cpp' && 'espressif/idf:v5.5.2' || '' }}
@@ -35,9 +39,10 @@ jobs:
         uses: github/codeql-action/init@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
 
       - name: Build for CodeQL (C/C++ only)
-        if: matrix.language == 'c-cpp'
+        if: matrix.build-mode == 'manual'
         run: |
           . $IDF_PATH/export.sh
           # Build multiple targets to analyze all platform-specific code
