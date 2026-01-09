@@ -1,0 +1,48 @@
+name: Clang-Tidy Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clang-check:
+    name: Clang-Tidy (${{ matrix.idf_target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        idf_target: [esp32, esp32s2, esp32s3, esp32p4]
+
+    container:
+      image: espressif/idf:v5.5.2
+
+    env:
+      IDF_TOOLCHAIN: clang
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          submodules: recursive
+
+      - name: Configure and run clang-check
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py set-target ${{ matrix.idf_target }}
+          idf.py clang-check --run-clang-tidy-options ""
+
+  clang-check-summary:
+    name: Clang-Tidy Summary
+    runs-on: ubuntu-latest
+    needs: clang-check
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "Clang-Tidy check completed"
+          echo "Check individual jobs for details"
