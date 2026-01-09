@@ -135,9 +135,9 @@ Each example includes specific instructions and pin configuration guidance.
 
 ## ESPHome Integration
 
-An ESPHome component is available that wraps this driver for easy integration with ESPHome projects. Supports all driver features including multi-panel layouts, shift driver initialization, and platform auto-detection.
+ESPHome 2025.12+ includes a built-in `hub75` display component that uses this library.
 
-See [hub75-esphome](https://github.com/stuartparmenter/hub75-esphome) for installation and configuration.
+See the [ESPHome HUB75 documentation](https://esphome.io/components/display/hub75.html) for configuration.
 
 ## Project Structure
 
@@ -186,6 +186,10 @@ For architecture, platform specifics, and advanced topics, see [docs/](docs/):
 - **[Color & Gamma](docs/COLOR_GAMMA.md)** - CIE 1931 correction and bit depth guide
 
 **Pin configuration examples:** See [examples/common/](examples/common/) for board-specific GPIO layouts.
+
+## Used By
+
+- **[ESPHome](https://esphome.io/)** - Built-in [`hub75` display component](https://esphome.io/components/display/hub75.html) (2025.12+)
 
 ## References
 
