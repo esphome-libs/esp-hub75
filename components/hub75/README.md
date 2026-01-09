@@ -115,14 +115,15 @@ void app_main() {
 
 ### Drawing
 
-- `void draw_pixels(x, y, w, h, buffer, format, color_order, big_endian)` - Bulk pixel write (most efficient)
+- `void draw_pixels(x, y, w, h, buffer, format, color_order, big_endian)` - Bulk pixel write from buffer (most efficient for images/sprites)
   - `format`: `PixelFormat::RGB888` (24-bit packed), `RGB888_32` (32-bit padded), or `RGB565` (16-bit)
   - `color_order`: `ColorOrder::RGB` or `BGR` (for RGB888_32 only)
   - `big_endian`: Byte order control (affects RGB565 and RGB888_32)
 - `void set_pixel(x, y, r, g, b)` - Draw single pixel with RGB888 values (0-255)
+- `void fill(x, y, w, h, r, g, b)` - Fill rectangular region with solid color (optimized - color conversion done once)
 - `void clear()` - Clear entire display to black
 
-**Note:** For graphics primitives (rectangles, lines, circles), use a graphics library like LVGL or Adafruit_GFX, or implement manually with `set_pixel()` loops.
+**Note:** `fill()` is more efficient than `set_pixel()` loops for solid color rectangles. For complex graphics primitives (circles, arcs, text), use a graphics library like LVGL or Adafruit_GFX.
 
 ### Double Buffering
 

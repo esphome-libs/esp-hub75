@@ -13,9 +13,10 @@
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 
 #include "i2s_dma.h"
-#include "../../color/color_convert.h"   // For RGB565 scaling utilities
-#include "../../panels/scan_patterns.h"  // For scan pattern remapping
-#include "../../panels/panel_layout.h"   // For panel layout remapping
+#include "../../color/color_convert.h"    // For RGB565 scaling utilities
+#include "../../panels/scan_patterns.h"   // For scan pattern remapping
+#include "../../panels/panel_layout.h"    // For panel layout remapping
+#include "../../util/drawing_profiler.h"  // For drawing profiling macros
 #include <cassert>
 #include <cstring>
 #include <algorithm>
@@ -71,11 +72,15 @@ constexpr uint16_t RGB_MASK = RGB_UPPER_MASK | RGB_LOWER_MASK;  // 0x003F
 // Bit clear masks
 constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
 
+// Pre-computed bit masks for BCM bit planes (avoids shift per iteration)
+static constexpr uint16_t BCM_BIT_MASKS[12] = {0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020,
+                                               0x0040, 0x0080, 0x0100, 0x0200, 0x0400, 0x0800};
+
 // ESP32 I2S TX FIFO position adjustment
 // In 16-bit parallel mode with tx_fifo_mod=1, the FIFO outputs 16-bit words in swapped pairs.
 // The FIFO reads 32-bit words from memory and outputs them as two 16-bit chunks in reversed order.
 // XOR with 1 swaps odd/even pairs (0↔1, 2↔3, etc.). ESP32-S2 doesn't need adjustment.
-static HUB75_CONST inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
+__attribute__((always_inline)) HUB75_CONST static inline constexpr uint16_t fifo_adjust_x(uint16_t x) {
 #if defined(CONFIG_IDF_TARGET_ESP32)
   return x ^ 1;
 #else
@@ -504,7 +509,7 @@ void I2sDma::set_basis_brightness(uint8_t brightness) {
   if (brightness == 0) {
     ESP_LOGI(TAG, "Brightness set to 0 (display off)");
   } else {
-    ESP_LOGI(TAG, "Basis brightness set to %u", (unsigned) brightness);
+    ESP_LOGD(TAG, "Basis brightness set to %u", (unsigned) brightness);
   }
 
   // Apply brightness change immediately by updating OE bits in DMA buffers
@@ -520,7 +525,7 @@ void I2sDma::set_intensity(float intensity) {
   }
 
   intensity_ = intensity;
-  ESP_LOGI(TAG, "Intensity set to %.2f", intensity);
+  ESP_LOGD(TAG, "Intensity set to %.2f", intensity);
 
   // Apply intensity change immediately by updating OE bits in DMA buffers
   set_brightness_oe();
@@ -744,7 +749,7 @@ void I2sDma::set_brightness_oe() {
   // Calculate brightness scaling (0-255 maps to 0-255)
   const uint8_t brightness = (uint8_t) ((float) basis_brightness_ * intensity_);
 
-  ESP_LOGI(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
+  ESP_LOGD(TAG, "Setting brightness OE: brightness=%u, lsbMsbTransitionBit=%u", brightness, lsbMsbTransitionBit_);
 
   // Update OE bits in all allocated buffers
   for (auto &row_buffer : row_buffers_) {
@@ -753,7 +758,7 @@ void I2sDma::set_brightness_oe() {
     }
   }
 
-  ESP_LOGI(TAG, "Brightness OE configuration complete");
+  ESP_LOGD(TAG, "Brightness OE configuration complete");
 }
 
 // ============================================================================
@@ -906,62 +911,86 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
     h = rotated_height - y;
   }
 
-  // Process each pixel based on format
+  // Pre-compute pixel stride for pointer arithmetic (avoids multiply per pixel)
+  const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
+                              : (format == Hub75PixelFormat::RGB565) ? 2
+                                                                     : /* RGB888_32 */ 4;
+
+  // Check if we can use identity fast path (no coordinate transforms needed)
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Pre-compute bit plane stride (bytes between bit planes)
+  const size_t bit_plane_stride = dma_width_ * 2;
+
+  // Process each pixel
+  const uint8_t *pixel_ptr = buffer;
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
 
-      // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
-      px = fifo_adjust_x(transformed.x);
-      const uint16_t row = transformed.row;
-      const bool is_lower = transformed.is_lower;
+      HUB75_PROFILE_BEGIN();
 
-      const size_t pixel_idx = (dy * w) + dx;
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        // Simple row/half calculation without modulo (subtraction is cheaper)
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+        px = fifo_adjust_x(px);
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = fifo_adjust_x(transformed.x);
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
+
+      HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
+
+      // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
+      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      pixel_ptr += pixel_stride;
 
-      // Extract RGB888 from pixel format
-      extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
+      HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
 
       // Apply LUT correction
       const uint16_t r_corrected = lut_[r8];
       const uint16_t g_corrected = lut_[g8];
       const uint16_t b_corrected = lut_[b8];
 
-      // Update all bit planes for this pixel
+      HUB75_PROFILE_STAGE(PROFILE_LUT);
+
+      // Branchless bit-plane update using shift+and (avoids ternary branches on Xtensa)
+      uint8_t *base_ptr = target_buffers[row].data;
       for (int bit = 0; bit < bit_depth_; bit++) {
-        uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
 
-        const uint16_t mask = (1 << bit);
-        uint16_t word = buf[px];  // Read existing word (preserves control bits)
+        // Extract single bits (0 or 1) without branches using shift+and
+        const uint16_t r_bit = (r_corrected >> bit) & 1;
+        const uint16_t g_bit = (g_corrected >> bit) & 1;
+        const uint16_t b_bit = (b_corrected >> bit) & 1;
 
-        // Clear and update RGB bits for appropriate half
-        // IMPORTANT: Only modify RGB bits (0-5), preserve control bits (6-12)
+        uint16_t word = buf[px];
         if (is_lower) {
-          // Lower half: R2, G2, B2
-          word &= ~RGB_LOWER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R2_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G2_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B2_BIT);
+          word = (word & ~RGB_LOWER_MASK) | (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
         } else {
-          // Upper half: R1, G1, B1
-          word &= ~RGB_UPPER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R1_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G1_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B1_BIT);
+          word = (word & ~RGB_UPPER_MASK) | (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
         }
-
         buf[px] = word;
       }
+
+      HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
+      HUB75_PROFILE_PIXEL();
     }
   }
 }
@@ -985,8 +1014,92 @@ void I2sDma::clear() {
       }
     }
   }
+}
 
-  ESP_LOGI(TAG, "Display cleared");
+HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
+  // Always write to active buffer (CPU drawing buffer)
+  RowBitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
+
+  if (!target_buffers || !lut_) [[unlikely]] {
+    return;
+  }
+
+  // Calculate rotated dimensions (user-facing coordinates)
+  const uint16_t rotated_width = RotationTransform::get_rotated_width(virtual_width_, virtual_height_, rotation_);
+  const uint16_t rotated_height = RotationTransform::get_rotated_height(virtual_width_, virtual_height_, rotation_);
+
+  // Bounds check against rotated (user-facing) display size
+  if (x >= rotated_width || y >= rotated_height) [[unlikely]] {
+    return;
+  }
+
+  // Clip to display bounds
+  if (x + w > rotated_width) [[unlikely]] {
+    w = rotated_width - x;
+  }
+  if (y + h > rotated_height) [[unlikely]] {
+    h = rotated_height - y;
+  }
+
+  // Pre-compute LUT-corrected color values (ONCE for entire fill)
+  const uint16_t r_corrected = lut_[r];
+  const uint16_t g_corrected = lut_[g];
+  const uint16_t b_corrected = lut_[b];
+
+  // Pre-compute bit patterns for all bit planes (ONCE for entire fill)
+  // This eliminates per-pixel bit extraction and conditional logic
+  uint16_t upper_patterns[HUB75_BIT_DEPTH];
+  uint16_t lower_patterns[HUB75_BIT_DEPTH];
+  for (int bit = 0; bit < bit_depth_; bit++) {
+    const uint16_t mask = BCM_BIT_MASKS[bit];
+    upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) | ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B1_BIT) : 0);
+    lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) | ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B2_BIT) : 0);
+  }
+
+  // Pre-compute values for inner loop
+  const size_t bit_plane_stride = dma_width_ * 2;
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Fill loop
+  for (uint16_t dy = 0; dy < h; dy++) {
+    for (uint16_t dx = 0; dx < w; dx++) {
+      uint16_t px = x + dx;
+      uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
+
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+        px = fifo_adjust_x(px);
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = fifo_adjust_x(transformed.x);
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
+
+      // Update all bit planes using pre-computed patterns (is_lower hoisted outside loop)
+      uint8_t *base_ptr = target_buffers[row].data;
+      const uint16_t clear_mask = is_lower ? ~RGB_LOWER_MASK : ~RGB_UPPER_MASK;
+      const uint16_t *patterns = is_lower ? lower_patterns : upper_patterns;
+      for (int bit = 0; bit < bit_depth_; bit++) {
+        uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
+        buf[px] = (buf[px] & clear_mask) | patterns[bit];
+      }
+    }
+  }
 }
 
 void I2sDma::flip_buffer() {

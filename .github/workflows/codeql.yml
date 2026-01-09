@@ -1,0 +1,58 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: c-cpp
+            build-mode: manual
+
+    container:
+      image: ${{ matrix.language == 'c-cpp' && 'espressif/idf:v5.5.2' || '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          submodules: recursive
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Build for CodeQL (C/C++ only)
+        if: matrix.build-mode == 'manual'
+        run: |
+          . $IDF_PATH/export.sh
+          # Build multiple targets to analyze all platform-specific code
+          # esp32s3: gdma_dma.cpp, esp32: i2s_dma.cpp, esp32p4: parlio_dma.cpp
+          for target in esp32 esp32s3 esp32c6 esp32p4; do
+            idf.py -B build_$target set-target $target
+            idf.py -B build_$target build
+          done
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
+        with:
+          category: /language:${{ matrix.language }}

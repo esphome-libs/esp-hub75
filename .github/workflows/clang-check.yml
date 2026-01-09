@@ -1,0 +1,78 @@
+name: Clang-Tidy Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  clang-check:
+    name: Clang-Tidy (${{ matrix.idf_target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
+
+    container:
+      image: espressif/idf:v5.5.2
+
+    env:
+      IDF_TOOLCHAIN: clang
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          submodules: recursive
+
+      - name: Install clang toolchain
+        run: |
+          . $IDF_PATH/export.sh
+          $IDF_PATH/tools/idf_tools.py --non-interactive install esp-clang
+          pip install pyclang~=0.2.0
+
+      - name: Install clang-tidy-sarif
+        run: |
+          curl -sSL https://github.com/psastras/sarif-rs/releases/download/clang-tidy-sarif-v0.8.0/clang-tidy-sarif-x86_64-unknown-linux-gnu -o clang-tidy-sarif
+          chmod +x clang-tidy-sarif
+
+      - name: Configure and run clang-check
+        id: clang-check
+        run: |
+          # Re-source export.sh to pick up newly installed esp-clang
+          . $IDF_PATH/export.sh
+          idf.py set-target ${{ matrix.idf_target }}
+          idf.py clang-check --run-clang-tidy-py run-clang-tidy --run-clang-tidy-options ""
+
+      - name: Convert to SARIF
+        if: always()
+        run: |
+          if [ -f warnings.txt ] && [ -s warnings.txt ]; then
+            ./clang-tidy-sarif -o results.sarif -i warnings.txt
+          else
+            echo '{"version":"2.1.0","runs":[]}' > results.sarif
+          fi
+
+      - name: Upload SARIF file
+        if: always()
+        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
+        with:
+          sarif_file: results.sarif
+          category: clang-tidy-${{ matrix.idf_target }}
+
+  clang-check-summary:
+    name: Clang-Tidy Summary
+    runs-on: ubuntu-latest
+    needs: clang-check
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "Clang-Tidy check completed"
+          echo "Check individual jobs for details"

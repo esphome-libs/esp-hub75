@@ -61,9 +61,11 @@ HUB75_CONST HUB75_IRAM inline constexpr uint8_t scale_6bit_to_8bit(uint8_t val6)
  * @param g8 Output: 8-bit green component (0-255)
  * @param b8 Output: 8-bit blue component (0-255)
  */
-HUB75_IRAM inline void extract_rgb888_from_format(const uint8_t *buffer, size_t pixel_idx, Hub75PixelFormat format,
-                                                  Hub75ColorOrder color_order, bool big_endian, uint8_t &r8,
-                                                  uint8_t &g8, uint8_t &b8) {
+__attribute__((always_inline)) static inline void extract_rgb888_from_format(const uint8_t *buffer, size_t pixel_idx,
+                                                                             Hub75PixelFormat format,
+                                                                             Hub75ColorOrder color_order,
+                                                                             bool big_endian, uint8_t &r8, uint8_t &g8,
+                                                                             uint8_t &b8) {
   switch (format) {
     case Hub75PixelFormat::RGB565: {
       // 16-bit RGB565

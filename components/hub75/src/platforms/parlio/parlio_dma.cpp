@@ -269,6 +269,8 @@ void ParlioDma::shutdown() {
       row_buffers_[i] = nullptr;
     }
   }
+
+  ESP_LOGI(TAG, "Shutdown complete");
 }
 
 void ParlioDma::configure_parlio() {
@@ -473,8 +475,16 @@ bool ParlioDma::allocate_row_buffers() {
   total_buffer_bytes_ = total_bytes;  // Cache for flush_cache_to_dma() and build_transaction_queue()
 
   // Always allocate first buffer (buffer 0)
-  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits", total_bytes, num_rows_, bit_depth_);
-  dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+  // ESP32-C6 has no PSRAM, so use internal DMA-capable memory
+#ifdef CONFIG_IDF_TARGET_ESP32C6
+  constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL;
+  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (internal RAM)", total_bytes, num_rows_,
+           bit_depth_);
+#else
+  constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM;
+  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (PSRAM)", total_bytes, num_rows_, bit_depth_);
+#endif
+  dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 
   if (!dma_buffers_[0]) {
     ESP_LOGE(TAG, "Failed to allocate %zu bytes of DMA memory for buffer [0]", total_bytes);
@@ -502,7 +512,7 @@ bool ParlioDma::allocate_row_buffers() {
   if (config_.double_buffer) {
     ESP_LOGI(TAG, "Allocating buffer [1]: %zu bytes (double buffering enabled)", total_bytes);
     row_buffers_[1] = new BitPlaneBuffer[buffer_count];
-    dma_buffers_[1] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+    dma_buffers_[1] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 
     if (!dma_buffers_[1]) {
       ESP_LOGE(TAG, "Failed to allocate %zu bytes of DMA memory for buffer [1]", total_bytes);
@@ -526,7 +536,12 @@ bool ParlioDma::allocate_row_buffers() {
       }
       // Set indices for double-buffer mode (front=0, active=1)
       active_idx_ = 1;
+#ifdef CONFIG_IDF_TARGET_ESP32C6
+      ESP_LOGI(TAG, "Double buffering: 2 × %zu KB = %zu KB total internal RAM", total_bytes / 1024,
+               (total_bytes * 2) / 1024);
+#else
       ESP_LOGI(TAG, "Double buffering: 2 × %zu KB = %zu KB total PSRAM", total_bytes / 1024, (total_bytes * 2) / 1024);
+#endif
     }
   }
 
@@ -767,7 +782,7 @@ void ParlioDma::set_brightness_oe() {
   // Calculate effective brightness (0-255)
   const uint8_t brightness = (uint8_t) ((float) basis_brightness_ * intensity_);
 
-  ESP_LOGI(TAG, "Setting brightness OE: brightness=%u (basis=%u × intensity=%.2f)", brightness, basis_brightness_,
+  ESP_LOGD(TAG, "Setting brightness OE: brightness=%u (basis=%u × intensity=%.2f)", brightness, basis_brightness_,
            intensity_);
 
   // Update all allocated buffers
@@ -780,11 +795,13 @@ void ParlioDma::set_brightness_oe() {
   // Flush cache after brightness update
   flush_cache_to_dma();
 
-  ESP_LOGI(TAG, "Brightness OE updated");
+  ESP_LOGD(TAG, "Brightness OE updated");
 }
 
 void ParlioDma::flush_cache_to_dma() {
   // Only flush for PSRAM (external RAM) - internal SRAM doesn't need cache sync
+  // This handles ESP32-C6 automatically: C6 uses internal RAM, so esp_ptr_external_ram()
+  // returns false and we skip the msync (which would be unnecessary overhead).
   if (!dma_buffers_[active_idx_] || !esp_ptr_external_ram(dma_buffers_[active_idx_])) {
     return;
   }
@@ -804,15 +821,15 @@ bool ParlioDma::build_transaction_queue() {
     return false;
   }
 
-  ESP_LOGI(TAG, "Starting loop transmission...");
+  ESP_LOGD(TAG, "Starting loop transmission...");
 
   // Use cached buffer size (computed once in allocate_row_buffers)
   size_t total_words = total_buffer_bytes_ / sizeof(uint16_t);
   size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
 
-  ESP_LOGI(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
+  ESP_LOGD(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
            total_bits);
-  ESP_LOGI(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
+  ESP_LOGD(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
 
   // Start loop transmission with front buffer (ESP-IDF example calls transmit ONCE with loop_transmission=true)
   esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
@@ -823,7 +840,6 @@ bool ParlioDma::build_transaction_queue() {
   }
 
   ESP_LOGI(TAG, "Loop transmission started successfully");
-  ESP_LOGI(TAG, "Buffer will repeat continuously (loop_transmission=true)");
 
   return true;
 }
@@ -835,7 +851,7 @@ void ParlioDma::set_basis_brightness(uint8_t brightness) {
     if (brightness == 0) {
       ESP_LOGI(TAG, "Brightness set to 0 (display off)");
     } else {
-      ESP_LOGI(TAG, "Basis brightness set to %u", (unsigned) brightness);
+      ESP_LOGD(TAG, "Basis brightness set to %u", (unsigned) brightness);
     }
 
     set_brightness_oe();
@@ -846,6 +862,7 @@ void ParlioDma::set_intensity(float intensity) {
   intensity = std::clamp(intensity, 0.0f, 1.0f);
   if (intensity != intensity_) {
     intensity_ = intensity;
+    ESP_LOGD(TAG, "Intensity set to %.2f", intensity);
     set_brightness_oe();
   }
 }
@@ -878,66 +895,73 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     h = rotated_height - y;
   }
 
-  // Process each pixel based on format
+  // Pre-compute pixel stride for pointer arithmetic (avoids multiply per pixel)
+  const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
+                              : (format == Hub75PixelFormat::RGB565) ? 2
+                                                                     : /* RGB888_32 */ 4;
+
+  // Check if we can use identity fast path (no coordinate transforms needed)
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Process each pixel
+  const uint8_t *pixel_ptr = buffer;
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
-      const size_t pixel_idx = (dy * w) + dx;
+      uint16_t row;
+      bool is_lower;
 
-      // Coordinate transformation pipeline (rotation + layout + scan remapping)
-      auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                              scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
-                                              virtual_width_, virtual_height_, dma_width_, num_rows_);
-      px = transformed.x;
-      const uint16_t row = transformed.row;
-      const bool is_lower = transformed.is_lower;
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        // Simple row/half calculation without modulo (subtraction is cheaper)
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = transformed.x;
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
 
+      // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
-
-      // Extract RGB888 from pixel format
-      extract_rgb888_from_format(buffer, pixel_idx, format, color_order, big_endian, r8, g8, b8);
+      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      pixel_ptr += pixel_stride;
 
       // Apply LUT correction
       const uint16_t r_corrected = lut_[r8];
       const uint16_t g_corrected = lut_[g8];
       const uint16_t b_corrected = lut_[b8];
 
-      // Update all bit planes for this pixel
+      // Pre-compute base index for this row's bit planes
+      const int row_base_idx = row * bit_depth_;
+
+      // Branchless bit-plane update using shift+and
       // PARLIO bit layout: [CLK_GATE(15)|ADDR(14-11)|--|LAT(9)|OE(8)|--|--|R2(4)|R1(5)|G2(2)|G1(3)|B2(0)|B1(1)]
-      // Based on pin mapping in configure_parlio:
-      // data_pins[0] = B2, [1] = B1, [2] = G2, [3] = G1, [4] = R2, [5] = R1
       for (int bit = 0; bit < bit_depth_; bit++) {
-        int idx = (row * bit_depth_) + bit;
-        BitPlaneBuffer &bp = target_buffers[idx];
-        uint16_t *buf = bp.data;
+        BitPlaneBuffer &bp = target_buffers[row_base_idx + bit];
 
-        const uint16_t mask = (1 << bit);
-        uint16_t word = buf[px];  // Read existing word (preserves control bits)
+        // Extract single bits (0 or 1) without branches using shift+and
+        const uint16_t r_bit = (r_corrected >> bit) & 1;
+        const uint16_t g_bit = (g_corrected >> bit) & 1;
+        const uint16_t b_bit = (b_corrected >> bit) & 1;
 
-        // Clear and update RGB bits for appropriate half
-        // IMPORTANT: Only modify RGB bits (0-5), preserve control bits (8-15)
+        uint16_t word = bp.data[px];
         if (is_lower) {
-          // Lower half: R2, G2, B2
-          word &= ~RGB_LOWER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R2_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G2_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B2_BIT);
+          word = (word & ~RGB_LOWER_MASK) | (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
         } else {
-          // Upper half: R1, G1, B1
-          word &= ~RGB_UPPER_MASK;
-          if (r_corrected & mask)
-            word |= (1 << R1_BIT);
-          if (g_corrected & mask)
-            word |= (1 << G1_BIT);
-          if (b_corrected & mask)
-            word |= (1 << B1_BIT);
+          word = (word & ~RGB_UPPER_MASK) | (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
         }
-
-        buf[px] = word;
+        bp.data[px] = word;
       }
     }
   }
@@ -967,6 +991,102 @@ void ParlioDma::clear() {
       // Clear pixel section only (padding has no RGB data)
       for (size_t x = 0; x < bp.pixel_words; x++) {
         bp.data[x] &= RGB_CLEAR_MASK;
+      }
+    }
+  }
+
+  // Flush cache for DMA visibility (if not in double buffer mode)
+  // In double buffer mode, flush happens on flip_buffer()
+  if (!is_double_buffered_) {
+    flush_cache_to_dma();
+  }
+}
+
+HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
+  // Always write to active buffer (CPU drawing buffer)
+  BitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
+
+  if (!target_buffers || !lut_) [[unlikely]] {
+    return;
+  }
+
+  // Calculate rotated dimensions (user-facing coordinates)
+  const uint16_t rotated_width = RotationTransform::get_rotated_width(virtual_width_, virtual_height_, rotation_);
+  const uint16_t rotated_height = RotationTransform::get_rotated_height(virtual_width_, virtual_height_, rotation_);
+
+  // Bounds check against rotated (user-facing) display size
+  if (x >= rotated_width || y >= rotated_height) [[unlikely]] {
+    return;
+  }
+
+  // Clip to display bounds
+  if (x + w > rotated_width) [[unlikely]] {
+    w = rotated_width - x;
+  }
+  if (y + h > rotated_height) [[unlikely]] {
+    h = rotated_height - y;
+  }
+
+  // Pre-compute LUT-corrected color values (ONCE for entire fill)
+  const uint16_t r_corrected = lut_[r];
+  const uint16_t g_corrected = lut_[g];
+  const uint16_t b_corrected = lut_[b];
+
+  // Pre-compute bit patterns for all bit planes (ONCE for entire fill)
+  // PARLIO bit layout: R1=5, R2=4, G1=3, G2=2, B1=1, B2=0
+  uint16_t upper_patterns[HUB75_BIT_DEPTH];
+  uint16_t lower_patterns[HUB75_BIT_DEPTH];
+  for (int bit = 0; bit < bit_depth_; bit++) {
+    const uint16_t mask = (1 << bit);
+    upper_patterns[bit] = ((r_corrected & mask) ? (1 << R1_BIT) : 0) | ((g_corrected & mask) ? (1 << G1_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B1_BIT) : 0);
+    lower_patterns[bit] = ((r_corrected & mask) ? (1 << R2_BIT) : 0) | ((g_corrected & mask) ? (1 << G2_BIT) : 0) |
+                          ((b_corrected & mask) ? (1 << B2_BIT) : 0);
+  }
+
+  // Check if we can use identity fast path (no coordinate transforms needed)
+  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+
+  // Fill loop
+  for (uint16_t dy = 0; dy < h; dy++) {
+    for (uint16_t dx = 0; dx < w; dx++) {
+      uint16_t px = x + dx;
+      uint16_t py = y + dy;
+      uint16_t row;
+      bool is_lower;
+
+      // Fast path: identity transform (no rotation, standard layout, standard scan)
+      if (identity_transform) {
+        if (py < num_rows_) {
+          row = py;
+          is_lower = false;
+        } else {
+          row = py - num_rows_;
+          is_lower = true;
+        }
+      } else {
+        // Full coordinate transformation pipeline
+        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                virtual_width_, virtual_height_, dma_width_, num_rows_);
+        px = transformed.x;
+        row = transformed.row;
+        is_lower = transformed.is_lower;
+      }
+
+      // Update all bit planes using pre-computed patterns
+      const int row_base_idx = row * bit_depth_;
+      for (int bit = 0; bit < bit_depth_; bit++) {
+        BitPlaneBuffer &bp = target_buffers[row_base_idx + bit];
+        uint16_t word = bp.data[px];  // Read existing word (preserves control bits)
+
+        if (is_lower) {
+          word = (word & ~RGB_LOWER_MASK) | lower_patterns[bit];
+        } else {
+          word = (word & ~RGB_UPPER_MASK) | upper_patterns[bit];
+        }
+
+        bp.data[px] = word;
       }
     }
   }

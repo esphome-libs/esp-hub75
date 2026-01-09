@@ -7,6 +7,7 @@
 // This example demonstrates:
 // - Basic driver initialization from menuconfig
 // - Simple pixel drawing using set_pixel()
+// - Efficient rectangle fill using fill()
 // - Clearing the display
 // - Adapting to different panel sizes
 
@@ -27,7 +28,7 @@ extern "C" void app_main() {
   // Print configuration summary
   ESP_LOGI(TAG, "Configuration:");
   ESP_LOGI(TAG, "  Panel: %dx%d pixels (%d-bit, %d Hz min refresh)", config.panel_width, config.panel_height,
-           config.bit_depth, config.min_refresh_rate);
+           HUB75_BIT_DEPTH, config.min_refresh_rate);
   ESP_LOGI(TAG, "  Layout: %dx%d panels (total %dx%d display)", config.layout_cols, config.layout_rows,
            config.panel_width * config.layout_cols, config.panel_height * config.layout_rows);
 
@@ -49,36 +50,30 @@ extern "C" void app_main() {
   // Clear display
   driver.clear();
 
-  // Draw colored squares in corners (using set_pixel loops)
+  // Draw colored squares in corners
+  // Uses both fill() (optimized) and set_pixel() loops to demonstrate both APIs
   const uint16_t square_size = 8;
 
-  // Top-left: Red
-  for (uint16_t y = 0; y < square_size; y++) {
-    for (uint16_t x = 0; x < square_size; x++) {
-      driver.set_pixel(x, y, 255, 0, 0);
-    }
-  }
+  // Top-left: Red (using fill - optimized for solid rectangles)
+  driver.fill(0, 0, square_size, square_size, 255, 0, 0);
 
-  // Top-right: Green
+  // Top-right: Green (using set_pixel loop - for comparison)
   for (uint16_t y = 0; y < square_size; y++) {
     for (uint16_t x = driver.get_width() - square_size; x < driver.get_width(); x++) {
       driver.set_pixel(x, y, 0, 255, 0);
     }
   }
 
-  // Bottom-left: Blue
+  // Bottom-left: Blue (using set_pixel loop - for comparison)
   for (uint16_t y = driver.get_height() - square_size; y < driver.get_height(); y++) {
     for (uint16_t x = 0; x < square_size; x++) {
       driver.set_pixel(x, y, 0, 0, 255);
     }
   }
 
-  // Bottom-right: White
-  for (uint16_t y = driver.get_height() - square_size; y < driver.get_height(); y++) {
-    for (uint16_t x = driver.get_width() - square_size; x < driver.get_width(); x++) {
-      driver.set_pixel(x, y, 255, 255, 255);
-    }
-  }
+  // Bottom-right: White (using fill - optimized for solid rectangles)
+  driver.fill(driver.get_width() - square_size, driver.get_height() - square_size, square_size, square_size, 255, 255,
+              255);
 
   // Draw center cross in cyan
   uint16_t cx = driver.get_width() / 2;

@@ -79,12 +79,11 @@ class PlatformDma {
    * @param num_rows Number of row pairs (panel_height / 2)
    * @return Transformed coordinates with row index and half indicator
    */
-  static inline TransformedCoords transform_coordinate(uint16_t px, uint16_t py, Hub75Rotation rotation,
-                                                       bool needs_layout_remap, bool needs_scan_remap,
-                                                       Hub75PanelLayout layout, Hub75ScanWiring scan_wiring,
-                                                       uint16_t panel_width, uint16_t panel_height,
-                                                       uint16_t layout_rows, uint16_t layout_cols, uint16_t phys_width,
-                                                       uint16_t phys_height, uint16_t dma_width, uint16_t num_rows) {
+  __attribute__((always_inline)) static inline TransformedCoords transform_coordinate(
+      uint16_t px, uint16_t py, Hub75Rotation rotation, bool needs_layout_remap, bool needs_scan_remap,
+      Hub75PanelLayout layout, Hub75ScanWiring scan_wiring, uint16_t panel_width, uint16_t panel_height,
+      uint16_t layout_rows, uint16_t layout_cols, uint16_t phys_width, uint16_t phys_height, uint16_t dma_width,
+      uint16_t num_rows) {
     Coords c = {.x = px, .y = py};
 
     // Step 1: Rotation transform (FIRST - convert rotated user coords to physical)
@@ -188,6 +187,23 @@ class PlatformDma {
    * In double-buffer mode: Clears the back buffer (requires flip to display).
    */
   virtual void clear() {
+    // Default: no-op
+  }
+
+  /**
+   * @brief Fill a rectangular region with a solid color
+   * @param x X coordinate (top-left)
+   * @param y Y coordinate (top-left)
+   * @param w Width in pixels
+   * @param h Height in pixels
+   * @param r Red component (0-255)
+   * @param g Green component (0-255)
+   * @param b Blue component (0-255)
+   *
+   * Optimized for solid color fills - color conversion and bit pattern
+   * calculation are done once for the entire region.
+   */
+  virtual void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) {
     // Default: no-op
   }
 
