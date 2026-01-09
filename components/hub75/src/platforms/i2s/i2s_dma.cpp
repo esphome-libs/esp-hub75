@@ -260,44 +260,84 @@ bool I2sDma::init() {
 
 void I2sDma::configure_i2s_timing() {
   auto *dev = i2s_dev_;
-  uint32_t freq = static_cast<uint32_t>(config_.output_clock_speed);
 
   // Sample rate configuration
   dev->sample_rate_conf.val = 0;
   dev->sample_rate_conf.rx_bits_mod = 16;  // 16-bit parallel
   dev->sample_rate_conf.tx_bits_mod = 16;
 
+  // Output Frequency = (Source_CLK / clkm_div_num) / (tx_bck_div_num * 2)
+  unsigned int clkm_div, bck_div, actual_freq;
+
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
-  // ESP32-S2: Use PLL_160M
+  // ESP32-S2: Use PLL_160M (160MHz source)
   dev->clkm_conf.clk_sel = 2;  // PLL_160M_CLK
   dev->clkm_conf.clkm_div_a = 1;
   dev->clkm_conf.clkm_div_b = 0;
 
-  // Output Frequency = (160MHz / clkm_div_num) / (tx_bck_div_num*2)
-  unsigned int div_num = (freq > 8000000) ? 2 : 4;  // 20MHz or 10MHz
-  dev->clkm_conf.clkm_div_num = div_num;
+  switch (config_.output_clock_speed) {
+    case Hub75ClockSpeed::HZ_20M:
+      // 160/2/4 = 20MHz
+      clkm_div = 2;
+      bck_div = 2;
+      actual_freq = 20;
+      break;
+    case Hub75ClockSpeed::HZ_16M:
+      ESP_LOGW(TAG, "16MHz not achievable on ESP32-S2, using 10MHz");
+      [[fallthrough]];
+    case Hub75ClockSpeed::HZ_10M:
+      // 160/4/4 = 10MHz
+      clkm_div = 4;
+      bck_div = 2;
+      actual_freq = 10;
+      break;
+    case Hub75ClockSpeed::HZ_8M:
+      // 160/5/4 = 8MHz
+      clkm_div = 5;
+      bck_div = 2;
+      actual_freq = 8;
+      break;
+  }
+  dev->clkm_conf.clkm_div_num = clkm_div;
   dev->clkm_conf.clk_en = 1;
+  dev->sample_rate_conf.rx_bck_div_num = bck_div;
+  dev->sample_rate_conf.tx_bck_div_num = bck_div;
 
-  // BCK divider (must be >= 2 per TRM)
-  dev->sample_rate_conf.rx_bck_div_num = 2;
-  dev->sample_rate_conf.tx_bck_div_num = 2;
-
-  ESP_LOGI(TAG, "ESP32-S2 I2S clock: 160MHz / %d / 4 = %d MHz", div_num, 160 / div_num / 4);
+  ESP_LOGI(TAG, "ESP32-S2 I2S clock: 160MHz / %u / %u = %u MHz", clkm_div, bck_div * 2, actual_freq);
 #else
-  // ESP32: Use PLL_D2 (80MHz)
+  // ESP32: Use PLL_D2 (80MHz source)
   dev->clkm_conf.clka_en = 0;     // Use PLL_D2_CLK (80MHz)
   dev->clkm_conf.clkm_div_a = 1;  // Denominator
   dev->clkm_conf.clkm_div_b = 0;  // Numerator
 
-  // Calculate divider: 80MHz / clkm_div_num / tx_bck_div_num
-  unsigned int div_num = (freq > 8000000) ? 2 : 4;  // 20MHz or 10MHz
-  dev->clkm_conf.clkm_div_num = div_num;
+  switch (config_.output_clock_speed) {
+    case Hub75ClockSpeed::HZ_20M:
+      // 80/1/4 = 20MHz
+      clkm_div = 1;
+      bck_div = 2;
+      actual_freq = 20;
+      break;
+    case Hub75ClockSpeed::HZ_16M:
+      ESP_LOGW(TAG, "16MHz not achievable on ESP32, using 10MHz");
+      [[fallthrough]];
+    case Hub75ClockSpeed::HZ_10M:
+      // 80/2/4 = 10MHz
+      clkm_div = 2;
+      bck_div = 2;
+      actual_freq = 10;
+      break;
+    case Hub75ClockSpeed::HZ_8M:
+      // 80/1/10 = 8MHz
+      clkm_div = 1;
+      bck_div = 5;
+      actual_freq = 8;
+      break;
+  }
+  dev->clkm_conf.clkm_div_num = clkm_div;
+  dev->sample_rate_conf.tx_bck_div_num = bck_div;
+  dev->sample_rate_conf.rx_bck_div_num = bck_div;
 
-  // BCK divider (must be >= 2 per TRM)
-  dev->sample_rate_conf.tx_bck_div_num = 2;
-  dev->sample_rate_conf.rx_bck_div_num = 2;
-
-  ESP_LOGI(TAG, "ESP32 I2S clock: 80MHz / %d / 4 = %d MHz", div_num, 80 / div_num / 4);
+  ESP_LOGI(TAG, "ESP32 I2S clock: 80MHz / %u / %u = %u MHz", clkm_div, bck_div * 2, actual_freq);
 #endif
 }
 
