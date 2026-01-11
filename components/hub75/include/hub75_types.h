@@ -35,6 +35,9 @@ enum class Hub75ColorOrder {
  *
  * Platform limits: ESP32 max 10MHz, ESP32-S2 max 20MHz, ESP32-S3/P4/C6 max 32MHz.
  * Unsupported speeds fall back to platform max with a warning.
+ *
+ * Note: Panel and wiring quality are often the limiting factor. If you see
+ * visual artifacts or instability, try reducing the clock speed.
  */
 enum class Hub75ClockSpeed : uint32_t {
   HZ_8M = 8000000,
