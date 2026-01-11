@@ -298,6 +298,8 @@ void I2sDma::configure_i2s_timing() {
       clkm_div = 5;  // 160/5/4 = 8MHz
       actual_freq = 8;
       break;
+    default:
+      __builtin_unreachable();
   }
 
   dev->clkm_conf.clkm_div_num = clkm_div;
@@ -351,6 +353,8 @@ void I2sDma::configure_i2s_timing() {
       clkm_div = 4;  // 80/4/4 = 5MHz
       actual_freq = 5;
       break;
+    default:
+      __builtin_unreachable();
   }
 
   dev->clkm_conf.clkm_div_num = clkm_div;
