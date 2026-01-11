@@ -298,11 +298,6 @@ void I2sDma::configure_i2s_timing() {
       clkm_div = 5;  // 160/5/4 = 8MHz
       actual_freq = 8;
       break;
-    default:
-      ESP_LOGW(TAG, "Unknown clock speed, falling back to 10MHz");
-      clkm_div = 4;
-      actual_freq = 10;
-      break;
   }
 
   dev->clkm_conf.clkm_div_num = clkm_div;
@@ -355,11 +350,6 @@ void I2sDma::configure_i2s_timing() {
       ESP_LOGW(TAG, "8MHz not achievable on ESP32, falling back to 5MHz");
       clkm_div = 4;  // 80/4/4 = 5MHz
       actual_freq = 5;
-      break;
-    default:
-      ESP_LOGW(TAG, "Unknown clock speed, falling back to 10MHz");
-      clkm_div = 2;
-      actual_freq = 10;
       break;
   }
 
