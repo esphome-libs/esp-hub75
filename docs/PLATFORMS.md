@@ -4,16 +4,87 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 
 ## Platform Comparison Table
 
-| Feature | ESP32 / ESP32-S2 | ESP32-S3 | ESP32-P4 | ESP32-C6 |
-|---------|------------------|----------|----------|----------|
-| **Peripheral** | I2S (LCD mode) | LCD_CAM | PARLIO | PARLIO |
-| **DMA Engine** | I2S DMA | GDMA (AHB) | EDMA | EDMA |
-| **Memory** | Internal SRAM | Internal SRAM | **PSRAM** | Internal SRAM |
-| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~284 KB | ~284 KB |
-| **BCM Method** | Descriptor dup | Descriptor dup | Buffer padding | Buffer padding |
-| **Clock Gating** | No | No | **Yes** (MSB) | **No** |
-| **Max Clock** | 20 MHz | 40 MHz | 40 MHz+ | 40 MHz+ |
-| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ⏳ Planned |
+| Feature | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4 | ESP32-C6 |
+|---------|-------|----------|----------|----------|----------|
+| **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO | PARLIO |
+| **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA | EDMA |
+| **Memory** | Internal SRAM | Internal SRAM | Internal SRAM | **PSRAM** | Internal SRAM |
+| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | ~284 KB |
+| **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Buffer padding |
+| **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
+| **Max Clock** | 10 MHz | 20 MHz | 40 MHz | 40 MHz+ | 40 MHz+ |
+| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | ⏳ Planned |
+
+---
+
+## Clock Speed Reference
+
+The achievable clock speeds depend on platform hardware constraints. The I2S peripheral
+on ESP32/ESP32-S2 has different clock divider limitations than the LCD_CAM and PARLIO
+peripherals on newer chips.
+
+### Clock Speed by Platform
+
+| Requested | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4/C6 |
+|-----------|-------|----------|----------|-------------|
+| **32 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 32 MHz | ✅ 32 MHz |
+| **20 MHz** | ⚠️ 10 MHz | ✅ 20 MHz | ✅ 20 MHz | ✅ 20 MHz |
+| **16 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 16 MHz | ✅ 16 MHz |
+| **10 MHz** | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz |
+| **8 MHz** | ⚠️ 5 MHz | ✅ 8 MHz | ✅ 8 MHz | ✅ 8 MHz |
+
+⚠️ = Falls back to nearest achievable frequency (warning logged at runtime)
+
+### ESP32 Clock Limitations
+
+The ESP32 uses PLL_D2_CLK (80 MHz) as the I2S clock source. The output frequency is:
+
+```
+Output = 80 MHz / clkm_div_num / (tx_bck_div_num × 2)
+```
+
+Per the ESP32 TRM (Section 12.6), both `clkm_div_num` and `tx_bck_div_num` must be ≥ 2.
+With minimum dividers (2, 2), the maximum achievable frequency is:
+
+```
+80 MHz / 2 / 4 = 10 MHz (maximum)
+```
+
+Higher frequencies (16/20 MHz) would require `clkm_div_num < 2`, which violates TRM
+constraints and produces undefined behavior.
+
+### ESP32-S2 Clock Configuration
+
+The ESP32-S2 uses PLL_160M (160 MHz) as the I2S clock source:
+
+```
+Output = 160 MHz / clkm_div_num / (tx_bck_div_num × 2)
+```
+
+With the same divider constraints, more frequencies are achievable:
+
+| Speed | clkm_div | Formula | Result |
+|-------|----------|---------|--------|
+| 20 MHz | 2 | 160/2/4 | 20 MHz ✓ |
+| 16 MHz | — | Not achievable with integer dividers | Falls back to 10 MHz |
+| 10 MHz | 4 | 160/4/4 | 10 MHz ✓ |
+| 8 MHz | 5 | 160/5/4 | 8 MHz ✓ |
+
+### ESP32-S3 / ESP32-P4 / ESP32-C6
+
+These platforms use LCD_CAM or PARLIO peripherals with simpler clock dividers:
+
+```
+Output = 160 MHz / div_num
+```
+
+All standard frequencies (8/10/16/20/32 MHz) are achievable with integer dividers.
+
+### References
+
+- ESP32 TRM v5.3, Section 12.5-12.6 (I2S Clock)
+- ESP32-S2 TRM v1.5, Section 12.5-12.6 (I2S Clock)
+- ESP32-S3 TRM, Chapter 26 (LCD_CAM)
 
 ---
 
@@ -66,7 +137,7 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 ### Limitations
 
 - **I2S peripheral misuse**: Designed for audio, not parallel data
-- **20 MHz max clock**: Higher speeds may be unstable
+- **Clock speed limits**: ESP32 max 10 MHz, ESP32-S2 max 20 MHz (see [Clock Speed Reference](#clock-speed-reference))
 - **No PSRAM support**: All buffers must be internal SRAM
 
 ### Advantages

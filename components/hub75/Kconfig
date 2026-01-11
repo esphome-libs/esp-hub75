@@ -282,10 +282,10 @@ menu "HUB75 RGB LED Matrix Driver"
                 Higher speeds = faster refresh, but may cause signal integrity
                 issues on long cables or with some panels.
 
-                  - 8 MHz: Very conservative
-                  - 10 MHz: Conservative, works with all panels
-                  - 16 MHz: Good balance
-                  - 20 MHz: Recommended default
+                Platform limits (falls back with warning if exceeded):
+                  - ESP32: 10 MHz max
+                  - ESP32-S2: 20 MHz max
+                  - ESP32-S3/P4/C6: 32 MHz
 
             config HUB75_CLK_8MHZ
                 bool "8 MHz (Very Conservative)"
@@ -298,6 +298,9 @@ menu "HUB75 RGB LED Matrix Driver"
 
             config HUB75_CLK_20MHZ
                 bool "20 MHz (Recommended)"
+
+            config HUB75_CLK_32MHZ
+                bool "32 MHz (ESP32-S3/P4/C6 only)"
         endchoice
 
         config HUB75_MIN_REFRESH_RATE

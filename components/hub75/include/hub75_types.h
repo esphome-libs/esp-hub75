@@ -33,13 +33,18 @@ enum class Hub75ColorOrder {
 /**
  * @brief Output clock speed options
  *
- * Valid speeds that divide evenly from 160MHz base clock.
+ * Platform limits: ESP32 max 10MHz, ESP32-S2 max 20MHz, ESP32-S3/P4/C6 max 32MHz.
+ * Unsupported speeds fall back to platform max with a warning.
+ *
+ * Note: Panel and wiring quality are often the limiting factor. If you see
+ * visual artifacts or instability, try reducing the clock speed.
  */
 enum class Hub75ClockSpeed : uint32_t {
-  HZ_8M = 8000000,    // 8 MHz
-  HZ_10M = 10000000,  // 10 MHz
-  HZ_16M = 16000000,  // 16 MHz
-  HZ_20M = 20000000,  // 20 MHz (default)
+  HZ_8M = 8000000,
+  HZ_10M = 10000000,
+  HZ_16M = 16000000,
+  HZ_20M = 20000000,  // default
+  HZ_32M = 32000000,  // ESP32-S3/P4/C6 only
 };
 
 /**
