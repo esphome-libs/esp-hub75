@@ -278,6 +278,10 @@ void I2sDma::configure_i2s_timing() {
   unsigned int clkm_div;
   unsigned int actual_freq;
   switch (config_.output_clock_speed) {
+    case Hub75ClockSpeed::HZ_32M:
+      // 32MHz not achievable on ESP32-S2 (max 20MHz), falling back
+      ESP_LOGW(TAG, "32MHz not achievable on ESP32-S2 (max 20MHz), falling back to 20MHz");
+      [[fallthrough]];
     case Hub75ClockSpeed::HZ_20M:
       clkm_div = 2;  // 160/2/4 = 20MHz
       actual_freq = 20;
@@ -327,6 +331,11 @@ void I2sDma::configure_i2s_timing() {
   unsigned int clkm_div;
   unsigned int actual_freq;
   switch (config_.output_clock_speed) {
+    case Hub75ClockSpeed::HZ_32M:
+      ESP_LOGW(TAG, "32MHz not achievable on ESP32 (max 10MHz), falling back to 10MHz");
+      clkm_div = 2;  // 80/2/4 = 10MHz
+      actual_freq = 10;
+      break;
     case Hub75ClockSpeed::HZ_20M:
       ESP_LOGW(TAG, "20MHz not achievable on ESP32 (max 10MHz), falling back to 10MHz");
       clkm_div = 2;  // 80/2/4 = 10MHz

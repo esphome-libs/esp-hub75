@@ -212,6 +212,8 @@ static inline Hub75Config getMenuConfigSettings() {
   config.output_clock_speed = Hub75ClockSpeed::HZ_16M;
 #elif defined(CONFIG_HUB75_CLK_20MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_20M;
+#elif defined(CONFIG_HUB75_CLK_32MHZ)
+  config.output_clock_speed = Hub75ClockSpeed::HZ_32M;
 #endif
 
   // Performance settings

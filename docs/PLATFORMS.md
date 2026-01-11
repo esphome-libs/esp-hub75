@@ -27,6 +27,7 @@ peripherals on newer chips.
 
 | Requested | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4/C6 |
 |-----------|-------|----------|----------|-------------|
+| **32 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 32 MHz | ✅ 32 MHz |
 | **20 MHz** | ⚠️ 10 MHz | ✅ 20 MHz | ✅ 20 MHz | ✅ 20 MHz |
 | **16 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 16 MHz | ✅ 16 MHz |
 | **10 MHz** | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz |
@@ -77,7 +78,7 @@ These platforms use LCD_CAM or PARLIO peripherals with simpler clock dividers:
 Output = 160 MHz / div_num
 ```
 
-All standard frequencies (8/10/16/20/40 MHz) are achievable with integer dividers.
+All standard frequencies (8/10/16/20/32 MHz) are achievable with integer dividers.
 
 ### References
 
