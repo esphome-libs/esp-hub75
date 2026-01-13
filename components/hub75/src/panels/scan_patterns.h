@@ -175,7 +175,8 @@ consteval bool test_standard_scan_identity() {
   constexpr Coords input = {32, 16};
   constexpr uint16_t panel_width = 64;
   constexpr uint16_t panel_height = 32;
-  constexpr Coords output = ScanPatternRemap::remap(input, Hub75ScanWiring::STANDARD_TWO_SCAN, panel_width, panel_height);
+  constexpr Coords output =
+      ScanPatternRemap::remap(input, Hub75ScanWiring::STANDARD_TWO_SCAN, panel_width, panel_height);
   return (output.x == input.x) && (output.y == input.y);
 }
 
@@ -195,7 +196,8 @@ consteval bool test_four_scan_no_overflow() {
 consteval bool test_four_scan_32px_segment_size() {
   constexpr uint16_t panel_width = 64;
   constexpr uint16_t panel_height = 32;
-  constexpr uint16_t segment_size = get_four_scan_segment_size(Hub75ScanWiring::FOUR_SCAN_32PX_HIGH, panel_width, panel_height);
+  constexpr uint16_t segment_size =
+      get_four_scan_segment_size(Hub75ScanWiring::FOUR_SCAN_32PX_HIGH, panel_width, panel_height);
   // For 64x32 panel: segment_size = 64 / (32 / 8) = 64 / 4 = 16
   return segment_size == 16;
 }
@@ -223,20 +225,23 @@ consteval bool test_four_scan_32px_remap() {
   constexpr Coords in1 = {0, 0};
   constexpr Coords out1 = ScanPatternRemap::remap(in1, Hub75ScanWiring::FOUR_SCAN_32PX_HIGH, panel_width, panel_height);
   // y & 8 == 0, so x += ((0/16) + 1) * 16 = 16
-  if (out1.x != 16 || out1.y != 0) return false;
+  if (out1.x != 16 || out1.y != 0)
+    return false;
 
   // Test pixel at (0, 8) - should remap to x=0, y=0
   constexpr Coords in2 = {0, 8};
   constexpr Coords out2 = ScanPatternRemap::remap(in2, Hub75ScanWiring::FOUR_SCAN_32PX_HIGH, panel_width, panel_height);
   // y & 8 != 0, so x += (0/16) * 16 = 0
   // y = (8 >> 4) * 8 + (8 & 0b111) = 0 * 8 + 0 = 0
-  if (out2.x != 0 || out2.y != 0) return false;
+  if (out2.x != 0 || out2.y != 0)
+    return false;
 
   // Test pixel at (16, 0) - should remap to x=48, y=0
   constexpr Coords in3 = {16, 0};
   constexpr Coords out3 = ScanPatternRemap::remap(in3, Hub75ScanWiring::FOUR_SCAN_32PX_HIGH, panel_width, panel_height);
   // y & 8 == 0, so x += ((16/16) + 1) * 16 = 32, total = 16 + 32 = 48
-  if (out3.x != 48 || out3.y != 0) return false;
+  if (out3.x != 48 || out3.y != 0)
+    return false;
 
   return true;
 }

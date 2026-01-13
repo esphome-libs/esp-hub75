@@ -104,7 +104,8 @@ I2sDma::I2sDma(const Hub75Config &config)
       virtual_width_(config.panel_width * config.layout_cols),
       virtual_height_(config.panel_height * config.layout_rows),
       // Use helper function to compute DMA width (doubles for four-scan panels)
-      dma_width_(get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
+      dma_width_(
+          get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
       scan_wiring_(config.scan_wiring),
       layout_(config.layout),
       needs_scan_remap_(config.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN),
@@ -233,8 +234,8 @@ bool I2sDma::init() {
 
   i2s_dev_->timing.val = 0;
 
-  ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_,
-           layout_cols_, layout_rows_, virtual_width_, virtual_height_);
+  ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
+           layout_rows_, virtual_width_, virtual_height_);
   ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), four-scan: %s", dma_width_, num_rows_,
            is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
 
