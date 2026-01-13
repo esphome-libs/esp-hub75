@@ -157,19 +157,38 @@ menu "HUB75 RGB LED Matrix Driver"
                 try one of the FOUR_SCAN variants.
 
                 FOUR_SCAN patterns are for panels with non-standard internal
-                wiring where shift registers are arranged differently.
+                wiring where shift registers are arranged differently. The
+                driver automatically adjusts DMA buffer dimensions and
+                coordinate remapping for these panels.
 
             config HUB75_WIRING_STANDARD
                 bool "Standard (Most Panels)"
+                help
+                    Standard two-scan wiring (no coordinate remapping needed).
+                    Works with most HUB75 panels.
 
             config HUB75_WIRING_FOUR_SCAN_16PX
                 bool "Four-Scan 1/4 (16px high panels)"
+                help
+                    For 16-pixel high panels with 1/4 scan (4 row addresses).
+                    Uses four-scan wiring with panel-width pixel segments.
 
             config HUB75_WIRING_FOUR_SCAN_32PX
                 bool "Four-Scan 1/8 (32px high panels)"
+                help
+                    For 32-pixel high panels with 1/8 scan (8 row addresses).
+                    Common for 64x32 panels with non-standard wiring.
+
+                    Uses four-scan wiring with 16-pixel segments.
+                    DMA buffer is doubled in width, halved in height.
+
+                    Example: 64x32 panel -> DMA buffer 128x8
 
             config HUB75_WIRING_FOUR_SCAN_64PX
                 bool "Four-Scan 1/8 (64px high panels)"
+                help
+                    For 64-pixel high panels with 1/8 scan wiring.
+                    Uses four-scan wiring with panel-width pixel segments.
         endchoice
 
         choice HUB75_SHIFT_DRIVER

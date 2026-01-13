@@ -161,13 +161,15 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       layout_cols_(config.layout_cols),
       virtual_width_(config.panel_width * config.layout_cols),
       virtual_height_(config.panel_height * config.layout_rows),
-      dma_width_(config.panel_width * config.layout_rows * config.layout_cols),
+      // Use helper function to compute DMA width (doubles for four-scan panels)
+      dma_width_(get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
       scan_wiring_(config.scan_wiring),
       layout_(config.layout),
       needs_scan_remap_(config.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN),
       needs_layout_remap_(config.layout != Hub75PanelLayout::HORIZONTAL),
       rotation_(config.rotation),
-      num_rows_(config.panel_height / 2),
+      // Use helper function to compute num_rows (halves for four-scan panels)
+      num_rows_(get_effective_num_rows(config.scan_wiring, config.panel_height)),
       dma_buffers_{nullptr, nullptr},
       row_buffers_{nullptr, nullptr},
       front_idx_(0),
@@ -177,6 +179,8 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       intensity_(1.0f),
       transfer_started_(false) {
   // Initialize transmit config
+  // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
+  // to match the physical shift register layout
   transmit_config_.idle_value = 0x00;
   transmit_config_.bitscrambler_program = nullptr;
   transmit_config_.flags.queue_nonblocking = 0;
@@ -193,9 +197,11 @@ bool ParlioDma::init() {
            ""
 #endif
   );
-  ESP_LOGI(TAG, "Panel: %dx%d, Layout: %dx%d, Virtual: %dx%d, DMA: %dx%d", panel_width_, panel_height_, layout_cols_,
-           layout_rows_, virtual_width_, virtual_height_, dma_width_, panel_height_);
-  ESP_LOGI(TAG, "Rows: %d, Bit depth: %d", num_rows_, bit_depth_);
+  ESP_LOGI(TAG, "Panel: %dx%d, Layout: %dx%d, Virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
+           layout_rows_, virtual_width_, virtual_height_);
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), four-scan: %s", dma_width_, num_rows_,
+           is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
+  ESP_LOGI(TAG, "Bit depth: %d", bit_depth_);
 
   // Calculate BCM timings first
   calculate_bcm_timings();

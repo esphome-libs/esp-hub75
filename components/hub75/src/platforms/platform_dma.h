@@ -97,8 +97,9 @@ class PlatformDma {
     }
 
     // Step 3: Scan pattern remapping (if non-standard panel)
+    // Pass panel_height to enable correct segment size calculation for four-scan panels
     if (needs_scan_remap) {
-      c = ScanPatternRemap::remap(c, scan_wiring, panel_width);
+      c = ScanPatternRemap::remap(c, scan_wiring, panel_width, panel_height);
     }
 
     return {.x = c.x, .y = c.y, .row = static_cast<uint16_t>(c.y % num_rows), .is_lower = (c.y >= num_rows)};
