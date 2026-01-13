@@ -75,7 +75,6 @@ void app_main() {
     Hub75Config config{};
     config.panel_width = 64;
     config.panel_height = 64;
-    config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
     config.shift_driver = Hub75ShiftDriver::FM6126A;  // Try this if GENERIC doesn't work
 
     // Set GPIO pins (example for ESP32-S3)

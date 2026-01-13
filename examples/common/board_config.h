@@ -21,16 +21,7 @@ static inline Hub75Config getMenuConfigSettings() {
   config.panel_width = CONFIG_HUB75_PANEL_WIDTH;
   config.panel_height = CONFIG_HUB75_PANEL_HEIGHT;
 
-  // Scan pattern
-#if defined(CONFIG_HUB75_SCAN_1_8)
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_8;
-#elif defined(CONFIG_HUB75_SCAN_1_16)
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_16;
-#elif defined(CONFIG_HUB75_SCAN_1_32)
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
-#endif
-
-  // Scan wiring
+  // Scan wiring (scan rate is determined automatically from panel_height)
 #if defined(CONFIG_HUB75_WIRING_STANDARD)
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 #elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_16PX)

@@ -9,6 +9,7 @@
 #include "../color/color_convert.h"
 #include "../drivers/driver_init.h"
 #include "../panels/rotation.h"
+#include "../panels/scan_patterns.h"
 #include "../platforms/platform_dma.h"
 #include "../platforms/platform_detect.h"
 
@@ -49,7 +50,9 @@ Hub75Driver::Hub75Driver(const Hub75Config &config) : config_(config), running_(
            (unsigned int) config_.panel_height, (unsigned int) config_.layout_cols, (unsigned int) config_.layout_rows,
            (unsigned int) (config_.panel_width * config_.layout_cols),
            (unsigned int) (config_.panel_height * config_.layout_rows));
-  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), scan 1/%u", HUB75_BIT_DEPTH, (unsigned int) config_.scan_pattern);
+  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), %u row addresses, four-scan: %s", HUB75_BIT_DEPTH,
+           (unsigned int) get_effective_num_rows(config_.scan_wiring, config_.panel_height),
+           is_four_scan_wiring(config_.scan_wiring) ? "yes" : "no");
 }
 
 Hub75Driver::~Hub75Driver() { end(); }

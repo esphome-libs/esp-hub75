@@ -43,17 +43,6 @@ enum class Hub75ClockSpeed : uint32_t {
 };
 
 /**
- * @brief Panel scan pattern (scan rate: number of row pairs)
- */
-enum class Hub75ScanPattern {
-  SCAN_1_2 = 2,    // 1/2 scan (upper/lower half)
-  SCAN_1_4 = 4,    // 1/4 scan
-  SCAN_1_8 = 8,    // 1/8 scan
-  SCAN_1_16 = 16,  // 1/16 scan
-  SCAN_1_32 = 32,  // 1/32 scan
-};
-
-/**
  * @brief Scan wiring pattern - how panel's internal shift registers are wired
  *
  * This determines coordinate remapping for panels with non-standard internal wiring.
@@ -157,10 +146,10 @@ struct Hub75Config {
   // Height of a single panel module in pixels (typically 32 or 64)
   uint16_t panel_height = 64;
 
-  // Scan rate pattern (number of row pairs: typically 1/16 for 32px or 1/32 for 64px height)
-  Hub75ScanPattern scan_pattern = Hub75ScanPattern::SCAN_1_32;
-
   // Scan wiring pattern (coordinate remapping for non-standard panels)
+  // Note: The scan rate (1/8, 1/16, 1/32) is determined automatically from
+  // panel_height and scan_wiring. For standard panels, num_rows = panel_height / 2.
+  // For four-scan panels, num_rows = panel_height / 4.
   Hub75ScanWiring scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 
   // Shift driver chip type (determines initialization sequence)

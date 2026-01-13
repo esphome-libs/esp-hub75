@@ -121,31 +121,6 @@ menu "HUB75 RGB LED Matrix Driver"
 
                 Height determines the required scan pattern.
 
-        choice HUB75_SCAN_PATTERN
-            prompt "Scan Pattern"
-            default HUB75_SCAN_1_32 if HUB75_PANEL_HEIGHT = 64
-            default HUB75_SCAN_1_16 if HUB75_PANEL_HEIGHT = 32
-            default HUB75_SCAN_1_8
-            help
-                Row scanning pattern (must match panel hardware).
-
-                Formula: scan_pattern = height / 2
-                  - 16 pixels high → 1/8 scan (8 row pairs)
-                  - 32 pixels high → 1/16 scan (16 row pairs)
-                  - 64 pixels high → 1/32 scan (32 row pairs)
-
-                If unsure, match to panel height as shown above.
-
-            config HUB75_SCAN_1_8
-                bool "1/8 Scan (16-row panels)"
-
-            config HUB75_SCAN_1_16
-                bool "1/16 Scan (32-row panels)"
-
-            config HUB75_SCAN_1_32
-                bool "1/32 Scan (64-row panels)"
-        endchoice
-
         choice HUB75_SCAN_WIRING
             prompt "Scan Wiring Pattern"
             default HUB75_WIRING_STANDARD

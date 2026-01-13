@@ -28,7 +28,6 @@ static inline Hub75Config getDefaultConfig_ESP32() {
   // Single panel specifications
   config.panel_width = 64;
   config.panel_height = 64;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;  // 64 rows = 1/32 scan
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
 
@@ -81,7 +80,6 @@ static inline Hub75Config getDefaultConfig_32x32() {
 
   config.panel_width = 32;
   config.panel_height = 32;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_16;  // 32 rows = 1/16 scan
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
@@ -116,7 +114,6 @@ static inline Hub75Config getDefaultConfig_ESP32S3() {
 
   config.panel_width = 64;
   config.panel_height = 64;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
@@ -155,7 +152,6 @@ static inline Hub75Config getDefaultConfig_ESP32C6() {
 
   config.panel_width = 64;
   config.panel_height = 64;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
   config.layout_rows = 1;
@@ -195,7 +191,6 @@ static inline Hub75Config getDefaultConfig_Chained() {
   // Panel specifications
   config.panel_width = 64;
   config.panel_height = 64;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
 
@@ -233,7 +228,6 @@ static inline Hub75Config getUserConfig_ESP32S3_Dual64x64() {
   // Panel configuration (2x 64x64 panels = 128x64 virtual display)
   config.panel_width = 64;
   config.panel_height = 64;
-  config.scan_pattern = Hub75ScanPattern::SCAN_1_32;  // 64 rows = 1/32 scan
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
   config.shift_driver = Hub75ShiftDriver::GENERIC;
 

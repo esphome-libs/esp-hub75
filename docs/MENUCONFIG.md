@@ -107,24 +107,16 @@ Choose which example to build in main/:
 - **Common values**: 16, 32, 64
 - **Note**: Determines required scan pattern
 
-### HUB75_SCAN_PATTERN
-- **Type**: choice
-- **Options**:
-  - `SCAN_1_8` - 16-row panels (1/8 scan)
-  - `SCAN_1_16` - 32-row panels (1/16 scan)
-  - `SCAN_1_32` - 64-row panels (1/32 scan)
-- **Auto-selection**: Default matches panel_height
-- **Formula**: `num_rows = height / scan_pattern`
-
 ### HUB75_SCAN_WIRING
 - **Type**: choice
 - **Default**: STANDARD
 - **Options**:
-  - `WIRING_STANDARD` - Most panels (95%)
+  - `WIRING_STANDARD` - Most panels (95%), num_rows = height / 2
   - `WIRING_FOUR_SCAN_16PX` - Four-scan 1/4 scan, 16px high
-  - `WIRING_FOUR_SCAN_32PX` - Four-scan 1/8 scan, 32px high
+  - `WIRING_FOUR_SCAN_32PX` - Four-scan 1/8 scan, 32px high (e.g., 64x32 panels), num_rows = height / 4
   - `WIRING_FOUR_SCAN_64PX` - Four-scan 1/8 scan, 64px high
-- **Use when**: Display shows scrambled output with correct pins/scan pattern
+- **Use when**: Display shows scrambled output with correct pins
+- **Note**: Four-scan wiring automatically adjusts DMA buffer dimensions (doubled width, halved row count)
 
 ### HUB75_SHIFT_DRIVER
 - **Type**: choice
