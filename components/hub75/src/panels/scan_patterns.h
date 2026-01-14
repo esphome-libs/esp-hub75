@@ -32,7 +32,7 @@ struct Coords {
  * - Number of row addresses to be halved
  * - Coordinate remapping with segment interleaving
  */
-HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
+__attribute__((always_inline)) HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
   return wiring == Hub75ScanWiring::SCAN_1_4_16PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_32PX_HIGH ||
          wiring == Hub75ScanWiring::SCAN_1_8_40PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
 }
@@ -43,8 +43,10 @@ HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
  * For standard panels: panel_width * layout_rows * layout_cols
  * For 1/4 or 1/8 scan panels: panel_width * 2 * layout_rows * layout_cols
  */
-HUB75_CONST inline constexpr uint16_t get_effective_dma_width(Hub75ScanWiring wiring, uint16_t panel_width,
-                                                              uint16_t layout_rows, uint16_t layout_cols) {
+__attribute__((always_inline)) HUB75_CONST inline constexpr uint16_t get_effective_dma_width(Hub75ScanWiring wiring,
+                                                                                             uint16_t panel_width,
+                                                                                             uint16_t layout_rows,
+                                                                                             uint16_t layout_cols) {
   const uint16_t multiplier = is_four_scan_wiring(wiring) ? 2 : 1;
   return panel_width * multiplier * layout_rows * layout_cols;
 }
@@ -55,7 +57,8 @@ HUB75_CONST inline constexpr uint16_t get_effective_dma_width(Hub75ScanWiring wi
  * Standard panels: panel_height / 2 (upper/lower halves)
  * 1/4 or 1/8 scan panels: panel_height / 4 (physical height is halved)
  */
-HUB75_CONST inline constexpr uint16_t get_effective_num_rows(Hub75ScanWiring wiring, uint16_t panel_height) {
+__attribute__((always_inline)) HUB75_CONST inline constexpr uint16_t get_effective_num_rows(Hub75ScanWiring wiring,
+                                                                                            uint16_t panel_height) {
   return is_four_scan_wiring(wiring) ? (panel_height / 4) : (panel_height / 2);
 }
 
@@ -71,8 +74,9 @@ HUB75_CONST inline constexpr uint16_t get_effective_num_rows(Hub75ScanWiring wir
  *
  * @return Segment size in pixels for coordinate remapping
  */
-HUB75_CONST inline constexpr uint16_t get_four_scan_segment_size(Hub75ScanWiring wiring, uint16_t panel_width,
-                                                                 uint16_t panel_height) {
+__attribute__((always_inline)) HUB75_CONST inline constexpr uint16_t get_four_scan_segment_size(Hub75ScanWiring wiring,
+                                                                                                uint16_t panel_width,
+                                                                                                uint16_t panel_height) {
   switch (wiring) {
     case Hub75ScanWiring::SCAN_1_8_32PX_HIGH:
       // 32px high 1/8 scan panels use 16-pixel segments
