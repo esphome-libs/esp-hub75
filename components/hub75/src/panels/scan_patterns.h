@@ -74,9 +74,8 @@ __attribute__((always_inline)) HUB75_CONST inline constexpr uint16_t get_effecti
  *
  * @return Segment size in pixels for coordinate remapping
  */
-__attribute__((always_inline)) HUB75_CONST inline constexpr uint16_t get_four_scan_segment_size(Hub75ScanWiring wiring,
-                                                                                                uint16_t panel_width,
-                                                                                                uint16_t panel_height) {
+__attribute__((always_inline)) HUB75_CONST HUB75_IRAM inline constexpr uint16_t get_four_scan_segment_size(
+    Hub75ScanWiring wiring, uint16_t panel_width, uint16_t panel_height) {
   switch (wiring) {
     case Hub75ScanWiring::SCAN_1_8_32PX_HIGH:
       // 32px high 1/8 scan panels use 16-pixel segments
@@ -104,9 +103,9 @@ class ScanPatternRemap {
   // @param panel_width Width of single panel
   // @param panel_height Height of single panel (used for segment size calculation)
   // @return Remapped coordinates
-  __attribute__((always_inline)) static HUB75_CONST constexpr Coords remap(Coords c, Hub75ScanWiring pattern,
-                                                                           uint16_t panel_width,
-                                                                           uint16_t panel_height) {
+  __attribute__((always_inline)) static HUB75_CONST HUB75_IRAM constexpr Coords remap(Coords c, Hub75ScanWiring pattern,
+                                                                                      uint16_t panel_width,
+                                                                                      uint16_t panel_height) {
     switch (pattern) {
       case Hub75ScanWiring::STANDARD_TWO_SCAN:
         // No transformation needed
