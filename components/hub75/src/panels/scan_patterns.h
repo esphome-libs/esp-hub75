@@ -27,7 +27,7 @@ struct Coords {
 /**
  * @brief Check if scan wiring pattern requires dimension adjustments
  *
- * Four-scan panels have internal wiring that requires:
+ * 1/4 and 1/8 scan panels have internal wiring that requires:
  * - DMA buffer width to be doubled
  * - Number of row addresses to be halved
  * - Coordinate remapping with segment interleaving
@@ -38,35 +38,22 @@ HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
 }
 
 /**
- * @brief Get DMA buffer width multiplier for scan wiring
- *
- * Four-scan panels require double the DMA buffer width because the
- * physical shift register layout interleaves pixel segments.
- *
- * @return 2 for four-scan patterns, 1 for standard
- */
-HUB75_CONST inline constexpr uint16_t get_dma_width_multiplier(Hub75ScanWiring wiring) {
-  return is_four_scan_wiring(wiring) ? 2 : 1;
-}
-
-/**
  * @brief Get effective DMA buffer width for a panel configuration
  *
  * For standard panels: panel_width * layout_rows * layout_cols
- * For four-scan panels: panel_width * 2 * layout_rows * layout_cols
+ * For 1/4 or 1/8 scan panels: panel_width * 2 * layout_rows * layout_cols
  */
 HUB75_CONST inline constexpr uint16_t get_effective_dma_width(Hub75ScanWiring wiring, uint16_t panel_width,
                                                               uint16_t layout_rows, uint16_t layout_cols) {
-  return panel_width * get_dma_width_multiplier(wiring) * layout_rows * layout_cols;
+  const uint16_t multiplier = is_four_scan_wiring(wiring) ? 2 : 1;
+  return panel_width * multiplier * layout_rows * layout_cols;
 }
 
 /**
  * @brief Get number of row addresses (num_rows) for a panel configuration
  *
  * Standard panels: panel_height / 2 (upper/lower halves)
- * Four-scan panels: panel_height / 4 (physical height is halved)
- *
- * This corresponds to the number of unique row addresses the panel uses.
+ * 1/4 or 1/8 scan panels: panel_height / 4 (physical height is halved)
  */
 HUB75_CONST inline constexpr uint16_t get_effective_num_rows(Hub75ScanWiring wiring, uint16_t panel_height) {
   return is_four_scan_wiring(wiring) ? (panel_height / 4) : (panel_height / 2);
