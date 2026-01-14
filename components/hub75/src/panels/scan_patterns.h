@@ -104,8 +104,9 @@ class ScanPatternRemap {
   // @param panel_width Width of single panel
   // @param panel_height Height of single panel (used for segment size calculation)
   // @return Remapped coordinates
-  static HUB75_CONST HUB75_IRAM constexpr Coords remap(Coords c, Hub75ScanWiring pattern, uint16_t panel_width,
-                                                       uint16_t panel_height) {
+  __attribute__((always_inline)) static HUB75_CONST constexpr Coords remap(Coords c, Hub75ScanWiring pattern,
+                                                                           uint16_t panel_width,
+                                                                           uint16_t panel_height) {
     switch (pattern) {
       case Hub75ScanWiring::STANDARD_TWO_SCAN:
         // No transformation needed
