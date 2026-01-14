@@ -52,11 +52,13 @@ enum class Hub75ScanWiring {
   STANDARD_TWO_SCAN,   // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
   SCAN_1_4_16PX_HIGH,  // 1/4 scan, 16-pixel high panels
   SCAN_1_8_32PX_HIGH,  // 1/8 scan, 32-pixel high panels (e.g., 64x32)
+  SCAN_1_8_40PX_HIGH,  // 1/8 scan, 40-pixel high panels
   SCAN_1_8_64PX_HIGH,  // 1/8 scan, 64-pixel high panels
 
   // Deprecated aliases (kept for backwards compatibility)
   FOUR_SCAN_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_HIGH")]] = SCAN_1_4_16PX_HIGH,
   FOUR_SCAN_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_HIGH")]] = SCAN_1_8_32PX_HIGH,
+  FOUR_SCAN_40PX_HIGH [[deprecated("Use SCAN_1_8_40PX_HIGH")]] = SCAN_1_8_40PX_HIGH,
   FOUR_SCAN_64PX_HIGH [[deprecated("Use SCAN_1_8_64PX_HIGH")]] = SCAN_1_8_64PX_HIGH,
 };
 

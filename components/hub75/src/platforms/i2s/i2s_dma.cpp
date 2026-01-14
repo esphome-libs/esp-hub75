@@ -565,7 +565,6 @@ void I2sDma::calculate_bcm_timings() {
 
   // Target refresh rate from config
   const uint32_t target_hz = config_.min_refresh_rate;
-  const uint32_t num_rows = panel_height_ / 2;
 
   // Calculate optimal lsbMsbTransitionBit to achieve target refresh rate
   lsbMsbTransitionBit_ = 0;
@@ -577,7 +576,7 @@ void I2sDma::calculate_bcm_timings() {
 
     // Calculate refresh rate
     const float time_per_row_us = transmissions * buffer_time_us;
-    const float time_per_frame_us = time_per_row_us * num_rows;
+    const float time_per_frame_us = time_per_row_us * num_rows_;
     actual_hz = (int) (1000000.0f / time_per_frame_us);
 
     ESP_LOGD(TAG, "Testing lsbMsbTransitionBit=%d: %d transmissions/row, %d Hz", lsbMsbTransitionBit_, transmissions,

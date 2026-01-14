@@ -34,7 +34,7 @@ struct Coords {
  */
 HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
   return wiring == Hub75ScanWiring::SCAN_1_4_16PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_32PX_HIGH ||
-         wiring == Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
+         wiring == Hub75ScanWiring::SCAN_1_8_40PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
 }
 
 /**
@@ -78,7 +78,10 @@ HUB75_CONST inline constexpr uint16_t get_four_scan_segment_size(Hub75ScanWiring
       // 32px high 1/8 scan panels use 16-pixel segments
       // Formula: panel_width / (panel_height / 8) = panel_width / 4
       // For 64x32: 64 / 4 = 16
+      if (panel_height < 8)
+        return panel_width;  // Defensive check for invalid config
       return panel_width / (panel_height / 8);
+    case Hub75ScanWiring::SCAN_1_8_40PX_HIGH:
     case Hub75ScanWiring::SCAN_1_4_16PX_HIGH:
     case Hub75ScanWiring::SCAN_1_8_64PX_HIGH:
     default:
@@ -98,7 +101,7 @@ class ScanPatternRemap {
   // @param panel_height Height of single panel (used for segment size calculation)
   // @return Remapped coordinates
   static HUB75_CONST HUB75_IRAM constexpr Coords remap(Coords c, Hub75ScanWiring pattern, uint16_t panel_width,
-                                                       uint16_t panel_height = 0) {
+                                                       uint16_t panel_height) {
     switch (pattern) {
       case Hub75ScanWiring::STANDARD_TWO_SCAN:
         // No transformation needed
@@ -120,8 +123,7 @@ class ScanPatternRemap {
         // 32px high 1/8 scan panels
         // Segment size = panel_width / (panel_height / 8)
         // For typical 64x32 panel: 64 / 4 = 16-pixel segments
-        const uint16_t segment_size =
-            (panel_height > 0) ? get_four_scan_segment_size(pattern, panel_width, panel_height) : 16;
+        const uint16_t segment_size = get_four_scan_segment_size(pattern, panel_width, panel_height);
 
         if ((c.y & 8) == 0) {
           c.x += (((c.x / segment_size) + 1) * segment_size);
@@ -129,6 +131,17 @@ class ScanPatternRemap {
           c.x += ((c.x / segment_size) * segment_size);
         }
         c.y = (c.y >> 4) * 8 + (c.y & 0b00000111);
+        return c;
+      }
+
+      case Hub75ScanWiring::SCAN_1_8_40PX_HIGH: {
+        // 40px high 1/8 scan panels use 10-pixel row blocks
+        if ((c.y & 8) == 0) {
+          c.x += (((c.x / panel_width) + 1) * panel_width);
+        } else {
+          c.x += ((c.x / panel_width) * panel_width);
+        }
+        c.y = (c.y / 20) * 10 + (c.y % 10);
         return c;
       }
 
@@ -177,9 +190,11 @@ consteval bool test_four_scan_no_overflow() {
 
   constexpr Coords out16 = ScanPatternRemap::remap(input, Hub75ScanWiring::SCAN_1_4_16PX_HIGH, panel_width, 16);
   constexpr Coords out32 = ScanPatternRemap::remap(input, Hub75ScanWiring::SCAN_1_8_32PX_HIGH, panel_width, 32);
+  constexpr Coords out40 = ScanPatternRemap::remap(input, Hub75ScanWiring::SCAN_1_8_40PX_HIGH, panel_width, 40);
   constexpr Coords out64 = ScanPatternRemap::remap(input, Hub75ScanWiring::SCAN_1_8_64PX_HIGH, panel_width, 64);
 
-  return (out16.x < 256 && out16.y < 256) && (out32.x < 256 && out32.y < 256) && (out64.x < 256 && out64.y < 256);
+  return (out16.x < 256 && out16.y < 256) && (out32.x < 256 && out32.y < 256) && (out40.x < 256 && out40.y < 256) &&
+         (out64.x < 256 && out64.y < 256);
 }
 
 // Validate segment size calculation for 64x32 1/8 scan panel
@@ -236,11 +251,50 @@ consteval bool test_1_8_scan_32px_remap() {
   return true;
 }
 
+// Test 40px panel coordinate remapping
+consteval bool test_1_8_scan_40px_remap() {
+  constexpr uint16_t panel_width = 80;
+  constexpr uint16_t panel_height = 40;
+
+  // Test y=0 -> y=0
+  constexpr Coords in1 = {0, 0};
+  constexpr Coords out1 = ScanPatternRemap::remap(in1, Hub75ScanWiring::SCAN_1_8_40PX_HIGH, panel_width, panel_height);
+  // y = (0 / 20) * 10 + (0 % 10) = 0
+  if (out1.y != 0)
+    return false;
+
+  // Test y=20 -> y=10 (second 10-pixel block)
+  constexpr Coords in2 = {0, 20};
+  constexpr Coords out2 = ScanPatternRemap::remap(in2, Hub75ScanWiring::SCAN_1_8_40PX_HIGH, panel_width, panel_height);
+  // y = (20 / 20) * 10 + (20 % 10) = 10
+  if (out2.y != 10)
+    return false;
+
+  // Test y=5 -> y=5
+  constexpr Coords in3 = {0, 5};
+  constexpr Coords out3 = ScanPatternRemap::remap(in3, Hub75ScanWiring::SCAN_1_8_40PX_HIGH, panel_width, panel_height);
+  // y = (5 / 20) * 10 + (5 % 10) = 5
+  if (out3.y != 5)
+    return false;
+
+  return true;
+}
+
+// Test multi-panel DMA dimensions
+consteval bool test_1_8_scan_chained_panels() {
+  // 2x2 layout of 64x32 1/8 scan panels
+  constexpr uint16_t dma_width = get_effective_dma_width(Hub75ScanWiring::SCAN_1_8_32PX_HIGH, 64, 2, 2);
+  // Expected: 64 * 2 (four-scan) * 2 * 2 = 512
+  return dma_width == 512;
+}
+
 static_assert(test_standard_scan_identity(), "Standard scan must be identity transform");
 static_assert(test_four_scan_no_overflow(), "Four-scan patterns produce out-of-bounds coordinates");
 static_assert(test_1_8_scan_32px_segment_size(), "SCAN_1_8_32PX_HIGH segment size should be 16 for 64x32 panel");
 static_assert(test_1_8_scan_dma_dimensions(), "1/8 scan DMA dimensions incorrect");
 static_assert(test_1_8_scan_32px_remap(), "SCAN_1_8_32PX_HIGH coordinate remapping incorrect");
+static_assert(test_1_8_scan_40px_remap(), "SCAN_1_8_40PX_HIGH coordinate remapping incorrect");
+static_assert(test_1_8_scan_chained_panels(), "Multi-panel DMA dimensions incorrect");
 
 }  // namespace
 #endif  // ESP_IDF_VERSION_MAJOR >= 5

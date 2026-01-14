@@ -24,12 +24,14 @@ static inline Hub75Config getMenuConfigSettings() {
   // Scan wiring (scan rate is determined automatically from panel_height)
 #if defined(CONFIG_HUB75_WIRING_STANDARD)
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
-#elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_16PX)
-  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_16PX_HIGH;
-#elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_32PX)
-  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_32PX_HIGH;
-#elif defined(CONFIG_HUB75_WIRING_FOUR_SCAN_64PX)
-  config.scan_wiring = Hub75ScanWiring::FOUR_SCAN_64PX_HIGH;
+#elif defined(CONFIG_HUB75_WIRING_SCAN_1_4_16PX)
+  config.scan_wiring = Hub75ScanWiring::SCAN_1_4_16PX_HIGH;
+#elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_32PX)
+  config.scan_wiring = Hub75ScanWiring::SCAN_1_8_32PX_HIGH;
+#elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_40PX)
+  config.scan_wiring = Hub75ScanWiring::SCAN_1_8_40PX_HIGH;
+#elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_64PX)
+  config.scan_wiring = Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
 #endif
 
   // Shift driver
