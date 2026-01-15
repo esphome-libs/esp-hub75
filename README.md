@@ -189,6 +189,7 @@ For architecture, platform specifics, and advanced topics, see [docs/](docs/):
 ## Used By
 
 - **[ESPHome](https://esphome.io/)** - Built-in [`hub75` display component](https://esphome.io/components/display/hub75.html) (2025.12+)
+- **[Tronbyt](https://github.com/tronbyt/firmware-esp32)** - A community supported firmware for the Tidbyt hardware (1.5.0+)
 
 ## References
 
