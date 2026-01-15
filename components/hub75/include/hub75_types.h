@@ -58,7 +58,6 @@ enum class Hub75ScanWiring {
   // Deprecated aliases (kept for backwards compatibility)
   FOUR_SCAN_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_HIGH")]] = SCAN_1_4_16PX_HIGH,
   FOUR_SCAN_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_HIGH")]] = SCAN_1_8_32PX_HIGH,
-  FOUR_SCAN_40PX_HIGH [[deprecated("Use SCAN_1_8_40PX_HIGH")]] = SCAN_1_8_40PX_HIGH,
   FOUR_SCAN_64PX_HIGH [[deprecated("Use SCAN_1_8_64PX_HIGH")]] = SCAN_1_8_64PX_HIGH,
 };
 
