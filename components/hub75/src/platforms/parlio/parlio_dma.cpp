@@ -708,18 +708,17 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       const int padding_available = bp.padding_words - config_.latch_blanking;
 
-      // PARLIO brightness: Apply per-bit-plane BCM weighting via OE duty cycle
+      // PARLIO brightness: Use full padding proportionally (no rightshift)
       //
-      // For bits <= lsbMsbTransitionBit, padding sizes are equal, so BCM timing must
-      // come from OE duty cycle within the padding section. This uses the same rightshift
-      // formula as GDMA/I2S to achieve proper BCM ratios.
+      // Unlike GDMA (which uses rightshift + descriptor repetition), PARLIO achieves
+      // BCM timing purely through variable padding sizes. The padding SIZE is the timing.
       //
-      // Maps bit index to bitplane weight: LSB (bit 0) → high bitplane (short OE time),
-      // MSB (bit 7) → low bitplane (long OE time) for proper BCM timing
-      const int bitplane = bit_depth_ - 1 - bit;
-      const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
-      const int rightshift = std::max(bitplane - bitshift - 2, 0);
-      const int max_display = padding_available >> rightshift;
+      // Applying GDMA's rightshift here would crush bits 1-2, causing severe color
+      // imbalance in dark pixels → rainbow artifacts.
+      //
+      // Instead, use full padding for all MSB bits. LSB bits (0-1) already have reduced
+      // contribution via lsbMsbTransitionBit (no BCM scaling).
+      const int max_display = padding_available;
 
 #ifdef DEBUG_BRIGHTNESS_OE_VALIDATION
       // Store values for validation (only for row 0 to avoid duplication)
@@ -740,12 +739,8 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       int display_count = (max_display * brightness) >> 8;
 
-      // Hybrid minimum: gradually include more bits for minimum=1 as brightness increases.
-      // At very low brightness, only MSB gets minimum (preserves ratios for visible bits).
-      // As brightness increases, more bits naturally exceed 0, so minimum matters less.
-      // Formula: min_bit = 7 - (brightness/16), so brightness 1-15 → only bit7, 16-31 → bits 6-7, etc.
-      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (brightness >> 4));
-      if (brightness > 0 && display_count == 0 && bit >= min_bit_for_display) {
+      // Ensure at least 1 word for brightness > 0
+      if (brightness > 0 && display_count == 0) {
         display_count = 1;
       }
 
