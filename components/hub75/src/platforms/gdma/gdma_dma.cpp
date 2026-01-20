@@ -787,7 +787,7 @@ bool GdmaDma::validate_brightness_config() {
   const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
 
   for (int bit = 0; bit < bit_depth_; bit++) {
-    const int bitplane = (2 * bit_depth_ - bit) % bit_depth_;
+    const int bitplane = bit_depth_ - 1 - bit;
     const int rightshift = std::max(bitplane - bitshift - 2, 0);
     const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
 
@@ -910,7 +910,9 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
       uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
 
       // Calculate BCM weighting for this bit plane
-      const int bitplane = (2 * bit_depth_ - bit) % bit_depth_;
+      // Maps bit index to bitplane weight: LSB (bit 0) → high bitplane (short OE time),
+      // MSB (bit 7) → low bitplane (long OE time) for proper BCM timing
+      const int bitplane = bit_depth_ - 1 - bit;
       const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
       const int rightshift = std::max(bitplane - bitshift - 2, 0);
 
