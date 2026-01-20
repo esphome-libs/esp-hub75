@@ -708,17 +708,26 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       const int padding_available = bp.padding_words - config_.latch_blanking;
 
-      // PARLIO brightness: Use full padding proportionally (no rightshift)
+      // PARLIO brightness: Hybrid BCM approach
       //
-      // Unlike GDMA (which uses rightshift + descriptor repetition), PARLIO achieves
-      // BCM timing purely through variable padding sizes. The padding SIZE is the timing.
+      // Bits > lsbMsbTransitionBit: BCM timing via padding size (no rightshift)
+      //   - These bits have exponential padding (bit 7 has 32x padding of bit 2)
+      //   - Rightshift would double-weight them
       //
-      // Applying GDMA's rightshift here would crush bits 1-2, causing severe color
-      // imbalance in dark pixels → rainbow artifacts.
-      //
-      // Instead, use full padding for all MSB bits. LSB bits (0-1) already have reduced
-      // contribution via lsbMsbTransitionBit (no BCM scaling).
-      const int max_display = padding_available;
+      // Bits <= lsbMsbTransitionBit: BCM timing via OE duty cycle (need rightshift)
+      //   - These bits have IDENTICAL padding (all get base_padding + base_display)
+      //   - Without rightshift, they contribute equally instead of proper BCM ratios
+      int max_display;
+      if (bit <= lsbMsbTransitionBit_) {
+        // LSB bits have same padding - use rightshift for BCM differentiation
+        const int bitplane = bit_depth_ - 1 - bit;
+        const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
+        const int rightshift = std::max(bitplane - bitshift - 2, 0);
+        max_display = padding_available >> rightshift;
+      } else {
+        // MSB bits - padding size provides BCM timing, no rightshift
+        max_display = padding_available;
+      }
 
 #ifdef DEBUG_BRIGHTNESS_OE_VALIDATION
       // Store values for validation (only for row 0 to avoid duplication)
@@ -739,8 +748,14 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       int display_count = (max_display * brightness) >> 8;
 
-      // Ensure at least 1 word for brightness > 0
-      if (brightness > 0 && display_count == 0) {
+      // Hybrid minimum: only apply minimum to higher bits at low brightness
+      // This preserves color ratios for visible bits instead of forcing all bits on
+      // Formula: min_bit = (bit_depth-1) - (brightness/16)
+      //   brightness 1-15:  only bit 7 gets minimum
+      //   brightness 16-31: bits 6-7 get minimum
+      //   brightness 32-47: bits 5-7 get minimum, etc.
+      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (brightness >> 4));
+      if (brightness > 0 && display_count == 0 && bit >= min_bit_for_display) {
         display_count = 1;
       }
 
