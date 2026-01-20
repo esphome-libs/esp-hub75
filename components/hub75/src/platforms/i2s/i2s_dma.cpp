@@ -771,8 +771,12 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
       const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
       int display_pixels = (max_pixels * brightness) >> 8;
 
-      // Ensure at least 1 pixel for brightness > 0
-      if (brightness > 0 && display_pixels == 0) {
+      // Hybrid minimum: gradually include more bits for minimum=1 as brightness increases.
+      // At very low brightness, only MSB gets minimum (preserves ratios for visible bits).
+      // As brightness increases, more bits naturally exceed 0, so minimum matters less.
+      // Formula: min_bit = 7 - (brightness/16), so brightness 1-15 → only bit7, 16-31 → bits 6-7, etc.
+      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (brightness >> 4));
+      if (brightness > 0 && display_pixels == 0 && bit >= min_bit_for_display) {
         display_pixels = 1;
       }
 
