@@ -879,6 +879,35 @@ void GdmaDma::initialize_blank_buffers() {
 // BCM Control via OE Bit Manipulation
 // ============================================================================
 
+// Configure OE (Output Enable) bits in DMA buffers to control brightness.
+//
+// Architecture: BCM timing vs OE duty cycle
+// ------------------------------------------
+// Binary Code Modulation (BCM) creates color depth by displaying each bit plane
+// for a time proportional to its binary weight. This driver achieves BCM timing
+// through DMA descriptor repetition:
+//   - Bit 7 (MSB): 32 descriptors → displayed 32× longer
+//   - Bit 6: 16 descriptors → displayed 16× longer
+//   - ...
+//   - Bit 0 (LSB): 1 descriptor → displayed 1×
+//
+// The OE signal controls whether LEDs are actually lit during each bit plane's
+// transmission. By keeping OE HIGH (disabled) for part of each transmission,
+// we reduce perceived brightness WITHOUT changing BCM ratios.
+//
+// Key insight: Since BCM ratios come from descriptor repetition, OE duty cycle
+// is applied UNIFORMLY to all bit planes. Each bit plane has the same percentage
+// of pixels with OE=LOW (enabled). This dims the display while preserving color
+// accuracy.
+//
+// Center-based OE placement
+// -------------------------
+// The enabled region (OE=LOW) is centered in the buffer rather than left-aligned.
+// This provides symmetric blanking margins on both sides, which:
+//   1. Keeps the display period away from buffer edges where timing is less stable
+//   2. Provides natural separation from the LAT pulse at the end
+//   3. Distributes any timing jitter symmetrically
+//
 void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brightness) {
   if (!buffers) {
     return;
@@ -886,12 +915,11 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
 
   const uint8_t latch_blanking = config_.latch_blanking;
 
-  // Special case: brightness=0 means fully blanked (display off)
+  // brightness=0 blanks the display entirely
   if (brightness == 0) {
     for (int row = 0; row < num_rows_; row++) {
       for (int bit = 0; bit < bit_depth_; bit++) {
         uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
-        // Blank all pixels: set OE bit HIGH
         for (int x = 0; x < dma_width_; x++) {
           buf[x] |= (1 << OE_BIT);
         }
@@ -900,97 +928,98 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
     return;
   }
 
-  // Minimum brightness floor to maintain BCM ratios
+  // Minimum brightness floor
   //
-  // Problem: At low brightness (e.g., brightness=4), the formula
-  //   display_pixels = (max_pixels * brightness) >> 8
-  // truncates multiple bit planes to the SAME value (e.g., all = 1), destroying
-  // the 1:2:4:8:16:32 BCM ratios that create correct colors.
+  // At very low brightness, the formula `display_pixels = (max_pixels * brightness) >> 8`
+  // can round down to the same small value for multiple bit planes, destroying BCM ratios.
+  // For example, if all bit planes get display_pixels=1, they contribute equally instead
+  // of the 1:2:4:8:16:32 ratios needed for correct colors.
   //
-  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥8 display_pixels.
-  // With 8 pixels, bits 5-7 can have ratios 8:4:2, preserving 3-bit color depth.
-  // Lower bits (0-4) contribute less visually due to CIE correction anyway.
+  // The floor ensures the MSB gets at least 8 display_pixels, allowing bits 5-7 to maintain
+  // distinguishable ratios (8:4:2). Lower bits contribute minimally to perceived brightness
+  // due to CIE gamma correction, so this trade-off preserves visual color accuracy.
   //
-  // Formula: brightness >= (8 * 256) / max_pixels
-  // For 128-wide panel: min = 16, for 64-wide: min = 33, for 256-wide: min = 8
+  // Formula: min_brightness = ceil((8 * 256) / max_pixels)
+  //   128-wide panel: min = 17 → 8+ display pixels
+  //   64-wide panel:  min = 33 → 8+ display pixels
+  //   256-wide panel: min = 8  → 8+ display pixels
   const int max_pixels_no_shift = dma_width_ - latch_blanking;
   const int min_brightness = std::min(255, (8 * 256 + max_pixels_no_shift - 1) / max_pixels_no_shift);
 
-  // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
-  // This preserves all 255 brightness levels while ensuring BCM ratios work correctly.
-  // User sees smooth dimming; internally we never go below the minimum.
+  // Remap user brightness (1-255) to effective range (min_brightness-255)
+  // This preserves all 255 user-visible brightness levels while ensuring the internal
+  // value never drops below the floor. The remapping is linear, so dimming appears smooth.
   const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
-      // Get pointer to this bit plane's buffer
       uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
 
-      // Uniform OE duty cycle for all bit planes
-      //
-      // BCM timing is handled by descriptor repetition (bit 7 has 32 descriptors, bit 0 has 1).
-      // OE duty cycle controls brightness only, so it's uniform across all bits.
+      // Uniform OE duty cycle: same display_pixels count for all bit planes.
+      // BCM ratios come from descriptor repetition, not OE timing.
       const int max_pixels = dma_width_ - latch_blanking;
       int display_pixels = (max_pixels * effective_brightness) >> 8;
 
-      // Safety net: Hybrid minimum for edge cases
+      // Edge case fallback for very low brightness
       //
-      // The brightness floor above should prevent display_pixels=0 for most cases.
-      // This catches edge cases at very low brightness where display_pixels might round to 0.
+      // Even with the brightness floor, integer truncation can result in display_pixels=0
+      // for some configurations. This fallback ensures at least 1 pixel is enabled for
+      // the most significant bits, which contribute most to perceived brightness.
       //
-      // Gradually include more bits: at low brightness only MSB gets minimum=1,
-      // preserving color ratios for visible bits. As brightness increases, more
-      // bits naturally exceed 0 anyway.
-      // Formula: min_bit = (bit_depth-1) - (brightness/16)
-      //   brightness 1-15:  only bit 7 gets minimum
-      //   brightness 16-31: bits 6-7 get minimum
-      //   brightness 32-47: bits 5-7 get minimum, etc.
+      // The threshold increases with brightness: at very low brightness only bit 7 gets
+      // the minimum; as brightness increases, more bits naturally exceed 0 anyway.
+      //   effective_brightness 1-15:   only bit 7 guaranteed minimum
+      //   effective_brightness 16-31:  bits 6-7 guaranteed minimum
+      //   effective_brightness 32-47:  bits 5-7 guaranteed minimum, etc.
       const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (effective_brightness >> 4));
       if (effective_brightness > 0 && display_pixels == 0 && bit >= min_bit_for_display) {
         display_pixels = 1;
       }
 
-      // Safety margin to prevent ghosting (keeps at least 1 pixel blanking to prevent flicker at brightness 252-255)
+      // Reserve at least 1 pixel blanking to prevent ghosting at maximum brightness.
+      // Without this margin, brightness=255 would enable all pixels including those
+      // near the LAT pulse, potentially causing visible artifacts.
       display_pixels = std::min(display_pixels, max_pixels - 1);
 
-      // Debug validation: verify invariants (checked by validate_brightness_config at startup)
       assert(max_pixels >= 2 && "max_pixels < 2: insufficient headroom for safety margin");
       assert(display_pixels >= 0 && "display_pixels underflow");
       assert(display_pixels <= max_pixels - 1 && "display_pixels exceeds safety margin");
 
-      // Calculate center region for OE=LOW (display enabled)
+      // Center the enabled region in the buffer
       const int x_min = (dma_width_ - display_pixels) / 2;
       const int x_max = (dma_width_ + display_pixels) / 2;
 
-      // Debug validation: verify buffer bounds
       assert(x_min >= 0 && "x_min underflow");
       assert(x_max <= dma_width_ && "x_max exceeds buffer bounds");
       assert(x_min <= x_max && "x_min > x_max: invalid display region");
 
-      // Set OE bits: LOW in center (display), HIGH elsewhere (blanked)
+      // Apply OE pattern: LOW (enabled) in center, HIGH (blanked) elsewhere
       for (int x = 0; x < dma_width_; x++) {
         if (x >= x_min && x < x_max) {
-          // Enable display: clear OE bit
           buf[x] &= OE_CLEAR_MASK;
         } else {
-          // Keep blanked: set OE bit (already set, but make explicit)
           buf[x] |= (1 << OE_BIT);
         }
       }
 
-      // CRITICAL: Latch blanking to prevent ghosting
-      // Blank pixels around LAT pulse to hide row transitions
+      // Latch blanking: force OE=HIGH around the LAT pulse
+      //
+      // The LAT (latch) signal on the last pixel transfers shift register data to the
+      // display buffer. The panel needs the display blanked during this transition to
+      // prevent visible artifacts from partially-latched data. Blanking pixels at both
+      // the start and end of the buffer ensures clean transitions regardless of where
+      // the centered display region falls.
       const int last_pixel = dma_width_ - 1;
 
-      // Blank LAT pixel itself
+      // Blank the LAT pixel itself (always required)
       buf[last_pixel] |= (1 << OE_BIT);
 
-      // Blank latch_blanking pixels BEFORE LAT
+      // Blank latch_blanking pixels before LAT
       for (int i = 1; i <= latch_blanking && (last_pixel - i) >= 0; i++) {
         buf[last_pixel - i] |= (1 << OE_BIT);
       }
 
-      // Blank latch_blanking pixels at START of buffer
+      // Blank latch_blanking pixels at buffer start (for wrap-around from previous row)
       for (int i = 0; i < latch_blanking && i < dma_width_; i++) {
         buf[i] |= (1 << OE_BIT);
       }
