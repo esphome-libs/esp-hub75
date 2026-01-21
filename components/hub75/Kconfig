@@ -205,9 +205,18 @@ menu "HUB75 RGB LED Matrix Driver"
                 bool "DP3246"
         endchoice
 
-        choice
+        choice HUB75_BIT_DEPTH_CHOICE
             prompt "Bit Depth"
-            default DEPTH_8
+            # Backward compatibility: honor deprecated DEPTH_* option names
+            default HUB75_BIT_DEPTH_4 if DEPTH_4
+            default HUB75_BIT_DEPTH_5 if DEPTH_5
+            default HUB75_BIT_DEPTH_6 if DEPTH_6
+            default HUB75_BIT_DEPTH_7 if DEPTH_7
+            default HUB75_BIT_DEPTH_9 if DEPTH_9
+            default HUB75_BIT_DEPTH_10 if DEPTH_10
+            default HUB75_BIT_DEPTH_11 if DEPTH_11
+            default HUB75_BIT_DEPTH_12 if DEPTH_12
+            default HUB75_BIT_DEPTH_8
             help
                 Color bit depth per channel (R/G/B).
 
@@ -226,52 +235,73 @@ menu "HUB75 RGB LED Matrix Driver"
 
                 Driver auto-adjusts BCM timing to maintain target refresh rate.
 
-            config DEPTH_4
+            config HUB75_BIT_DEPTH_4
                 bool "4-bit (Maximum Refresh)"
                 help
                     16 levels per channel (4,096 total colors).
                     Use for very large panel arrays where refresh rate is critical.
                     Visible banding in gradients is expected.
 
-            config DEPTH_5
+            config HUB75_BIT_DEPTH_5
                 bool "5-bit"
                 help
                     32 levels per channel (32,768 total colors).
                     Good balance between refresh rate and color quality for large displays.
 
-            config DEPTH_6
+            config HUB75_BIT_DEPTH_6
                 bool "6-bit (Fast)"
 
-            config DEPTH_7
+            config HUB75_BIT_DEPTH_7
                 bool "7-bit"
 
-            config DEPTH_8
+            config HUB75_BIT_DEPTH_8
                 bool "8-bit (Good Balance)"
 
-            config DEPTH_9
+            config HUB75_BIT_DEPTH_9
                 bool "9-bit"
 
-            config DEPTH_10
+            config HUB75_BIT_DEPTH_10
                 bool "10-bit (Recommended)"
 
-            config DEPTH_11
+            config HUB75_BIT_DEPTH_11
                 bool "11-bit"
 
-            config DEPTH_12
+            config HUB75_BIT_DEPTH_12
                 bool "12-bit (Best Quality)"
         endchoice
 
         config HUB75_BIT_DEPTH
             int
-            default 4 if DEPTH_4
-            default 5 if DEPTH_5
-            default 6 if DEPTH_6
-            default 7 if DEPTH_7
-            default 8 if DEPTH_8
-            default 9 if DEPTH_9
-            default 10 if DEPTH_10
-            default 11 if DEPTH_11
-            default 12 if DEPTH_12
+            default 4 if HUB75_BIT_DEPTH_4
+            default 5 if HUB75_BIT_DEPTH_5
+            default 6 if HUB75_BIT_DEPTH_6
+            default 7 if HUB75_BIT_DEPTH_7
+            default 8 if HUB75_BIT_DEPTH_8
+            default 9 if HUB75_BIT_DEPTH_9
+            default 10 if HUB75_BIT_DEPTH_10
+            default 11 if HUB75_BIT_DEPTH_11
+            default 12 if HUB75_BIT_DEPTH_12
+
+        # Deprecated options (hidden, for backward compatibility)
+        # These have no prompt, so they don't appear in menuconfig
+        config DEPTH_4
+            bool
+        config DEPTH_5
+            bool
+        config DEPTH_6
+            bool
+        config DEPTH_7
+            bool
+        config DEPTH_8
+            bool
+        config DEPTH_9
+            bool
+        config DEPTH_10
+            bool
+        config DEPTH_11
+            bool
+        config DEPTH_12
+            bool
 
         choice HUB75_CLOCK_SPEED
             prompt "Output Clock Speed"
@@ -685,9 +715,12 @@ menu "HUB75 RGB LED Matrix Driver"
 
     menu "Color"
 
-        choice
+        choice HUB75_GAMMA_CHOICE
             prompt "Gamma Correction Mode"
-            default GAMMA_CIE1931
+            # Backward compatibility: honor deprecated GAMMA_* option names
+            default HUB75_GAMMA_LINEAR if GAMMA_LINEAR
+            default HUB75_GAMMA_2_2 if GAMMA_2_2
+            default HUB75_GAMMA_CIE1931
             help
                 Gamma correction mode for color output.
                 Changes require full rebuild to regenerate LUT.
@@ -700,21 +733,29 @@ menu "HUB75 RGB LED Matrix Driver"
                 human perception of brightness. Linear provides direct
                 hardware mapping but may appear less smooth.
 
-            config GAMMA_LINEAR
+            config HUB75_GAMMA_LINEAR
                 bool "Linear (No Correction)"
 
-            config GAMMA_CIE1931
+            config HUB75_GAMMA_CIE1931
                 bool "CIE1931 (Perceptual)"
 
-            config GAMMA_2_2
+            config HUB75_GAMMA_2_2
                 bool "Gamma 2.2"
         endchoice
 
         config HUB75_GAMMA_MODE
             int
-            default 0 if GAMMA_LINEAR
-            default 1 if GAMMA_CIE1931
-            default 2 if GAMMA_2_2
+            default 0 if HUB75_GAMMA_LINEAR
+            default 1 if HUB75_GAMMA_CIE1931
+            default 2 if HUB75_GAMMA_2_2
+
+        # Deprecated options (hidden, for backward compatibility)
+        config GAMMA_LINEAR
+            bool
+        config GAMMA_CIE1931
+            bool
+        config GAMMA_2_2
+            bool
 
     endmenu
 
