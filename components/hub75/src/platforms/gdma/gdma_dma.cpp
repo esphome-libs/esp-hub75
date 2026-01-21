@@ -905,11 +905,14 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
   }
 
   // Minimum brightness floor to maintain BCM ratios
-  // Below 32, multiple bit planes collapse to same display_pixels,
-  // destroying color accuracy (e.g., bits 2-7 all get display_pixels=1)
-  // Remap user brightness (1-255) linearly to valid range (32-255)
-  static constexpr int MIN_BRIGHTNESS = 32;
-  const int effective_brightness = MIN_BRIGHTNESS + ((brightness * (255 - MIN_BRIGHTNESS)) / 255);
+  // At low brightness, multiple bit planes collapse to same display_pixels,
+  // destroying color accuracy. Calculate minimum dynamically based on panel width.
+  // Need bit 7 to have ≥16 display_pixels for 4-bit BCM ratio range (bits 4-7)
+  const int max_pixels_no_shift = dma_width_ - latch_blanking;
+  const int min_brightness = std::min(255, (16 * 256 + max_pixels_no_shift - 1) / max_pixels_no_shift);
+
+  // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
+  const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
