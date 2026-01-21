@@ -229,14 +229,8 @@ static inline Hub75Config getMenuConfigSettings() {
   config.clk_phase_inverted = false;
 #endif
 
-  // Gamma correction mode
-#if defined(CONFIG_HUB75_GAMMA_CIE1931)
-  config.gamma_mode = Hub75GammaMode::CIE1931;
-#elif defined(CONFIG_HUB75_GAMMA_LINEAR)
-  config.gamma_mode = Hub75GammaMode::LINEAR;
-#elif defined(CONFIG_HUB75_GAMMA_NONE)
-  config.gamma_mode = Hub75GammaMode::LINEAR;  // None is same as Linear
-#endif
+  // Note: Gamma correction is handled at compile-time via Kconfig (HUB75_GAMMA_MODE)
+  // and applied in color_lut.cpp during LUT generation. No runtime config needed.
 
   return config;
 }

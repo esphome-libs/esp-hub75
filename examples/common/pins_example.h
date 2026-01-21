@@ -65,7 +65,7 @@ static inline Hub75Config getDefaultConfig_ESP32() {
 
   // Features
   config.double_buffer = false;
-  config.gamma_mode = Hub75GammaMode::CIE1931;
+  // Gamma correction: Configure via menuconfig (Kconfig HUB75_GAMMA_MODE)
   config.brightness = 255;
 
   return config;
