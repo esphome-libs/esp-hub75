@@ -592,14 +592,14 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
   // truncates multiple bit planes to the SAME value (e.g., all = 1), destroying
   // the 1:2:4:8:16:32 BCM ratios that create correct colors.
   //
-  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥16 display_count.
-  // With 16 words, bits 4-7 can have ratios 16:8:4:2, preserving 4-bit color depth.
-  // Lower bits (0-3) contribute less visually due to CIE correction anyway.
+  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥8 display_count.
+  // With 8 words, bits 5-7 can have ratios 8:4:2, preserving 3-bit color depth.
+  // Lower bits (0-4) contribute less visually due to CIE correction anyway.
   //
-  // Formula: brightness >= (16 * 256) / base_display
-  // For 128-wide panel: min = 32, for 64-wide: min = 65, for 256-wide: min = 16
+  // Formula: brightness >= (8 * 256) / base_display
+  // For 128-wide panel: min = 16, for 64-wide: min = 33, for 256-wide: min = 8
   const int base_display = dma_width_ - config_.latch_blanking;
-  const int min_brightness = std::min(255, (16 * 256 + base_display - 1) / base_display);
+  const int min_brightness = std::min(255, (8 * 256 + base_display - 1) / base_display);
 
   // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
   // This preserves all 255 brightness levels while ensuring BCM ratios work correctly.
