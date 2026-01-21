@@ -785,24 +785,18 @@ bool GdmaDma::validate_brightness_config() {
     return false;
   }
 
-  // Edge Case 3: Verify all bit planes have sufficient headroom for safety margin
+  // Edge Case 3: Verify sufficient headroom for safety margin
   // We need max_pixels >= 2 (at least 1 for display + 1 for safety margin to prevent ghosting)
-  const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
-
-  for (int bit = 0; bit < bit_depth_; bit++) {
-    const int bitplane = bit_depth_ - 1 - bit;
-    const int rightshift = std::max(bitplane - bitshift - 2, 0);
-    const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
-
-    if (max_pixels < 2) {
-      ESP_LOGE(TAG,
-               "Invalid config: bit %d has max_pixels=%d (need >=2). "
-               "Increase dma_width or decrease latch_blanking or adjust bit_depth.",
-               bit, max_pixels);
-      ESP_LOGE(TAG, "  Config: dma_width=%u, latch_blanking=%u, bit_depth=%u, lsbMsbTransitionBit=%u", dma_width_,
-               latch_blanking, bit_depth_, lsbMsbTransitionBit_);
-      return false;
-    }
+  // Since we use uniform max_pixels for all bit planes (BCM comes from descriptor repetition),
+  // we only need to check once.
+  const int max_pixels = dma_width_ - latch_blanking;
+  if (max_pixels < 2) {
+    ESP_LOGE(TAG,
+             "Invalid config: max_pixels=%d (need >=2). "
+             "Increase dma_width or decrease latch_blanking.",
+             max_pixels);
+    ESP_LOGE(TAG, "  Config: dma_width=%u, latch_blanking=%u", dma_width_, latch_blanking);
+    return false;
   }
 
   ESP_LOGI(TAG,
@@ -932,30 +926,17 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
       // Get pointer to this bit plane's buffer
       uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
 
-      // Calculate BCM weighting for this bit plane
+      // Uniform OE duty cycle for all bit planes
       //
-      // BCM requires different display times for each bit: bit 7 displays 32x longer than bit 2.
-      // We achieve this by reducing max_pixels for lower bits via rightshift.
-      //
-      // bitplane: Inverts bit index so bit 0 (LSB) → bitplane 7, bit 7 (MSB) → bitplane 0
-      // rightshift: Higher bitplanes (lower bits) get more shift, reducing their max_pixels
-      //
-      // Example (8-bit, lsbMsbTransitionBit=1):
-      //   bit 7 (MSB): bitplane=0, rightshift=0, max_pixels=127 → longest display
-      //   bit 0 (LSB): bitplane=7, rightshift=2, max_pixels=31  → shortest display
-      const int bitplane = bit_depth_ - 1 - bit;
-      const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
-      const int rightshift = std::max(bitplane - bitshift - 2, 0);
-
-      // Calculate display pixel count: scale max_pixels by brightness (0-255 → 0-max_pixels)
-      const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
+      // BCM timing is handled by descriptor repetition (bit 7 has 32 descriptors, bit 0 has 1).
+      // OE duty cycle controls brightness only, so it's uniform across all bits.
+      const int max_pixels = dma_width_ - latch_blanking;
       int display_pixels = (max_pixels * effective_brightness) >> 8;
 
-      // Safety net: Hybrid minimum for edge cases (e.g., 12-bit depth, unusual latch_blanking)
+      // Safety net: Hybrid minimum for edge cases
       //
       // The brightness floor above should prevent display_pixels=0 for most cases.
-      // This catches edge cases where high rightshift values (at higher bit depths)
-      // could still result in display_pixels=0 for lower bits.
+      // This catches edge cases at very low brightness where display_pixels might round to 0.
       //
       // Gradually include more bits: at low brightness only MSB gets minimum=1,
       // preserving color ratios for visible bits. As brightness increases, more
