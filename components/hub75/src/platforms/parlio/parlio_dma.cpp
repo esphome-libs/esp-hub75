@@ -683,13 +683,24 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
   }
 
   // Minimum brightness floor to maintain BCM ratios
-  // At low brightness, multiple bit planes collapse to same display_count,
-  // destroying color accuracy. Calculate minimum dynamically based on panel width.
-  // Need MSB bit to have ≥16 display_count for 4-bit BCM ratio range
+  //
+  // Problem: At low brightness (e.g., brightness=4), the formula
+  //   display_count = (max_display * brightness) >> 8
+  // truncates multiple bit planes to the SAME value (e.g., all = 1), destroying
+  // the 1:2:4:8:16:32 BCM ratios that create correct colors.
+  //
+  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥16 display_count.
+  // With 16 words, bits 4-7 can have ratios 16:8:4:2, preserving 4-bit color depth.
+  // Lower bits (0-3) contribute less visually due to CIE correction anyway.
+  //
+  // Formula: brightness >= (16 * 256) / base_display
+  // For 128-wide panel: min = 32, for 64-wide: min = 65, for 256-wide: min = 16
   const int base_display = dma_width_ - config_.latch_blanking;
   const int min_brightness = std::min(255, (16 * 256 + base_display - 1) / base_display);
 
   // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
+  // This preserves all 255 brightness levels while ensuring BCM ratios work correctly.
+  // User sees smooth dimming; internally we never go below the minimum.
   const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
 
   for (int row = 0; row < num_rows_; row++) {
@@ -718,24 +729,31 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       const int padding_available = bp.padding_words - config_.latch_blanking;
 
-      // PARLIO brightness: Hybrid BCM approach
+      // PARLIO Hybrid BCM Approach
       //
-      // Bits > lsbMsbTransitionBit: BCM timing via padding size (no rightshift)
-      //   - These bits have exponential padding (bit 7 has 32x padding of bit 2)
-      //   - Rightshift would double-weight them
+      // PARLIO differs from GDMA/I2S: BCM timing comes from PADDING SIZE, not descriptor
+      // repetitions. Each bit plane has different padding (bit 7 has 32x more than bit 2).
       //
-      // Bits <= lsbMsbTransitionBit: BCM timing via OE duty cycle (need rightshift)
-      //   - These bits have IDENTICAL padding (all get base_padding + base_display)
-      //   - Without rightshift, they contribute equally instead of proper BCM ratios
+      // This creates a TWO-TIER system:
+      //
+      // MSB bits (> lsbMsbTransitionBit): Padding size provides BCM weighting
+      //   - Bit 7 has 32x more padding than bit 2 → inherently 32x longer display time
+      //   - Using rightshift here would DOUBLE-WEIGHT them (padding ratio × OE ratio)
+      //   - Solution: Use full padding_available, let padding size control BCM
+      //
+      // LSB bits (≤ lsbMsbTransitionBit): All have IDENTICAL padding (base_padding)
+      //   - Without differentiation, bits 0 and 1 would contribute equally → wrong colors
+      //   - Solution: Apply rightshift to reduce max_display for lower bits
+      //   - Same formula as GDMA/I2S for these bits
       int max_display;
       if (bit <= lsbMsbTransitionBit_) {
-        // LSB bits have same padding - use rightshift for BCM differentiation
+        // LSB bits: identical padding, need rightshift for BCM differentiation
         const int bitplane = bit_depth_ - 1 - bit;
         const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
         const int rightshift = std::max(bitplane - bitshift - 2, 0);
         max_display = padding_available >> rightshift;
       } else {
-        // MSB bits - padding size provides BCM timing, no rightshift
+        // MSB bits: padding size provides BCM timing, no rightshift needed
         max_display = padding_available;
       }
 
@@ -758,8 +776,15 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
       int display_count = (max_display * effective_brightness) >> 8;
 
-      // Hybrid minimum: only apply minimum to higher bits at low brightness
-      // This preserves color ratios for visible bits instead of forcing all bits on
+      // Safety net: Hybrid minimum for edge cases (e.g., 12-bit depth, unusual latch_blanking)
+      //
+      // The brightness floor above should prevent display_count=0 for most cases.
+      // This catches edge cases where high rightshift values (at higher bit depths)
+      // could still result in display_count=0 for lower bits.
+      //
+      // Gradually include more bits: at low brightness only MSB gets minimum=1,
+      // preserving color ratios for visible bits. As brightness increases, more
+      // bits naturally exceed 0 anyway.
       // Formula: min_bit = (bit_depth-1) - (brightness/16)
       //   brightness 1-15:  only bit 7 gets minimum
       //   brightness 16-31: bits 6-7 get minimum

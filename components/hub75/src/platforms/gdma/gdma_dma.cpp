@@ -905,13 +905,24 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
   }
 
   // Minimum brightness floor to maintain BCM ratios
-  // At low brightness, multiple bit planes collapse to same display_pixels,
-  // destroying color accuracy. Calculate minimum dynamically based on panel width.
-  // Need bit 7 to have ≥16 display_pixels for 4-bit BCM ratio range (bits 4-7)
+  //
+  // Problem: At low brightness (e.g., brightness=4), the formula
+  //   display_pixels = (max_pixels * brightness) >> 8
+  // truncates multiple bit planes to the SAME value (e.g., all = 1), destroying
+  // the 1:2:4:8:16:32 BCM ratios that create correct colors.
+  //
+  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥16 display_pixels.
+  // With 16 pixels, bits 4-7 can have ratios 16:8:4:2, preserving 4-bit color depth.
+  // Lower bits (0-3) contribute less visually due to CIE correction anyway.
+  //
+  // Formula: brightness >= (16 * 256) / max_pixels
+  // For 128-wide panel: min = 32, for 64-wide: min = 65, for 256-wide: min = 16
   const int max_pixels_no_shift = dma_width_ - latch_blanking;
   const int min_brightness = std::min(255, (16 * 256 + max_pixels_no_shift - 1) / max_pixels_no_shift);
 
   // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
+  // This preserves all 255 brightness levels while ensuring BCM ratios work correctly.
+  // User sees smooth dimming; internally we never go below the minimum.
   const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
 
   for (int row = 0; row < num_rows_; row++) {
@@ -920,20 +931,37 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
       uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
 
       // Calculate BCM weighting for this bit plane
-      // Maps bit index to bitplane weight: LSB (bit 0) → high bitplane (short OE time),
-      // MSB (bit 7) → low bitplane (long OE time) for proper BCM timing
+      //
+      // BCM requires different display times for each bit: bit 7 displays 32x longer than bit 2.
+      // We achieve this by reducing max_pixels for lower bits via rightshift.
+      //
+      // bitplane: Inverts bit index so bit 0 (LSB) → bitplane 7, bit 7 (MSB) → bitplane 0
+      // rightshift: Higher bitplanes (lower bits) get more shift, reducing their max_pixels
+      //
+      // Example (8-bit, lsbMsbTransitionBit=1):
+      //   bit 7 (MSB): bitplane=0, rightshift=0, max_pixels=127 → longest display
+      //   bit 0 (LSB): bitplane=7, rightshift=2, max_pixels=31  → shortest display
       const int bitplane = bit_depth_ - 1 - bit;
       const int bitshift = (bit_depth_ - lsbMsbTransitionBit_ - 1) >> 1;
       const int rightshift = std::max(bitplane - bitshift - 2, 0);
 
-      // Calculate display pixel count for this bit plane
+      // Calculate display pixel count: scale max_pixels by brightness (0-255 → 0-max_pixels)
       const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
       int display_pixels = (max_pixels * effective_brightness) >> 8;
 
-      // Hybrid minimum: gradually include more bits for minimum=1 as brightness increases.
-      // At very low brightness, only MSB gets minimum (preserves ratios for visible bits).
-      // As brightness increases, more bits naturally exceed 0, so minimum matters less.
-      // Formula: min_bit = 7 - (brightness/16), so brightness 1-15 → only bit7, 16-31 → bits 6-7, etc.
+      // Safety net: Hybrid minimum for edge cases (e.g., 12-bit depth, unusual latch_blanking)
+      //
+      // The brightness floor above should prevent display_pixels=0 for most cases.
+      // This catches edge cases where high rightshift values (at higher bit depths)
+      // could still result in display_pixels=0 for lower bits.
+      //
+      // Gradually include more bits: at low brightness only MSB gets minimum=1,
+      // preserving color ratios for visible bits. As brightness increases, more
+      // bits naturally exceed 0 anyway.
+      // Formula: min_bit = (bit_depth-1) - (brightness/16)
+      //   brightness 1-15:  only bit 7 gets minimum
+      //   brightness 16-31: bits 6-7 get minimum
+      //   brightness 32-47: bits 5-7 get minimum, etc.
       const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (effective_brightness >> 4));
       if (effective_brightness > 0 && display_pixels == 0 && bit >= min_bit_for_display) {
         display_pixels = 1;
