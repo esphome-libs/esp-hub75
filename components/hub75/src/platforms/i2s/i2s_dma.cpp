@@ -756,10 +756,11 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
   }
 
   // Minimum brightness floor to maintain BCM ratios
-  // Below this threshold, multiple bit planes collapse to same display_pixels,
+  // Below 32, multiple bit planes collapse to same display_pixels,
   // destroying color accuracy (e.g., bits 2-7 all get display_pixels=1)
+  // Remap user brightness (1-255) linearly to valid range (32-255)
   static constexpr int MIN_BRIGHTNESS = 32;
-  const int effective_brightness = std::max(static_cast<int>(brightness), MIN_BRIGHTNESS);
+  const int effective_brightness = MIN_BRIGHTNESS + ((brightness * (255 - MIN_BRIGHTNESS)) / 255);
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
