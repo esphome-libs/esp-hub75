@@ -1142,8 +1142,11 @@ bool GdmaDma::build_descriptor_chain() {
 // ============================================================================
 
 // Calculate number of transmissions per row for BCM timing
+// Must match the actual descriptor allocation in build_descriptor_chain():
+//   bits <= transition: 1 descriptor each
+//   bits > transition: 2^(bit - transition - 1) descriptors each
 HUB75_CONST constexpr int GdmaDma::calculate_bcm_transmissions(int bit_depth, int lsb_msb_transition) {
-  int transmissions = bit_depth;  // Base: all bits shown once
+  int transmissions = lsb_msb_transition + 1;  // Bits 0 to transition: 1 each
 
   // Add BCM repetitions for bits above transition
   for (int i = lsb_msb_transition + 1; i < bit_depth; ++i) {
@@ -1213,48 +1216,44 @@ void GdmaDma::calculate_bcm_timings() {
 #if ESP_IDF_VERSION_MAJOR >= 5
 namespace {
 
-// Validate BCM calculations produce exact expected counts
+// Validate BCM calculations match actual descriptor allocation
+// Formula: (transition + 1) base + sum of 2^(i - transition - 1) for i > transition
 consteval bool test_bcm_12bit_transition0() {
-  // Worst case: 12-bit depth, transition=0
-  // 12 + (1+2+4+8+16+32+64+128+256+512+1024) = 12 + 2047 = 2059
+  // 12-bit depth, transition=0: 1 + (1+2+4+8+16+32+64+128+256+512+1024) = 1 + 2047 = 2048
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(12, 0);
-  return transmissions == 2059;
+  return transmissions == 2048;
 }
 
 consteval bool test_bcm_10bit_transition0() {
-  // 10-bit depth, transition=0
-  // 10 + (1+2+4+8+16+32+64+128+256) = 10 + 511 = 521
+  // 10-bit depth, transition=0: 1 + (1+2+4+8+16+32+64+128+256) = 1 + 511 = 512
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(10, 0);
-  return transmissions == 521;
+  return transmissions == 512;
 }
 
 consteval bool test_bcm_8bit_transition0() {
-  // 8-bit depth, transition=0
-  // 8 + (1+2+4+8+16+32+64) = 8 + 127 = 135
+  // 8-bit depth, transition=0: 1 + (1+2+4+8+16+32+64) = 1 + 127 = 128
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 0);
-  return transmissions == 135;
+  return transmissions == 128;
 }
 
 consteval bool test_bcm_8bit_transition1() {
-  // 8-bit, transition=1: bits 0-1 shown 1× each, bits 2-7 get BCM weighting
-  // 8 + (1+2+4+8+16+32) = 8 + 63 = 71
+  // 8-bit, transition=1: 2 + (1+2+4+8+16+32) = 2 + 63 = 65
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 1);
-  return transmissions == 71;
+  return transmissions == 65;
 }
 
 consteval bool test_bcm_8bit_transition2() {
-  // 8-bit, transition=2: bits 0-2 shown 1× each, bits 3-7 get BCM weighting
-  // 8 + (1+2+4+8+16) = 8 + 31 = 39
+  // 8-bit, transition=2: 3 + (1+2+4+8+16) = 3 + 31 = 34
   constexpr int transmissions = GdmaDma::calculate_bcm_transmissions(8, 2);
-  return transmissions == 39;
+  return transmissions == 34;
 }
 
 // Static assertions
-static_assert(test_bcm_12bit_transition0(), "BCM: 12-bit/transition=0 should produce 2059 transmissions");
-static_assert(test_bcm_10bit_transition0(), "BCM: 10-bit/transition=0 should produce 521 transmissions");
-static_assert(test_bcm_8bit_transition0(), "BCM: 8-bit/transition=0 should produce 135 transmissions");
-static_assert(test_bcm_8bit_transition1(), "BCM: 8-bit/transition=1 should produce 71 transmissions");
-static_assert(test_bcm_8bit_transition2(), "BCM: 8-bit/transition=2 should produce 39 transmissions");
+static_assert(test_bcm_12bit_transition0(), "BCM: 12-bit/transition=0 should produce 2048 transmissions");
+static_assert(test_bcm_10bit_transition0(), "BCM: 10-bit/transition=0 should produce 512 transmissions");
+static_assert(test_bcm_8bit_transition0(), "BCM: 8-bit/transition=0 should produce 128 transmissions");
+static_assert(test_bcm_8bit_transition1(), "BCM: 8-bit/transition=1 should produce 65 transmissions");
+static_assert(test_bcm_8bit_transition2(), "BCM: 8-bit/transition=2 should produce 34 transmissions");
 
 }  // namespace
 #endif  // ESP_IDF_VERSION_MAJOR >= 5
