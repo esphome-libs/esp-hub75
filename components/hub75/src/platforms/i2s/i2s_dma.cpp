@@ -755,6 +755,12 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
     return;
   }
 
+  // Minimum brightness floor to maintain BCM ratios
+  // Below this threshold, multiple bit planes collapse to same display_pixels,
+  // destroying color accuracy (e.g., bits 2-7 all get display_pixels=1)
+  static constexpr int MIN_BRIGHTNESS = 32;
+  const int effective_brightness = std::max(static_cast<int>(brightness), MIN_BRIGHTNESS);
+
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
       // Get pointer to this bit plane's buffer
@@ -769,14 +775,14 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
 
       // Calculate display pixel count for this bit plane
       const int max_pixels = (dma_width_ - latch_blanking) >> rightshift;
-      int display_pixels = (max_pixels * brightness) >> 8;
+      int display_pixels = (max_pixels * effective_brightness) >> 8;
 
       // Hybrid minimum: gradually include more bits for minimum=1 as brightness increases.
       // At very low brightness, only MSB gets minimum (preserves ratios for visible bits).
       // As brightness increases, more bits naturally exceed 0, so minimum matters less.
       // Formula: min_bit = 7 - (brightness/16), so brightness 1-15 → only bit7, 16-31 → bits 6-7, etc.
-      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (brightness >> 4));
-      if (brightness > 0 && display_pixels == 0 && bit >= min_bit_for_display) {
+      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (effective_brightness >> 4));
+      if (effective_brightness > 0 && display_pixels == 0 && bit >= min_bit_for_display) {
         display_pixels = 1;
       }
 

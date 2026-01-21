@@ -682,6 +682,12 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
     return;
   }
 
+  // Minimum brightness floor to maintain BCM ratios
+  // Below this threshold, multiple bit planes collapse to same display_count,
+  // destroying color accuracy (e.g., bits 2-7 all get display_count=1)
+  static constexpr int MIN_BRIGHTNESS = 32;
+  const int effective_brightness = std::max(static_cast<int>(brightness), MIN_BRIGHTNESS);
+
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
       int idx = (row * bit_depth_) + bit;
@@ -746,7 +752,7 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
         continue;
       }
 
-      int display_count = (max_display * brightness) >> 8;
+      int display_count = (max_display * effective_brightness) >> 8;
 
       // Hybrid minimum: only apply minimum to higher bits at low brightness
       // This preserves color ratios for visible bits instead of forcing all bits on
@@ -754,8 +760,8 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
       //   brightness 1-15:  only bit 7 gets minimum
       //   brightness 16-31: bits 6-7 get minimum
       //   brightness 32-47: bits 5-7 get minimum, etc.
-      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (brightness >> 4));
-      if (brightness > 0 && display_count == 0 && bit >= min_bit_for_display) {
+      const int min_bit_for_display = std::max(0, bit_depth_ - 1 - (effective_brightness >> 4));
+      if (effective_brightness > 0 && display_count == 0 && bit >= min_bit_for_display) {
         display_count = 1;
       }
 
