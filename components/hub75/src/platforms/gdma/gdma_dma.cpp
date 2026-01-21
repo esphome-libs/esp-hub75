@@ -71,6 +71,9 @@ constexpr uint16_t RGB_UPPER_MASK = (1 << R1_BIT) | (1 << G1_BIT) | (1 << B1_BIT
 constexpr uint16_t RGB_LOWER_MASK = (1 << R2_BIT) | (1 << G2_BIT) | (1 << B2_BIT);
 constexpr uint16_t RGB_MASK = RGB_UPPER_MASK | RGB_LOWER_MASK;  // 0x003F
 
+// Bit clear masks
+constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
+
 GdmaDma::GdmaDma(const Hub75Config &config)
     : PlatformDma(config),
       dma_chan_(nullptr),
@@ -888,7 +891,6 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
   }
 
   const uint8_t latch_blanking = config_.latch_blanking;
-  const uint16_t oe_clear_mask = ~(1 << OE_BIT);
 
   // Special case: brightness=0 means fully blanked (display off)
   if (brightness == 0) {
@@ -988,7 +990,7 @@ void GdmaDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t bri
       for (int x = 0; x < dma_width_; x++) {
         if (x >= x_min && x < x_max) {
           // Enable display: clear OE bit
-          buf[x] &= oe_clear_mask;
+          buf[x] &= OE_CLEAR_MASK;
         } else {
           // Keep blanked: set OE bit (already set, but make explicit)
           buf[x] |= (1 << OE_BIT);

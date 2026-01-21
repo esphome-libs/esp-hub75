@@ -670,9 +670,7 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
   if (brightness == 0) {
     for (int row = 0; row < num_rows_; row++) {
       for (int bit = 0; bit < bit_depth_; bit++) {
-        int idx = (row * bit_depth_) + bit;
-        BitPlaneBuffer &bp = buffers[idx];
-
+        BitPlaneBuffer &bp = buffers[(row * bit_depth_) + bit];
         // Blank all pixels in padding section: set OE bit HIGH
         for (size_t i = 0; i < bp.padding_words; i++) {
           bp.data[bp.pixel_words + i] |= (1 << OE_BIT);
@@ -705,8 +703,7 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
-      int idx = (row * bit_depth_) + bit;
-      BitPlaneBuffer &bp = buffers[idx];
+      BitPlaneBuffer &bp = buffers[(row * bit_depth_) + bit];
 
       // For PARLIO with clock gating, brightness is controlled by OE duty cycle
       // in the padding section (where MSB=0 and panel displays)
@@ -798,8 +795,8 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
       display_count = std::min(display_count, max_display - 1);
 
       // Center the display window in padding section
-      const int start_display = (bp.padding_words - display_count) / 2;
-      const int end_display = start_display + display_count;
+      const size_t start_display = (bp.padding_words - display_count) / 2;
+      const size_t end_display = start_display + display_count;
 
       // Set OE bits in padding section
       for (size_t i = 0; i < bp.padding_words; i++) {
@@ -817,8 +814,7 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
       // CRITICAL: Latch blanking at end of padding
       // Blank last N words to prevent ghosting during row transition
       for (size_t i = 0; i < config_.latch_blanking && i < bp.padding_words; i++) {
-        size_t idx = bp.padding_words - 1 - i;
-        bp.data[bp.pixel_words + idx] |= (1 << OE_BIT);
+        bp.data[bp.pixel_words + bp.padding_words - 1 - i] |= (1 << OE_BIT);
       }
     }
   }
