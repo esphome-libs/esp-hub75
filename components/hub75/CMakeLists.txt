@@ -93,3 +93,32 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 # Require C++20 for [[likely]]/[[unlikely]] and other modern features
 # Note: consteval validation is skipped on ESP-IDF 4.x (GCC 8.x) via version guards
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_20)
+
+# ============================================================================
+# Deprecation warnings for old Kconfig option names
+# ============================================================================
+
+# Check for deprecated DEPTH_* options (should use HUB75_BIT_DEPTH_*)
+set(DEPRECATED_DEPTH_OPTIONS
+    CONFIG_DEPTH_4 CONFIG_DEPTH_5 CONFIG_DEPTH_6 CONFIG_DEPTH_7
+    CONFIG_DEPTH_8 CONFIG_DEPTH_9 CONFIG_DEPTH_10 CONFIG_DEPTH_11 CONFIG_DEPTH_12)
+
+foreach(opt IN LISTS DEPRECATED_DEPTH_OPTIONS)
+    if(${opt})
+        message(WARNING "Deprecated Kconfig option ${opt} detected. "
+            "Please update your sdkconfig.defaults to use HUB75_BIT_DEPTH_* instead of DEPTH_*. "
+            "Run 'idf.py save-defconfig' to generate updated config.")
+    endif()
+endforeach()
+
+# Check for deprecated GAMMA_* options (should use HUB75_GAMMA_*)
+set(DEPRECATED_GAMMA_OPTIONS
+    CONFIG_GAMMA_LINEAR CONFIG_GAMMA_CIE1931 CONFIG_GAMMA_2_2)
+
+foreach(opt IN LISTS DEPRECATED_GAMMA_OPTIONS)
+    if(${opt})
+        message(WARNING "Deprecated Kconfig option ${opt} detected. "
+            "Please update your sdkconfig.defaults to use HUB75_GAMMA_* instead of GAMMA_*. "
+            "Run 'idf.py save-defconfig' to generate updated config.")
+    endif()
+endforeach()
