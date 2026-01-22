@@ -91,6 +91,12 @@ class GdmaDma : public PlatformDma {
    */
   void flip_buffer() override;
 
+  /**
+   * @brief Get GDMA channel handle for external callback registration
+   * @return GDMA channel handle, or NULL if not initialized
+   */
+  gdma_channel_handle_t getGdmaChannel() const { return dma_chan_; }
+
   // ============================================================================
   // Static Helper Functions (Public for compile-time validation)
   // ============================================================================

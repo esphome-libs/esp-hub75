@@ -49,6 +49,9 @@ class ParlioDma : public PlatformDma {
   void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) override;
   void flip_buffer() override;
 
+  // Get underlying PARLIO TX unit handle (for frame sync callbacks)
+  parlio_tx_unit_handle_t getTxUnitHandle() const { return tx_unit_; }
+
   struct BitPlaneBuffer {
     uint16_t *data;
     size_t pixel_words;

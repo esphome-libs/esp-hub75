@@ -208,6 +208,12 @@ class Hub75Driver {
    */
   bool is_running() const;
 
+  /**
+   * @brief Get platform-specific DMA handle for advanced use cases
+   * @return Pointer to PlatformDma implementation
+   */
+  hub75::PlatformDma* getDmaEngine() const { return dma_; }
+
  private:
   Hub75Config config_;
   bool running_;
