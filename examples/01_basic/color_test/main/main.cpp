@@ -162,6 +162,117 @@ static void draw_brightness_steps(Hub75Driver &driver, uint8_t r, uint8_t g, uin
   }
 }
 
+// Draw RGB565 gradient test - shows the reduced resolution of 5-6-5 bit color
+static void draw_rgb565_gradients(Hub75Driver &driver) {
+  const uint16_t width = driver.get_width();
+  const uint16_t height = driver.get_height();
+  const uint16_t section_height = height / 3;
+
+  ESP_LOGI(TAG, ">>> RGB565 channel gradients (5-6-5 bit resolution)");
+  ESP_LOGI(TAG, "    Red/Blue: 32 levels (5-bit), Green: 64 levels (6-bit)");
+
+  // Create RGB565 buffer for one row
+  uint16_t row_buffer[128];  // Assuming max 128 width
+
+  // Red gradient (5-bit: 0-31 values)
+  ESP_LOGI(TAG, "    Top third: Red 5-bit gradient (0-31 mapped to width)");
+  for (uint16_t x = 0; x < width && x < 128; x++) {
+    uint8_t r5 = static_cast<uint8_t>((x * 31) / (width - 1));
+    // RGB565: RRRRR GGGGGG BBBBB (big-endian would be different)
+    row_buffer[x] = (r5 << 11) | (0 << 5) | 0;  // Red only
+  }
+  for (uint16_t y = 0; y < section_height; y++) {
+    driver.draw_pixels(0, y, width, 1, reinterpret_cast<const uint8_t *>(row_buffer), Hub75PixelFormat::RGB565,
+                       Hub75ColorOrder::RGB, false);
+  }
+
+  // Green gradient (6-bit: 0-63 values)
+  ESP_LOGI(TAG, "    Middle third: Green 6-bit gradient (0-63 mapped to width)");
+  for (uint16_t x = 0; x < width && x < 128; x++) {
+    uint8_t g6 = static_cast<uint8_t>((x * 63) / (width - 1));
+    row_buffer[x] = (0 << 11) | (g6 << 5) | 0;  // Green only
+  }
+  for (uint16_t y = section_height; y < section_height * 2; y++) {
+    driver.draw_pixels(0, y, width, 1, reinterpret_cast<const uint8_t *>(row_buffer), Hub75PixelFormat::RGB565,
+                       Hub75ColorOrder::RGB, false);
+  }
+
+  // Blue gradient (5-bit: 0-31 values)
+  ESP_LOGI(TAG, "    Bottom third: Blue 5-bit gradient (0-31 mapped to width)");
+  for (uint16_t x = 0; x < width && x < 128; x++) {
+    uint8_t b5 = static_cast<uint8_t>((x * 31) / (width - 1));
+    row_buffer[x] = (0 << 11) | (0 << 5) | b5;  // Blue only
+  }
+  for (uint16_t y = section_height * 2; y < height; y++) {
+    driver.draw_pixels(0, y, width, 1, reinterpret_cast<const uint8_t *>(row_buffer), Hub75PixelFormat::RGB565,
+                       Hub75ColorOrder::RGB, false);
+  }
+}
+
+// Draw RGB565 dark region test - exposes quantization in darkest values
+static void draw_rgb565_dark_test(Hub75Driver &driver) {
+  const uint16_t width = driver.get_width();
+  const uint16_t height = driver.get_height();
+
+  ESP_LOGI(TAG, ">>> RGB565 dark region test (first 8 values per channel)");
+  ESP_LOGI(TAG, "    Shows how 565 dark values map through CIE correction");
+
+  // Clear to black
+  driver.fill(0, 0, width, height, 0, 0, 0);
+
+  // We'll show the first 8 RGB565 values for each channel as vertical bars
+  // Top row: Red (5-bit values 0-7)
+  // Middle row: Green (6-bit values 0-7) - note: 6-bit 1 may disappear!
+  // Bottom row: Blue (5-bit values 0-7)
+  const uint16_t section_height = height / 3;
+  const uint16_t bar_width = width / 8;
+
+  uint16_t pixel;
+
+  // Red bars (5-bit: 0-7)
+  ESP_LOGI(TAG, "    Top: Red 5-bit values 0-7");
+  for (int i = 0; i < 8; i++) {
+    pixel = (static_cast<uint16_t>(i) << 11);  // R5 in bits 15-11
+    for (uint16_t y = 0; y < section_height; y++) {
+      for (uint16_t x = i * bar_width; x < (i + 1) * bar_width && x < width; x++) {
+        driver.draw_pixels(x, y, 1, 1, reinterpret_cast<const uint8_t *>(&pixel), Hub75PixelFormat::RGB565,
+                           Hub75ColorOrder::RGB, false);
+      }
+    }
+    // Log the 5-bit to 8-bit conversion
+    uint8_t r8 = (i << 3) | (i >> 2);
+    ESP_LOGI(TAG, "      R5=%d -> R8=%d", i, r8);
+  }
+
+  // Green bars (6-bit: 0-7) - NOTE: value 1 may be invisible!
+  ESP_LOGI(TAG, "    Middle: Green 6-bit values 0-7 (value 1 may be invisible at 8-bit CIE!)");
+  for (int i = 0; i < 8; i++) {
+    pixel = (static_cast<uint16_t>(i) << 5);  // G6 in bits 10-5
+    for (uint16_t y = section_height; y < section_height * 2; y++) {
+      for (uint16_t x = i * bar_width; x < (i + 1) * bar_width && x < width; x++) {
+        driver.draw_pixels(x, y, 1, 1, reinterpret_cast<const uint8_t *>(&pixel), Hub75PixelFormat::RGB565,
+                           Hub75ColorOrder::RGB, false);
+      }
+    }
+    uint8_t g8 = (i << 2) | (i >> 4);
+    ESP_LOGI(TAG, "      G6=%d -> G8=%d", i, g8);
+  }
+
+  // Blue bars (5-bit: 0-7)
+  ESP_LOGI(TAG, "    Bottom: Blue 5-bit values 0-7");
+  for (int i = 0; i < 8; i++) {
+    pixel = static_cast<uint16_t>(i);  // B5 in bits 4-0
+    for (uint16_t y = section_height * 2; y < height; y++) {
+      for (uint16_t x = i * bar_width; x < (i + 1) * bar_width && x < width; x++) {
+        driver.draw_pixels(x, y, 1, 1, reinterpret_cast<const uint8_t *>(&pixel), Hub75PixelFormat::RGB565,
+                           Hub75ColorOrder::RGB, false);
+      }
+    }
+    uint8_t b8 = (i << 3) | (i >> 2);
+    ESP_LOGI(TAG, "      B5=%d -> B8=%d", i, b8);
+  }
+}
+
 // Draw RGB channel identification test (corner markers)
 static void draw_channel_id_test(Hub75Driver &driver) {
   const uint16_t width = driver.get_width();
@@ -336,6 +447,21 @@ extern "C" void app_main() {
     fill_and_log(driver, 0, 128, 0, "50% GREEN");
     fill_and_log(driver, 0, 0, 128, "50% BLUE");
     fill_and_log(driver, 128, 128, 128, "50% GRAY");
+
+    // ========================================
+    // Test 11: RGB565 Format Tests
+    // ========================================
+    ESP_LOGI(TAG, "--- TEST 11: RGB565 Format Tests ---");
+    ESP_LOGI(TAG, "Testing RGB565 color format (5-6-5 bit resolution)");
+    ESP_LOGI(TAG, "Look for: reduced gradient steps vs RGB888, green channel quirks");
+
+    driver.clear();
+    draw_rgb565_gradients(driver);
+    vTaskDelay(pdMS_TO_TICKS(TEST_DURATION_MS));
+
+    driver.clear();
+    draw_rgb565_dark_test(driver);
+    vTaskDelay(pdMS_TO_TICKS(TEST_DURATION_MS));
 
     ESP_LOGI(TAG, "======== CYCLE %d COMPLETE ========", cycle);
     ESP_LOGI(TAG, "");
