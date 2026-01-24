@@ -49,10 +49,10 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
   const uint16_t patch_x = (width - MEASURE_PATCH_SIZE) / 2;
   const uint16_t patch_y = (height - MEASURE_PATCH_SIZE) / 2;
 
-  // Calculate number of grayscale patches
+  // Calculate number of patches
   const int num_gray_patches = (255 / MEASURE_STEP) + 1;  // 0 to 255 inclusive
-  const int num_primary_patches = 6;                      // R,G,B at 255 and 128
-  const int total_patches = num_gray_patches + num_primary_patches;
+  const int num_color_patches = 34;                       // Color validation patches (see array below)
+  const int total_patches = num_gray_patches + num_color_patches;
   const float total_time_min = (total_patches * MEASURE_HOLD_MS) / 60000.0f;
 
   ESP_LOGI(TAG, "");
@@ -105,25 +105,81 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
 
-    // Primary colors at key levels
+    // Color patches for chromaticity validation
     ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "--- PRIMARY COLORS ---");
+    ESP_LOGI(TAG, "--- COLOR PATCHES ---");
 
-    struct PrimaryPatch {
+    struct ColorPatch {
       uint8_t r, g, b;
       const char *name;
     };
-    const PrimaryPatch primaries[] = {
-        {255, 0, 0, "Red 255"}, {0, 255, 0, "Green 255"}, {0, 0, 255, "Blue 255"},
-        {128, 0, 0, "Red 128"}, {0, 128, 0, "Green 128"}, {0, 0, 128, "Blue 128"},
+
+    // Comprehensive color validation set:
+    // - Primaries at 100%, 75%, 50%, 25% to detect intensity-dependent color shifts
+    // - Secondaries to verify color mixing
+    // - White point reference
+    // - Skin tones (common problem area)
+    // - Saturated and desaturated colors
+    const ColorPatch colors[] = {
+        // Primaries at multiple levels (detect color shift with intensity)
+        {255, 0, 0, "Red 100%"},
+        {191, 0, 0, "Red 75%"},
+        {128, 0, 0, "Red 50%"},
+        {64, 0, 0, "Red 25%"},
+
+        {0, 255, 0, "Green 100%"},
+        {0, 191, 0, "Green 75%"},
+        {0, 128, 0, "Green 50%"},
+        {0, 64, 0, "Green 25%"},
+
+        {0, 0, 255, "Blue 100%"},
+        {0, 0, 191, "Blue 75%"},
+        {0, 0, 128, "Blue 50%"},
+        {0, 0, 64, "Blue 25%"},
+
+        // Secondaries (color mixing validation)
+        {255, 255, 0, "Yellow"},
+        {0, 255, 255, "Cyan"},
+        {255, 0, 255, "Magenta"},
+
+        // Secondaries at 50%
+        {128, 128, 0, "Yellow 50%"},
+        {0, 128, 128, "Cyan 50%"},
+        {128, 0, 128, "Magenta 50%"},
+
+        // White point
+        {255, 255, 255, "White"},
+        {191, 191, 191, "Gray 75%"},
+        {128, 128, 128, "Gray 50%"},
+
+        // Skin tones (Fitzpatrick scale approximations)
+        {255, 224, 189, "Skin Light"},
+        {234, 192, 134, "Skin Medium"},
+        {141, 85, 36, "Skin Dark"},
+
+        // Orange/warm tones (often problematic)
+        {255, 128, 0, "Orange"},
+        {255, 64, 0, "Red-Orange"},
+
+        // Pastels (desaturated - tests low saturation accuracy)
+        {255, 192, 192, "Pink"},
+        {192, 255, 192, "Mint"},
+        {192, 192, 255, "Lavender"},
+
+        // Memory colors
+        {0, 128, 0, "Foliage"},
+        {135, 206, 235, "Sky Blue"},
     };
 
-    for (const auto &p : primaries) {
+    const int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+    for (int i = 0; i < num_colors; i++) {
+      const auto &c = colors[i];
       patch_num++;
       driver.fill(0, 0, width, height, 0, 0, 0);
-      driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, p.r, p.g, p.b);
+      driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, c.r, c.g, c.b);
 
-      ESP_LOGI(TAG, "PATCH %3d/%d: %-10s | RGB(%3d,%3d,%3d)", patch_num, total_patches, p.name, p.r, p.g, p.b);
+      ESP_LOGI(TAG, "PATCH %3d/%d: %-12s | RGB(%3d,%3d,%3d)", patch_num, total_patches, c.name, c.r, c.g, c.b);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
