@@ -25,6 +25,110 @@ static const char *const TAG = "color_test";
 static const uint32_t TEST_DURATION_MS = 3000;
 static const uint32_t QUICK_DURATION_MS = 1500;
 
+// Colorimeter measurement mode settings
+static const uint32_t MEASURE_SETUP_MS = 10000;  // Initial black screen for positioning
+static const uint32_t MEASURE_HOLD_MS = 8000;    // Hold each patch for measurement
+static const uint16_t MEASURE_PATCH_SIZE = 32;   // Size of center measurement patch
+
+// Colorimeter measurement mode - displays center patches for taking readings
+// Enable by setting COLORIMETER_MODE to 1
+#define COLORIMETER_MODE 0
+
+#if COLORIMETER_MODE
+static void run_colorimeter_mode(Hub75Driver &driver) {
+  const uint16_t width = driver.get_width();
+  const uint16_t height = driver.get_height();
+
+  // Center patch coordinates
+  const uint16_t patch_x = (width - MEASURE_PATCH_SIZE) / 2;
+  const uint16_t patch_y = (height - MEASURE_PATCH_SIZE) / 2;
+
+  // Test values - grayscale ramp plus primaries
+  struct MeasurePatch {
+    uint8_t r, g, b;
+    const char *name;
+    float expected_cie_luminance;  // Relative luminance after CIE (0-1 scale)
+  };
+
+  // CIE L* luminance values (approximate, for reference)
+  // L* = 116 * (Y/Yn)^(1/3) - 16 for Y/Yn > 0.008856
+  // These are the expected relative luminance values after CIE correction
+  const MeasurePatch patches[] = {
+      // Grayscale ramp - key values to verify CIE curve
+      {0, 0, 0, "Black", 0.0f},
+      {1, 1, 1, "Gray 1", 0.0001f},
+      {2, 2, 2, "Gray 2", 0.0002f},
+      {4, 4, 4, "Gray 4", 0.0005f},
+      {8, 8, 8, "Gray 8", 0.001f},
+      {16, 16, 16, "Gray 16", 0.003f},
+      {32, 32, 32, "Gray 32", 0.010f},
+      {64, 64, 64, "Gray 64", 0.050f},
+      {128, 128, 128, "Gray 128", 0.214f},
+      {192, 192, 192, "Gray 192", 0.527f},
+      {255, 255, 255, "White", 1.0f},
+
+      // Primaries at full brightness
+      {255, 0, 0, "Red 255", 0.213f},    // sRGB red relative luminance
+      {0, 255, 0, "Green 255", 0.715f},  // sRGB green relative luminance
+      {0, 0, 255, "Blue 255", 0.072f},   // sRGB blue relative luminance
+
+      // Primaries at 50%
+      {128, 0, 0, "Red 128", 0.046f},
+      {0, 128, 0, "Green 128", 0.153f},
+      {0, 0, 128, "Blue 128", 0.015f},
+  };
+  const int num_patches = sizeof(patches) / sizeof(patches[0]);
+
+  ESP_LOGI(TAG, "");
+  ESP_LOGI(TAG, "========================================");
+  ESP_LOGI(TAG, "COLORIMETER MEASUREMENT MODE");
+  ESP_LOGI(TAG, "========================================");
+  ESP_LOGI(TAG, "Patch size: %dx%d pixels at center (%d,%d)", MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, patch_x, patch_y);
+  ESP_LOGI(TAG, "Setup time: %lu seconds (position colorimeter)", (unsigned long) (MEASURE_SETUP_MS / 1000));
+  ESP_LOGI(TAG, "Hold time: %lu seconds per patch", (unsigned long) (MEASURE_HOLD_MS / 1000));
+  ESP_LOGI(TAG, "Total patches: %d", num_patches);
+  ESP_LOGI(TAG, "========================================");
+  ESP_LOGI(TAG, "");
+
+  int cycle = 0;
+  while (true) {
+    cycle++;
+    ESP_LOGI(TAG, "===== MEASUREMENT CYCLE %d =====", cycle);
+
+    // Initial black screen for setup/positioning
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, ">>> BLACK - Position colorimeter on center patch");
+    ESP_LOGI(TAG, "    %lu seconds to position...", (unsigned long) (MEASURE_SETUP_MS / 1000));
+    driver.fill(0, 0, width, height, 0, 0, 0);
+    vTaskDelay(pdMS_TO_TICKS(MEASURE_SETUP_MS));
+
+    // Loop through each measurement patch
+    for (int i = 0; i < num_patches; i++) {
+      const auto &p = patches[i];
+
+      // Black background
+      driver.fill(0, 0, width, height, 0, 0, 0);
+
+      // Draw center patch
+      driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, p.r, p.g, p.b);
+
+      ESP_LOGI(TAG, "");
+      ESP_LOGI(TAG, ">>> PATCH %d/%d: %s", i + 1, num_patches, p.name);
+      ESP_LOGI(TAG, "    RGB(%d, %d, %d)", p.r, p.g, p.b);
+      ESP_LOGI(TAG, "    Expected relative luminance: %.4f", p.expected_cie_luminance);
+      ESP_LOGI(TAG, "    Holding for %lu seconds...", (unsigned long) (MEASURE_HOLD_MS / 1000));
+
+      vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
+    }
+
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "===== CYCLE %d COMPLETE =====", cycle);
+    ESP_LOGI(TAG, "Restarting measurement cycle...");
+    ESP_LOGI(TAG, "");
+  }
+}
+#endif  // COLORIMETER_MODE
+
 // Helper to fill display with a solid color and log it
 static void fill_and_log(Hub75Driver &driver, uint8_t r, uint8_t g, uint8_t b, const char *name) {
   ESP_LOGI(TAG, ">>> %s: RGB(%d, %d, %d)", name, r, g, b);
@@ -338,6 +442,12 @@ extern "C" void app_main() {
   ESP_LOGI(TAG, "Driver initialized, starting test loop...");
   ESP_LOGI(TAG, "Each test runs for %lu ms", (unsigned long) TEST_DURATION_MS);
   ESP_LOGI(TAG, "");
+
+#if COLORIMETER_MODE
+  // Run colorimeter measurement mode instead of normal tests
+  run_colorimeter_mode(driver);
+  // Never returns
+#endif
 
   int cycle = 0;
 
