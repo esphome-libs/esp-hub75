@@ -71,7 +71,7 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
   ESP_LOGI(TAG, "  spotread -v -e -O measurements.txt");
   ESP_LOGI(TAG, "");
   ESP_LOGI(TAG, "CSV header for logging:");
-  ESP_LOGI(TAG, "patch,name,r,g,b,exp_x,exp_y,exp_Y,meas_x,meas_y,meas_Y");
+  ESP_LOGI(TAG, "patch,name,r,g,b,exp_Y_r,exp_Y_g,exp_Y_b,meas_x,meas_y,meas_Y");
   ESP_LOGI(TAG, "========================================");
   ESP_LOGI(TAG, "");
 
@@ -90,109 +90,120 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
     int patch_num = 0;
 
     // Grayscale ramp: 0 to 255 in steps of MEASURE_STEP
-    // For gray, chromaticity should be D65 white point (0.3127, 0.3290)
-    // Y is relative luminance based on sRGB gamma
+    // Expected luminance uses CIE 1931 curve (matches our gamma correction)
+    // xy coordinates are panel-dependent but should be CONSTANT across all gray levels
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "--- GRAYSCALE RAMP (step=%d) ---", MEASURE_STEP);
-    ESP_LOGI(TAG, "Gray x,y should be ~(0.313, 0.329) at all levels");
+    ESP_LOGI(TAG, "Check: xy should be CONSTANT (panel white point) at all levels");
+    ESP_LOGI(TAG, "Check: Y should follow CIE 1931 curve (relative to white=1.0)");
 
     for (int v = 0; v <= 255; v += MEASURE_STEP) {
       patch_num++;
       uint8_t val = static_cast<uint8_t>(v > 255 ? 255 : v);
 
-      // Calculate expected relative luminance (sRGB gamma)
-      float normalized = val / 255.0f;
-      float linear;
-      if (normalized <= 0.04045f) {
-        linear = normalized / 12.92f;
+      // Calculate expected relative luminance using CIE 1931 (matches our LUT)
+      // This is what our driver actually applies, not sRGB gamma
+      float lightness = (val / 255.0f) * 100.0f;
+      float luminance;
+      if (lightness <= 8.0f) {
+        luminance = lightness / 902.3f;
       } else {
-        linear = powf((normalized + 0.055f) / 1.055f, 2.4f);
+        float temp = (lightness + 16.0f) / 116.0f;
+        luminance = temp * temp * temp;
       }
 
       // Black background + center patch
       driver.fill(0, 0, width, height, 0, 0, 0);
       driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, val, val, val);
 
-      // Output with expected xyY (gray = D65 white point)
-      ESP_LOGI(TAG, "PATCH %3d/%d: Gray %-3d    | RGB(%3d,%3d,%3d) | xyY(0.313,0.329,%.4f)", patch_num, total_patches,
-               val, val, val, val, linear);
+      // Output with expected Y (CIE 1931), xy is panel-dependent
+      ESP_LOGI(TAG, "PATCH %3d/%d: Gray %-3d    | RGB(%3d,%3d,%3d) | exp_Y=%.4f", patch_num, total_patches, val, val,
+               val, val, luminance);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
 
     // Color patches for chromaticity validation
-    // Expected xyY values calculated from sRGB (D65 white point)
-    // Y is relative luminance (0-1), x and y are chromaticity coordinates
+    // NOTE: xy coordinates are PANEL-DEPENDENT (LED phosphor characteristics)
+    // We CAN validate: consistent xy across intensity, correct Y ratios
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "--- COLOR PATCHES ---");
-    ESP_LOGI(TAG, "Expected values assume sRGB primaries (may differ from panel LEDs)");
+    ESP_LOGI(TAG, "xy values are panel-dependent. Check for:");
+    ESP_LOGI(TAG, "  - Primary xy CONSTANT across intensity levels (no color shift)");
+    ESP_LOGI(TAG, "  - Gray xy matches white xy (neutral balance)");
+    ESP_LOGI(TAG, "  - Y values follow CIE 1931 ratios");
 
     struct ColorPatch {
       uint8_t r, g, b;
       const char *name;
-      float exp_x, exp_y, exp_Y;  // Expected CIE xyY values
+      float exp_Y;  // Expected relative luminance (CIE 1931)
     };
 
-    // Comprehensive color validation set with expected sRGB xyY values
-    // x, y = chromaticity coordinates, Y = relative luminance (0-1 scale, white=1.0)
-    // Primaries: Red (0.64, 0.33), Green (0.30, 0.60), Blue (0.15, 0.06)
-    // D65 white point: (0.3127, 0.3290)
+    // Helper lambda to calculate CIE 1931 luminance for a single channel
+    auto cie_luminance = [](uint8_t val) -> float {
+      float lightness = (val / 255.0f) * 100.0f;
+      if (lightness <= 8.0f) {
+        return lightness / 902.3f;
+      } else {
+        float temp = (lightness + 16.0f) / 116.0f;
+        return temp * temp * temp;
+      }
+    };
+
+    // Color validation set
+    // exp_Y calculated from CIE 1931 curve (what our driver applies)
     const ColorPatch colors[] = {
-        // Primaries at multiple levels (detect color shift with intensity)
-        // Pure primaries should maintain constant xy regardless of intensity
-        {255, 0, 0, "Red 100%", 0.640f, 0.330f, 0.2126f},
-        {191, 0, 0, "Red 75%", 0.640f, 0.330f, 0.1145f},
-        {128, 0, 0, "Red 50%", 0.640f, 0.330f, 0.0455f},
-        {64, 0, 0, "Red 25%", 0.640f, 0.330f, 0.0100f},
+        // Primaries at multiple levels - xy should be CONSTANT within each color
+        // Y follows CIE 1931 curve
+        {255, 0, 0, "Red 100%", 1.0000f},
+        {191, 0, 0, "Red 75%", 0.5121f},
+        {128, 0, 0, "Red 50%", 0.2140f},
+        {64, 0, 0, "Red 25%", 0.0540f},
 
-        {0, 255, 0, "Green 100%", 0.300f, 0.600f, 0.7152f},
-        {0, 191, 0, "Green 75%", 0.300f, 0.600f, 0.3850f},
-        {0, 128, 0, "Green 50%", 0.300f, 0.600f, 0.1532f},
-        {0, 64, 0, "Green 25%", 0.300f, 0.600f, 0.0337f},
+        {0, 255, 0, "Green 100%", 1.0000f},
+        {0, 191, 0, "Green 75%", 0.5121f},
+        {0, 128, 0, "Green 50%", 0.2140f},
+        {0, 64, 0, "Green 25%", 0.0540f},
 
-        {0, 0, 255, "Blue 100%", 0.150f, 0.060f, 0.0722f},
-        {0, 0, 191, "Blue 75%", 0.150f, 0.060f, 0.0389f},
-        {0, 0, 128, "Blue 50%", 0.150f, 0.060f, 0.0154f},
-        {0, 0, 64, "Blue 25%", 0.150f, 0.060f, 0.0034f},
+        {0, 0, 255, "Blue 100%", 1.0000f},
+        {0, 0, 191, "Blue 75%", 0.5121f},
+        {0, 0, 128, "Blue 50%", 0.2140f},
+        {0, 0, 64, "Blue 25%", 0.0540f},
 
-        // Secondaries (color mixing validation)
-        {255, 255, 0, "Yellow", 0.419f, 0.505f, 0.9278f},
-        {0, 255, 255, "Cyan", 0.224f, 0.328f, 0.7874f},
-        {255, 0, 255, "Magenta", 0.321f, 0.154f, 0.2848f},
+        // Secondaries - xy should fall between primaries on CIE diagram
+        {255, 255, 0, "Yellow", 2.0000f},   // R+G luminance sum
+        {0, 255, 255, "Cyan", 2.0000f},     // G+B luminance sum
+        {255, 0, 255, "Magenta", 2.0000f},  // R+B luminance sum
 
-        // Secondaries at 50%
-        {128, 128, 0, "Yellow 50%", 0.419f, 0.505f, 0.1987f},
-        {0, 128, 128, "Cyan 50%", 0.224f, 0.328f, 0.1687f},
-        {128, 0, 128, "Magenta 50%", 0.321f, 0.154f, 0.0610f},
+        {128, 128, 0, "Yellow 50%", 0.4280f},
+        {0, 128, 128, "Cyan 50%", 0.4280f},
+        {128, 0, 128, "Magenta 50%", 0.4280f},
 
-        // White/gray (should be D65: x=0.3127, y=0.3290)
-        {255, 255, 255, "White", 0.3127f, 0.3290f, 1.0000f},
-        {191, 191, 191, "Gray 75%", 0.3127f, 0.3290f, 0.5384f},
-        {128, 128, 128, "Gray 50%", 0.3127f, 0.3290f, 0.2140f},
+        // White/gray - xy should match across all levels (panel white point)
+        {255, 255, 255, "White", 3.0000f},  // R+G+B
+        {191, 191, 191, "Gray 75%", 1.5363f},
+        {128, 128, 128, "Gray 50%", 0.6420f},
 
-        // Skin tones
-        {255, 224, 189, "Skin Light", 0.3569f, 0.3554f, 0.7570f},
-        {234, 192, 134, "Skin Medium", 0.3782f, 0.3699f, 0.5189f},
-        {141, 85, 36, "Skin Dark", 0.4307f, 0.3862f, 0.0979f},
+        // Skin tones - record xy for reference
+        {255, 224, 189, "Skin Light", 0.0f},  // Y varies, record actual
+        {234, 192, 134, "Skin Medium", 0.0f},
+        {141, 85, 36, "Skin Dark", 0.0f},
 
         // Orange/warm tones
-        {255, 128, 0, "Orange", 0.4909f, 0.4453f, 0.4341f},
-        {255, 64, 0, "Red-Orange", 0.5665f, 0.3898f, 0.2743f},
+        {255, 128, 0, "Orange", 0.0f},
+        {255, 64, 0, "Red-Orange", 0.0f},
 
         // Pastels
-        {255, 192, 192, "Pink", 0.3500f, 0.3184f, 0.6549f},
-        {192, 255, 192, "Mint", 0.3101f, 0.3608f, 0.7969f},
-        {192, 192, 255, "Lavender", 0.2845f, 0.2902f, 0.5650f},
+        {255, 192, 192, "Pink", 0.0f},
+        {192, 255, 192, "Mint", 0.0f},
+        {192, 192, 255, "Lavender", 0.0f},
 
         // Memory colors
-        {0, 128, 0, "Foliage", 0.300f, 0.600f, 0.1532f},
-        {135, 206, 235, "Sky Blue", 0.2608f, 0.3041f, 0.5523f},
+        {0, 128, 0, "Foliage", 0.2140f},
+        {135, 206, 235, "Sky Blue", 0.0f},
     };
 
     const int num_colors = sizeof(colors) / sizeof(colors[0]);
-
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Format: RGB | Expected xyY | (measure and compare)");
 
     for (int i = 0; i < num_colors; i++) {
       const auto &c = colors[i];
@@ -200,9 +211,15 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
       driver.fill(0, 0, width, height, 0, 0, 0);
       driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, c.r, c.g, c.b);
 
-      // Log with expected xyY values for comparison
-      ESP_LOGI(TAG, "PATCH %3d/%d: %-12s | RGB(%3d,%3d,%3d) | xyY(%.3f,%.3f,%.4f)", patch_num, total_patches, c.name,
-               c.r, c.g, c.b, c.exp_x, c.exp_y, c.exp_Y);
+      // Calculate actual expected Y from CIE 1931 for each channel
+      float y_r = cie_luminance(c.r);
+      float y_g = cie_luminance(c.g);
+      float y_b = cie_luminance(c.b);
+      float y_total = y_r + y_g + y_b;
+
+      // Log RGB and expected luminance contributions
+      ESP_LOGI(TAG, "PATCH %3d/%d: %-12s | RGB(%3d,%3d,%3d) | Y_rgb=(%.3f,%.3f,%.3f) sum=%.3f", patch_num,
+               total_patches, c.name, c.r, c.g, c.b, y_r, y_g, y_b, y_total);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
