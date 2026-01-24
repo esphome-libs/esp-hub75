@@ -15,6 +15,7 @@
 
 #include "hub75.h"
 #include "board_config.h"
+#include <cmath>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>  // NOLINT(misc-header-include-cycle)
 #include <freertos/task.h>
@@ -69,8 +70,8 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
   ESP_LOGI(TAG, "TIP: Use ArgyllCMS for automated logging:");
   ESP_LOGI(TAG, "  spotread -v -e -O measurements.txt");
   ESP_LOGI(TAG, "");
-  ESP_LOGI(TAG, "CSV header for manual logging:");
-  ESP_LOGI(TAG, "patch,r,g,b,measured_Y,measured_x,measured_y");
+  ESP_LOGI(TAG, "CSV header for logging:");
+  ESP_LOGI(TAG, "patch,name,r,g,b,exp_x,exp_y,exp_Y,meas_x,meas_y,meas_Y");
   ESP_LOGI(TAG, "========================================");
   ESP_LOGI(TAG, "");
 
@@ -89,89 +90,109 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
     int patch_num = 0;
 
     // Grayscale ramp: 0 to 255 in steps of MEASURE_STEP
+    // For gray, chromaticity should be D65 white point (0.3127, 0.3290)
+    // Y is relative luminance based on sRGB gamma
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "--- GRAYSCALE RAMP (step=%d) ---", MEASURE_STEP);
+    ESP_LOGI(TAG, "Gray x,y should be ~(0.313, 0.329) at all levels");
+
     for (int v = 0; v <= 255; v += MEASURE_STEP) {
       patch_num++;
       uint8_t val = static_cast<uint8_t>(v > 255 ? 255 : v);
+
+      // Calculate expected relative luminance (sRGB gamma)
+      float normalized = val / 255.0f;
+      float linear;
+      if (normalized <= 0.04045f) {
+        linear = normalized / 12.92f;
+      } else {
+        linear = powf((normalized + 0.055f) / 1.055f, 2.4f);
+      }
 
       // Black background + center patch
       driver.fill(0, 0, width, height, 0, 0, 0);
       driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, val, val, val);
 
-      // Output in CSV-friendly format
-      ESP_LOGI(TAG, "PATCH %3d/%d: Gray %3d | RGB(%3d,%3d,%3d)", patch_num, total_patches, val, val, val, val);
+      // Output with expected xyY (gray = D65 white point)
+      ESP_LOGI(TAG, "PATCH %3d/%d: Gray %-3d    | RGB(%3d,%3d,%3d) | xyY(0.313,0.329,%.4f)", patch_num, total_patches,
+               val, val, val, val, linear);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
 
     // Color patches for chromaticity validation
+    // Expected xyY values calculated from sRGB (D65 white point)
+    // Y is relative luminance (0-1), x and y are chromaticity coordinates
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "--- COLOR PATCHES ---");
+    ESP_LOGI(TAG, "Expected values assume sRGB primaries (may differ from panel LEDs)");
 
     struct ColorPatch {
       uint8_t r, g, b;
       const char *name;
+      float exp_x, exp_y, exp_Y;  // Expected CIE xyY values
     };
 
-    // Comprehensive color validation set:
-    // - Primaries at 100%, 75%, 50%, 25% to detect intensity-dependent color shifts
-    // - Secondaries to verify color mixing
-    // - White point reference
-    // - Skin tones (common problem area)
-    // - Saturated and desaturated colors
+    // Comprehensive color validation set with expected sRGB xyY values
+    // x, y = chromaticity coordinates, Y = relative luminance (0-1 scale, white=1.0)
+    // Primaries: Red (0.64, 0.33), Green (0.30, 0.60), Blue (0.15, 0.06)
+    // D65 white point: (0.3127, 0.3290)
     const ColorPatch colors[] = {
         // Primaries at multiple levels (detect color shift with intensity)
-        {255, 0, 0, "Red 100%"},
-        {191, 0, 0, "Red 75%"},
-        {128, 0, 0, "Red 50%"},
-        {64, 0, 0, "Red 25%"},
+        // Pure primaries should maintain constant xy regardless of intensity
+        {255, 0, 0, "Red 100%", 0.640f, 0.330f, 0.2126f},
+        {191, 0, 0, "Red 75%", 0.640f, 0.330f, 0.1145f},
+        {128, 0, 0, "Red 50%", 0.640f, 0.330f, 0.0455f},
+        {64, 0, 0, "Red 25%", 0.640f, 0.330f, 0.0100f},
 
-        {0, 255, 0, "Green 100%"},
-        {0, 191, 0, "Green 75%"},
-        {0, 128, 0, "Green 50%"},
-        {0, 64, 0, "Green 25%"},
+        {0, 255, 0, "Green 100%", 0.300f, 0.600f, 0.7152f},
+        {0, 191, 0, "Green 75%", 0.300f, 0.600f, 0.3850f},
+        {0, 128, 0, "Green 50%", 0.300f, 0.600f, 0.1532f},
+        {0, 64, 0, "Green 25%", 0.300f, 0.600f, 0.0337f},
 
-        {0, 0, 255, "Blue 100%"},
-        {0, 0, 191, "Blue 75%"},
-        {0, 0, 128, "Blue 50%"},
-        {0, 0, 64, "Blue 25%"},
+        {0, 0, 255, "Blue 100%", 0.150f, 0.060f, 0.0722f},
+        {0, 0, 191, "Blue 75%", 0.150f, 0.060f, 0.0389f},
+        {0, 0, 128, "Blue 50%", 0.150f, 0.060f, 0.0154f},
+        {0, 0, 64, "Blue 25%", 0.150f, 0.060f, 0.0034f},
 
         // Secondaries (color mixing validation)
-        {255, 255, 0, "Yellow"},
-        {0, 255, 255, "Cyan"},
-        {255, 0, 255, "Magenta"},
+        {255, 255, 0, "Yellow", 0.419f, 0.505f, 0.9278f},
+        {0, 255, 255, "Cyan", 0.224f, 0.328f, 0.7874f},
+        {255, 0, 255, "Magenta", 0.321f, 0.154f, 0.2848f},
 
         // Secondaries at 50%
-        {128, 128, 0, "Yellow 50%"},
-        {0, 128, 128, "Cyan 50%"},
-        {128, 0, 128, "Magenta 50%"},
+        {128, 128, 0, "Yellow 50%", 0.419f, 0.505f, 0.1987f},
+        {0, 128, 128, "Cyan 50%", 0.224f, 0.328f, 0.1687f},
+        {128, 0, 128, "Magenta 50%", 0.321f, 0.154f, 0.0610f},
 
-        // White point
-        {255, 255, 255, "White"},
-        {191, 191, 191, "Gray 75%"},
-        {128, 128, 128, "Gray 50%"},
+        // White/gray (should be D65: x=0.3127, y=0.3290)
+        {255, 255, 255, "White", 0.3127f, 0.3290f, 1.0000f},
+        {191, 191, 191, "Gray 75%", 0.3127f, 0.3290f, 0.5384f},
+        {128, 128, 128, "Gray 50%", 0.3127f, 0.3290f, 0.2140f},
 
-        // Skin tones (Fitzpatrick scale approximations)
-        {255, 224, 189, "Skin Light"},
-        {234, 192, 134, "Skin Medium"},
-        {141, 85, 36, "Skin Dark"},
+        // Skin tones
+        {255, 224, 189, "Skin Light", 0.3569f, 0.3554f, 0.7570f},
+        {234, 192, 134, "Skin Medium", 0.3782f, 0.3699f, 0.5189f},
+        {141, 85, 36, "Skin Dark", 0.4307f, 0.3862f, 0.0979f},
 
-        // Orange/warm tones (often problematic)
-        {255, 128, 0, "Orange"},
-        {255, 64, 0, "Red-Orange"},
+        // Orange/warm tones
+        {255, 128, 0, "Orange", 0.4909f, 0.4453f, 0.4341f},
+        {255, 64, 0, "Red-Orange", 0.5665f, 0.3898f, 0.2743f},
 
-        // Pastels (desaturated - tests low saturation accuracy)
-        {255, 192, 192, "Pink"},
-        {192, 255, 192, "Mint"},
-        {192, 192, 255, "Lavender"},
+        // Pastels
+        {255, 192, 192, "Pink", 0.3500f, 0.3184f, 0.6549f},
+        {192, 255, 192, "Mint", 0.3101f, 0.3608f, 0.7969f},
+        {192, 192, 255, "Lavender", 0.2845f, 0.2902f, 0.5650f},
 
         // Memory colors
-        {0, 128, 0, "Foliage"},
-        {135, 206, 235, "Sky Blue"},
+        {0, 128, 0, "Foliage", 0.300f, 0.600f, 0.1532f},
+        {135, 206, 235, "Sky Blue", 0.2608f, 0.3041f, 0.5523f},
     };
 
     const int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "Format: RGB | Expected xyY | (measure and compare)");
 
     for (int i = 0; i < num_colors; i++) {
       const auto &c = colors[i];
@@ -179,7 +200,9 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
       driver.fill(0, 0, width, height, 0, 0, 0);
       driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, c.r, c.g, c.b);
 
-      ESP_LOGI(TAG, "PATCH %3d/%d: %-12s | RGB(%3d,%3d,%3d)", patch_num, total_patches, c.name, c.r, c.g, c.b);
+      // Log with expected xyY values for comparison
+      ESP_LOGI(TAG, "PATCH %3d/%d: %-12s | RGB(%3d,%3d,%3d) | xyY(%.3f,%.3f,%.4f)", patch_num, total_patches, c.name,
+               c.r, c.g, c.b, c.exp_x, c.exp_y, c.exp_Y);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
