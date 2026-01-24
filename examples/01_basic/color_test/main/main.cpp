@@ -27,12 +27,18 @@ static const uint32_t QUICK_DURATION_MS = 1500;
 
 // Colorimeter measurement mode settings
 static const uint32_t MEASURE_SETUP_MS = 10000;  // Initial black screen for positioning
-static const uint32_t MEASURE_HOLD_MS = 8000;    // Hold each patch for measurement
+static const uint32_t MEASURE_HOLD_MS = 4000;    // Hold each patch for measurement (4s for faster cycling)
 static const uint16_t MEASURE_PATCH_SIZE = 32;   // Size of center measurement patch
 
 // Colorimeter measurement mode - displays center patches for taking readings
 // Enable by setting COLORIMETER_MODE to 1
+// Set MEASURE_STEP to control granularity:
+//   1 = every value (256 patches, ~17 min per cycle)
+//   2 = every 2nd value (128 patches, ~8.5 min)
+//   4 = every 4th value (64 patches, ~4 min)
+//   8 = key values only (32 patches, ~2 min)
 #define COLORIMETER_MODE 0
+#define MEASURE_STEP 4  // Measure every Nth grayscale value
 
 #if COLORIMETER_MODE
 static void run_colorimeter_mode(Hub75Driver &driver) {
@@ -43,41 +49,11 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
   const uint16_t patch_x = (width - MEASURE_PATCH_SIZE) / 2;
   const uint16_t patch_y = (height - MEASURE_PATCH_SIZE) / 2;
 
-  // Test values - grayscale ramp plus primaries
-  struct MeasurePatch {
-    uint8_t r, g, b;
-    const char *name;
-    float expected_cie_luminance;  // Relative luminance after CIE (0-1 scale)
-  };
-
-  // CIE L* luminance values (approximate, for reference)
-  // L* = 116 * (Y/Yn)^(1/3) - 16 for Y/Yn > 0.008856
-  // These are the expected relative luminance values after CIE correction
-  const MeasurePatch patches[] = {
-      // Grayscale ramp - key values to verify CIE curve
-      {0, 0, 0, "Black", 0.0f},
-      {1, 1, 1, "Gray 1", 0.0001f},
-      {2, 2, 2, "Gray 2", 0.0002f},
-      {4, 4, 4, "Gray 4", 0.0005f},
-      {8, 8, 8, "Gray 8", 0.001f},
-      {16, 16, 16, "Gray 16", 0.003f},
-      {32, 32, 32, "Gray 32", 0.010f},
-      {64, 64, 64, "Gray 64", 0.050f},
-      {128, 128, 128, "Gray 128", 0.214f},
-      {192, 192, 192, "Gray 192", 0.527f},
-      {255, 255, 255, "White", 1.0f},
-
-      // Primaries at full brightness
-      {255, 0, 0, "Red 255", 0.213f},    // sRGB red relative luminance
-      {0, 255, 0, "Green 255", 0.715f},  // sRGB green relative luminance
-      {0, 0, 255, "Blue 255", 0.072f},   // sRGB blue relative luminance
-
-      // Primaries at 50%
-      {128, 0, 0, "Red 128", 0.046f},
-      {0, 128, 0, "Green 128", 0.153f},
-      {0, 0, 128, "Blue 128", 0.015f},
-  };
-  const int num_patches = sizeof(patches) / sizeof(patches[0]);
+  // Calculate number of grayscale patches
+  const int num_gray_patches = (255 / MEASURE_STEP) + 1;  // 0 to 255 inclusive
+  const int num_primary_patches = 6;                      // R,G,B at 255 and 128
+  const int total_patches = num_gray_patches + num_primary_patches;
+  const float total_time_min = (total_patches * MEASURE_HOLD_MS) / 60000.0f;
 
   ESP_LOGI(TAG, "");
   ESP_LOGI(TAG, "========================================");
@@ -86,7 +62,15 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
   ESP_LOGI(TAG, "Patch size: %dx%d pixels at center (%d,%d)", MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, patch_x, patch_y);
   ESP_LOGI(TAG, "Setup time: %lu seconds (position colorimeter)", (unsigned long) (MEASURE_SETUP_MS / 1000));
   ESP_LOGI(TAG, "Hold time: %lu seconds per patch", (unsigned long) (MEASURE_HOLD_MS / 1000));
-  ESP_LOGI(TAG, "Total patches: %d", num_patches);
+  ESP_LOGI(TAG, "Grayscale step: every %d values (%d patches)", MEASURE_STEP, num_gray_patches);
+  ESP_LOGI(TAG, "Total patches: %d (%.1f min per cycle)", total_patches, total_time_min);
+  ESP_LOGI(TAG, "========================================");
+  ESP_LOGI(TAG, "");
+  ESP_LOGI(TAG, "TIP: Use ArgyllCMS for automated logging:");
+  ESP_LOGI(TAG, "  spotread -v -e -O measurements.txt");
+  ESP_LOGI(TAG, "");
+  ESP_LOGI(TAG, "CSV header for manual logging:");
+  ESP_LOGI(TAG, "patch,r,g,b,measured_Y,measured_x,measured_y");
   ESP_LOGI(TAG, "========================================");
   ESP_LOGI(TAG, "");
 
@@ -102,28 +86,50 @@ static void run_colorimeter_mode(Hub75Driver &driver) {
     driver.fill(0, 0, width, height, 0, 0, 0);
     vTaskDelay(pdMS_TO_TICKS(MEASURE_SETUP_MS));
 
-    // Loop through each measurement patch
-    for (int i = 0; i < num_patches; i++) {
-      const auto &p = patches[i];
+    int patch_num = 0;
 
-      // Black background
+    // Grayscale ramp: 0 to 255 in steps of MEASURE_STEP
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "--- GRAYSCALE RAMP (step=%d) ---", MEASURE_STEP);
+    for (int v = 0; v <= 255; v += MEASURE_STEP) {
+      patch_num++;
+      uint8_t val = static_cast<uint8_t>(v > 255 ? 255 : v);
+
+      // Black background + center patch
       driver.fill(0, 0, width, height, 0, 0, 0);
+      driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, val, val, val);
 
-      // Draw center patch
+      // Output in CSV-friendly format
+      ESP_LOGI(TAG, "PATCH %3d/%d: Gray %3d | RGB(%3d,%3d,%3d)", patch_num, total_patches, val, val, val, val);
+
+      vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
+    }
+
+    // Primary colors at key levels
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "--- PRIMARY COLORS ---");
+
+    struct PrimaryPatch {
+      uint8_t r, g, b;
+      const char *name;
+    };
+    const PrimaryPatch primaries[] = {
+        {255, 0, 0, "Red 255"}, {0, 255, 0, "Green 255"}, {0, 0, 255, "Blue 255"},
+        {128, 0, 0, "Red 128"}, {0, 128, 0, "Green 128"}, {0, 0, 128, "Blue 128"},
+    };
+
+    for (const auto &p : primaries) {
+      patch_num++;
+      driver.fill(0, 0, width, height, 0, 0, 0);
       driver.fill(patch_x, patch_y, MEASURE_PATCH_SIZE, MEASURE_PATCH_SIZE, p.r, p.g, p.b);
 
-      ESP_LOGI(TAG, "");
-      ESP_LOGI(TAG, ">>> PATCH %d/%d: %s", i + 1, num_patches, p.name);
-      ESP_LOGI(TAG, "    RGB(%d, %d, %d)", p.r, p.g, p.b);
-      ESP_LOGI(TAG, "    Expected relative luminance: %.4f", p.expected_cie_luminance);
-      ESP_LOGI(TAG, "    Holding for %lu seconds...", (unsigned long) (MEASURE_HOLD_MS / 1000));
+      ESP_LOGI(TAG, "PATCH %3d/%d: %-10s | RGB(%3d,%3d,%3d)", patch_num, total_patches, p.name, p.r, p.g, p.b);
 
       vTaskDelay(pdMS_TO_TICKS(MEASURE_HOLD_MS));
     }
 
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "===== CYCLE %d COMPLETE =====", cycle);
-    ESP_LOGI(TAG, "Restarting measurement cycle...");
     ESP_LOGI(TAG, "");
   }
 }
