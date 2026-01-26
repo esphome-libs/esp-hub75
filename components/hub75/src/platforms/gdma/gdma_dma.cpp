@@ -270,9 +270,7 @@ uint32_t GdmaDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const 
   //                   20 MHz (div=8), 17.78 MHz (div=9), 16 MHz (div=10), ...
   uint32_t requested_hz = static_cast<uint32_t>(clock_speed);
   uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;  // Round to nearest
-  if (divider < 2)
-    divider = 2;
-  return 160000000 / divider;
+  return 160000000 / std::max(divider, 2u);
 }
 
 void GdmaDma::configure_lcd_clock() {

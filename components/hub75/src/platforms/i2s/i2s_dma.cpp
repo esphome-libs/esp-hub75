@@ -304,9 +304,7 @@ uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
     return 20000000;
   }
   uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
-  if (divider < 2)
-    divider = 2;
-  return 160000000 / (divider * 4);
+  return 160000000 / (std::max(divider, 2u) * 4);
 
 #else
   // ESP32: PLL_D2_CLK clock source (80 MHz base)
@@ -320,9 +318,7 @@ uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
     return 10000000;
   }
   uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
-  if (divider < 2)
-    divider = 2;
-  return 80000000 / (divider * 4);
+  return 80000000 / (std::max(divider, 2u) * 4);
 #endif
 }
 
