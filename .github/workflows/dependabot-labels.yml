@@ -1,0 +1,31 @@
+name: Remove Dependabot Semver Labels
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  remove-labels:
+    name: Remove Semver Labels
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove semver labels
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const labelsToRemove = ['major', 'minor', 'patch'];
+            const addedLabel = context.payload.label.name;
+
+            if (labelsToRemove.includes(addedLabel)) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: addedLabel
+              });
+              console.log(`Removed label: ${addedLabel}`);
+            }
