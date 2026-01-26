@@ -27,9 +27,9 @@ static const uint32_t TEST_DURATION_MS = 3000;
 static const uint32_t QUICK_DURATION_MS = 1500;
 
 // Colorimeter measurement mode settings
-static const uint32_t MEASURE_SETUP_MS = 10000;  // Initial black screen for positioning
-static const uint32_t MEASURE_HOLD_MS = 4000;    // Hold each patch for measurement (4s for faster cycling)
-static const uint16_t MEASURE_PATCH_SIZE = 32;   // Size of center measurement patch
+static const uint32_t MEASURE_SETUP_MS = 5000;  // Initial black screen for positioning
+static const uint32_t MEASURE_HOLD_MS = 2000;   // Hold each patch for measurement (4s for faster cycling)
+static const uint16_t MEASURE_PATCH_SIZE = 32;  // Size of center measurement patch
 
 // Colorimeter measurement mode - displays center patches for taking readings
 // Enable by setting COLORIMETER_MODE to 1
@@ -479,6 +479,80 @@ static void draw_rgb565_dark_test(Hub75Driver &driver) {
   }
 }
 
+// Draw RGB888 gradient test - full 8-bit resolution for comparison with RGB565
+static void draw_rgb888_gradients(Hub75Driver &driver) {
+  const uint16_t width = driver.get_width();
+  const uint16_t height = driver.get_height();
+  const uint16_t section_height = height / 3;
+
+  ESP_LOGI(TAG, ">>> RGB888 channel gradients (8-bit resolution)");
+  ESP_LOGI(TAG, "    All channels: 256 levels (compare with RGB565 5-6-5)");
+
+  // Red gradient (8-bit: 0-255 values)
+  ESP_LOGI(TAG, "    Top third: Red 8-bit gradient (0-255 mapped to width)");
+  for (uint16_t x = 0; x < width; x++) {
+    uint8_t r8 = static_cast<uint8_t>((x * 255) / (width - 1));
+    driver.fill(x, 0, 1, section_height, r8, 0, 0);
+  }
+
+  // Green gradient (8-bit: 0-255 values)
+  ESP_LOGI(TAG, "    Middle third: Green 8-bit gradient (0-255 mapped to width)");
+  for (uint16_t x = 0; x < width; x++) {
+    uint8_t g8 = static_cast<uint8_t>((x * 255) / (width - 1));
+    driver.fill(x, section_height, 1, section_height, 0, g8, 0);
+  }
+
+  // Blue gradient (8-bit: 0-255 values)
+  ESP_LOGI(TAG, "    Bottom third: Blue 8-bit gradient (0-255 mapped to width)");
+  for (uint16_t x = 0; x < width; x++) {
+    uint8_t b8 = static_cast<uint8_t>((x * 255) / (width - 1));
+    driver.fill(x, section_height * 2, 1, height - section_height * 2, 0, 0, b8);
+  }
+}
+
+// Draw RGB888 dark region test - shows the SAME 8-bit values that RGB565 produces
+// This allows direct comparison: if RGB565 shows a dark bar, does RGB888 show it too?
+static void draw_rgb888_dark_test(Hub75Driver &driver) {
+  const uint16_t width = driver.get_width();
+  const uint16_t height = driver.get_height();
+
+  ESP_LOGI(TAG, ">>> RGB888 dark region test (RGB565-equivalent values)");
+  ESP_LOGI(TAG, "    Shows same 8-bit values that RGB565 scaling produces");
+
+  // Clear to black
+  driver.fill(0, 0, width, height, 0, 0, 0);
+
+  const uint16_t section_height = height / 3;
+  const uint16_t bar_width = width / 8;
+
+  // Red bars - show the 8-bit values that RGB565 5-bit scaling produces
+  // R5=i -> R8 = (i << 3) | (i >> 2)
+  ESP_LOGI(TAG, "    Top: Red (RGB565 5-bit equivalent values)");
+  for (int i = 0; i < 8; i++) {
+    uint8_t r8 = (i << 3) | (i >> 2);  // Same scaling as RGB565
+    driver.fill(i * bar_width, 0, bar_width, section_height, r8, 0, 0);
+    ESP_LOGI(TAG, "      Bar %d: R8=%d (from R5=%d)", i, r8, i);
+  }
+
+  // Green bars - show the 8-bit values that RGB565 6-bit scaling produces
+  // G6=i -> G8 = (i << 2) | (i >> 4)
+  ESP_LOGI(TAG, "    Middle: Green (RGB565 6-bit equivalent values)");
+  for (int i = 0; i < 8; i++) {
+    uint8_t g8 = (i << 2) | (i >> 4);  // Same scaling as RGB565
+    driver.fill(i * bar_width, section_height, bar_width, section_height, 0, g8, 0);
+    ESP_LOGI(TAG, "      Bar %d: G8=%d (from G6=%d)", i, g8, i);
+  }
+
+  // Blue bars - show the 8-bit values that RGB565 5-bit scaling produces
+  // B5=i -> B8 = (i << 3) | (i >> 2)
+  ESP_LOGI(TAG, "    Bottom: Blue (RGB565 5-bit equivalent values)");
+  for (int i = 0; i < 8; i++) {
+    uint8_t b8 = (i << 3) | (i >> 2);  // Same scaling as RGB565
+    driver.fill(i * bar_width, section_height * 2, bar_width, height - section_height * 2, 0, 0, b8);
+    ESP_LOGI(TAG, "      Bar %d: B8=%d (from B5=%d)", i, b8, i);
+  }
+}
+
 // Draw RGB channel identification test (corner markers)
 static void draw_channel_id_test(Hub75Driver &driver) {
   const uint16_t width = driver.get_width();
@@ -661,9 +735,23 @@ extern "C" void app_main() {
     fill_and_log(driver, 128, 128, 128, "50% GRAY");
 
     // ========================================
-    // Test 11: RGB565 Format Tests
+    // Test 11: RGB888 Format Tests (baseline)
     // ========================================
-    ESP_LOGI(TAG, "--- TEST 11: RGB565 Format Tests ---");
+    ESP_LOGI(TAG, "--- TEST 11: RGB888 Format Tests (baseline) ---");
+    ESP_LOGI(TAG, "Full 8-bit resolution - compare with RGB565 tests");
+
+    driver.clear();
+    draw_rgb888_gradients(driver);
+    vTaskDelay(pdMS_TO_TICKS(TEST_DURATION_MS));
+
+    driver.clear();
+    draw_rgb888_dark_test(driver);
+    vTaskDelay(pdMS_TO_TICKS(TEST_DURATION_MS));
+
+    // ========================================
+    // Test 12: RGB565 Format Tests
+    // ========================================
+    ESP_LOGI(TAG, "--- TEST 12: RGB565 Format Tests ---");
     ESP_LOGI(TAG, "Testing RGB565 color format (5-6-5 bit resolution)");
     ESP_LOGI(TAG, "Look for: reduced gradient steps vs RGB888, green channel quirks");
 
