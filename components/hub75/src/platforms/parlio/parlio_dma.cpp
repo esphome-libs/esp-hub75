@@ -308,7 +308,7 @@ uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) cons
   //                   20 MHz (div=8), 17.78 MHz (div=9), 16 MHz (div=10), ...
   uint32_t requested_hz = static_cast<uint32_t>(clock_speed);
   uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;  // Round to nearest
-  return 160000000 / std::max(divider, 2ul);
+  return 160000000 / std::max(divider, uint32_t{2});
 }
 
 void ParlioDma::configure_gpio() {
