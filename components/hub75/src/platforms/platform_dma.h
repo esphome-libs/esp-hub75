@@ -51,7 +51,7 @@ class PlatformDma {
    * @param clock_speed Requested clock speed
    * @return Achievable frequency in Hz
    */
-  virtual uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const = 0;
+  virtual HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const = 0;
 
   // ============================================================================
   // Brightness Remapping (Quadratic Curve)

@@ -278,7 +278,7 @@ bool I2sDma::init() {
   return true;
 }
 
-uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
+HUB75_CONST uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
   // I2S LCD mode clock derivation:
   //   Output = base_clock / clkm_div / (tx_bck_div_num * 2)
   //   We use tx_bck_div_num = 2, so: Output = base_clock / clkm_div / 4

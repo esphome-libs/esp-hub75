@@ -69,7 +69,7 @@ class GdmaDma : public PlatformDma {
   /**
    * @brief Resolve clock speed to achievable frequency (160 MHz / N)
    */
-  uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
+  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
 
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)

@@ -252,7 +252,7 @@ bool GdmaDma::init() {
   return true;
 }
 
-uint32_t GdmaDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
+HUB75_CONST uint32_t GdmaDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
   // ESP32-S3 LCD_CAM clock derivation:
   //   Output = PLL_F160M / lcd_clkm_div_num
   //   Constraint: lcd_clkm_div_num >= 2

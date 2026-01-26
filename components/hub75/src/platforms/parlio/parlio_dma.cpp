@@ -290,7 +290,7 @@ void ParlioDma::configure_parlio() {
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
 }
 
-uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
+HUB75_CONST uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
   // ESP32-P4/C6 PARLIO clock derivation:
   //   Output = PLL_F160M / divider
   //   Constraint: divider >= 2
