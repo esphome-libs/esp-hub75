@@ -65,6 +65,14 @@ class I2sDma : public PlatformDma {
    */
   void set_rotation(Hub75Rotation rotation) override;
 
+  /**
+   * @brief Resolve clock speed to achievable frequency (I2S constraints)
+   *
+   * ESP32: max 10 MHz (80 MHz / 2 / 4)
+   * ESP32-S2: max 20 MHz (160 MHz / 2 / 4)
+   */
+  uint32_t resolve_actual_clock_speed(uint32_t requested_hz) const override;
+
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
   // ============================================================================

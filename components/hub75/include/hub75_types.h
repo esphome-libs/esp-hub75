@@ -43,7 +43,10 @@ enum class Hub75ClockSpeed : uint32_t {
   HZ_8M = 8000000,
   HZ_10M = 10000000,
   HZ_16M = 16000000,
+  HZ_18M = 18000000,  // Rounds to 160MHz/9 = 17.78MHz on S3/P4/C6, falls back on I2S
   HZ_20M = 20000000,  // default
+  HZ_23M = 23000000,  // Rounds to 160MHz/7 = 22.86MHz on S3/P4/C6, falls back on I2S
+  HZ_27M = 27000000,  // Rounds to 160MHz/6 = 26.67MHz on S3/P4/C6, falls back on I2S
   HZ_32M = 32000000,  // ESP32-S3/P4/C6 only
 };
 

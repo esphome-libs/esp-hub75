@@ -278,6 +278,55 @@ bool I2sDma::init() {
   return true;
 }
 
+uint32_t I2sDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
+  // I2S clock constraints differ from GDMA:
+  // - ESP32-S2: 160MHz / clkm_div / 4, achievable: 20M, 10M, 8M, 6.67M, ...
+  // - ESP32: 80MHz / clkm_div / 4, achievable: 10M, 5M, 4M, ...
+  // Constraints: clkm_div >= 2 (TRM requirement)
+
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+  // ESP32-S2: max 20 MHz (160/2/4)
+  // Achievable frequencies: 160/(N*4) where N>=2 → 20, 13.33, 10, 8, 6.67, ...
+  if (requested_hz > 20000000) {
+    ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32-S2 max (20 MHz), using 20 MHz", (unsigned int) requested_hz);
+    return 20000000;
+  } else if (requested_hz > 13333333) {
+    return 20000000;  // 160/2/4
+  } else if (requested_hz > 10000000) {
+    return 13333333;  // 160/3/4
+  } else if (requested_hz > 8000000) {
+    return 10000000;  // 160/4/4
+  } else if (requested_hz > 6666666) {
+    return 8000000;  // 160/5/4
+  } else {
+    // Round to nearest achievable: 160/(N*4) where N = round(160M / (requested*4))
+    uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);
+    if (divider < 2)
+      divider = 2;
+    return 160000000 / (divider * 4);
+  }
+#else
+  // ESP32: max 10 MHz (80/2/4)
+  // Achievable frequencies: 80/(N*4) where N>=2 → 10, 6.67, 5, 4, ...
+  if (requested_hz > 10000000) {
+    ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
+    return 10000000;
+  } else if (requested_hz > 6666666) {
+    return 10000000;  // 80/2/4
+  } else if (requested_hz > 5000000) {
+    return 6666666;  // 80/3/4 = 6.67 MHz
+  } else if (requested_hz > 4000000) {
+    return 5000000;  // 80/4/4
+  } else {
+    // Round to nearest achievable
+    uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);
+    if (divider < 2)
+      divider = 2;
+    return 80000000 / (divider * 4);
+  }
+#endif
+}
+
 void I2sDma::configure_i2s_timing() {
   auto *dev = i2s_dev_;
 
@@ -285,6 +334,14 @@ void I2sDma::configure_i2s_timing() {
   dev->sample_rate_conf.val = 0;
   dev->sample_rate_conf.rx_bits_mod = 16;  // 16-bit parallel
   dev->sample_rate_conf.tx_bits_mod = 16;
+
+  // Resolve requested clock to achievable frequency
+  uint32_t requested_hz = static_cast<uint32_t>(config_.output_clock_speed);
+  actual_clock_hz_ = resolve_actual_clock_speed(requested_hz);
+
+  if (actual_clock_hz_ != requested_hz) {
+    ESP_LOGI(TAG, "Clock speed %u Hz resolved to %u Hz", (unsigned int) requested_hz, (unsigned int) actual_clock_hz_);
+  }
 
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
   // ESP32-S2: PLL_160M clock source
@@ -295,32 +352,8 @@ void I2sDma::configure_i2s_timing() {
   dev->clkm_conf.clkm_div_a = 1;
   dev->clkm_conf.clkm_div_b = 0;
 
-  unsigned int clkm_div;
-  unsigned int actual_freq;
-  switch (config_.output_clock_speed) {
-    case Hub75ClockSpeed::HZ_32M:
-      // 32MHz not achievable on ESP32-S2 (max 20MHz), falling back
-      ESP_LOGW(TAG, "32MHz not achievable on ESP32-S2 (max 20MHz), falling back to 20MHz");
-      [[fallthrough]];
-    case Hub75ClockSpeed::HZ_20M:
-      clkm_div = 2;  // 160/2/4 = 20MHz
-      actual_freq = 20;
-      break;
-    case Hub75ClockSpeed::HZ_16M:
-      // 16MHz not achievable exactly with integer dividers, falling back to 10MHz
-      ESP_LOGW(TAG, "16MHz not achievable on ESP32-S2, falling back to 10MHz");
-      [[fallthrough]];
-    case Hub75ClockSpeed::HZ_10M:
-      clkm_div = 4;  // 160/4/4 = 10MHz
-      actual_freq = 10;
-      break;
-    case Hub75ClockSpeed::HZ_8M:
-      clkm_div = 5;  // 160/5/4 = 8MHz
-      actual_freq = 8;
-      break;
-    default:
-      __builtin_unreachable();
-  }
+  // Calculate divider from actual frequency: actual = 160M / (div * 4)
+  unsigned int clkm_div = 160000000 / (actual_clock_hz_ * 4);
 
   dev->clkm_conf.clkm_div_num = clkm_div;
   dev->clkm_conf.clk_en = 1;
@@ -329,56 +362,20 @@ void I2sDma::configure_i2s_timing() {
   dev->sample_rate_conf.rx_bck_div_num = 2;
   dev->sample_rate_conf.tx_bck_div_num = 2;
 
-  // Store actual clock frequency for BCM timing calculations
-  actual_clock_hz_ = actual_freq * 1000000;
-
-  ESP_LOGI(TAG, "ESP32-S2 I2S clock: 160MHz / %u / 4 = %u MHz", clkm_div, actual_freq);
+  ESP_LOGI(TAG, "ESP32-S2 I2S clock: 160MHz / %u / 4 = %.2f MHz (requested %u MHz)", clkm_div,
+           actual_clock_hz_ / 1000000.0f, (unsigned int) (requested_hz / 1000000));
 
 #else
   // ESP32: PLL_D2_CLK clock source (80MHz)
   // Output Frequency = 80MHz / clkm_div_num / (tx_bck_div_num * 2)
   // Reference: ESP32 TRM v5.3, Section 12.5 (I2S Clock)
   // Constraints: clkm_div_num >= 2, tx_bck_div_num >= 2 (TRM Section 12.6)
-  //
-  // NOTE: Maximum achievable frequency is 10MHz with minimum dividers (2, 2).
-  // Higher frequencies (16/20MHz) would require clkm_div_num < 2 which violates
-  // TRM constraints. The TRM states: "I2S_CLKM_DIV_NUM: Integral I2S clock
-  // divider value. fI2S = fCLK / I2S_CLKM_DIV_NUM (I2S_CLKM_DIV_NUM >= 2)"
   dev->clkm_conf.clka_en = 0;  // PLL_D2_CLK (80MHz)
   dev->clkm_conf.clkm_div_a = 1;
   dev->clkm_conf.clkm_div_b = 0;
 
-  unsigned int clkm_div;
-  unsigned int actual_freq;
-  switch (config_.output_clock_speed) {
-    case Hub75ClockSpeed::HZ_32M:
-      ESP_LOGW(TAG, "32MHz not achievable on ESP32 (max 10MHz), falling back to 10MHz");
-      clkm_div = 2;  // 80/2/4 = 10MHz
-      actual_freq = 10;
-      break;
-    case Hub75ClockSpeed::HZ_20M:
-      ESP_LOGW(TAG, "20MHz not achievable on ESP32 (max 10MHz), falling back to 10MHz");
-      clkm_div = 2;  // 80/2/4 = 10MHz
-      actual_freq = 10;
-      break;
-    case Hub75ClockSpeed::HZ_16M:
-      ESP_LOGW(TAG, "16MHz not achievable on ESP32 (max 10MHz), falling back to 10MHz");
-      clkm_div = 2;  // 80/2/4 = 10MHz
-      actual_freq = 10;
-      break;
-    case Hub75ClockSpeed::HZ_10M:
-      clkm_div = 2;  // 80/2/4 = 10MHz
-      actual_freq = 10;
-      break;
-    case Hub75ClockSpeed::HZ_8M:
-      // 8MHz not achievable exactly, closest is 5MHz
-      ESP_LOGW(TAG, "8MHz not achievable on ESP32, falling back to 5MHz");
-      clkm_div = 4;  // 80/4/4 = 5MHz
-      actual_freq = 5;
-      break;
-    default:
-      __builtin_unreachable();
-  }
+  // Calculate divider from actual frequency: actual = 80M / (div * 4)
+  unsigned int clkm_div = 80000000 / (actual_clock_hz_ * 4);
 
   dev->clkm_conf.clkm_div_num = clkm_div;
 
@@ -386,10 +383,8 @@ void I2sDma::configure_i2s_timing() {
   dev->sample_rate_conf.tx_bck_div_num = 2;
   dev->sample_rate_conf.rx_bck_div_num = 2;
 
-  // Store actual clock frequency for BCM timing calculations
-  actual_clock_hz_ = actual_freq * 1000000;
-
-  ESP_LOGI(TAG, "ESP32 I2S clock: 80MHz / %u / 4 = %u MHz", clkm_div, actual_freq);
+  ESP_LOGI(TAG, "ESP32 I2S clock: 80MHz / %u / 4 = %.2f MHz (requested %u MHz)", clkm_div,
+           actual_clock_hz_ / 1000000.0f, (unsigned int) (requested_hz / 1000000));
 #endif
 }
 

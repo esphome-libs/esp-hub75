@@ -218,11 +218,20 @@ void ParlioDma::configure_parlio() {
 
   // Configure PARLIO TX unit
   // Pin layout: [CLK_GATE(15)|ADDR(14-10)|LAT(9)|OE(8)|--|--|R2(4)|R1(5)|G2(2)|G1(3)|B2(0)|B1(1)]
+  // Resolve clock to nearest 160MHz/N to ensure integer divider (no jitter)
+  uint32_t requested_hz = static_cast<uint32_t>(config_.output_clock_speed);
+  actual_clock_hz_ = resolve_actual_clock_speed(requested_hz);
+
+  if (actual_clock_hz_ != requested_hz) {
+    ESP_LOGI(TAG, "Clock speed %u Hz rounded to %u Hz (160MHz / %u)", (unsigned int) requested_hz,
+             (unsigned int) actual_clock_hz_, (unsigned int) (160000000 / actual_clock_hz_));
+  }
+
   parlio_tx_unit_config_t config = {
       .clk_src = PARLIO_CLK_SRC_DEFAULT,
       .clk_in_gpio_num = GPIO_NUM_NC,  // Use internal clock
       .input_clk_src_freq_hz = 0,
-      .output_clk_freq_hz = static_cast<uint32_t>(config_.output_clock_speed),
+      .output_clk_freq_hz = actual_clock_hz_,
       .data_width = 16,  // Full 16-bit width
       .data_gpio_nums =
           {
@@ -272,13 +281,23 @@ void ParlioDma::configure_parlio() {
   }
 
   ESP_LOGI(TAG, "PARLIO TX unit created successfully");
-  ESP_LOGI(TAG, "  Data width: 16 bits, Clock: %u MHz", static_cast<uint32_t>(config_.output_clock_speed) / 1000000);
+  ESP_LOGI(TAG, "  Data width: 16 bits, Clock: %.2f MHz (requested %u MHz)", actual_clock_hz_ / 1000000.0f,
+           (unsigned int) (requested_hz / 1000000));
 #ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
   ESP_LOGI(TAG, "  Clock gating: ENABLED (MSB bit controls PCLK)");
 #else
   ESP_LOGI(TAG, "  Clock gating: NOT SUPPORTED");
 #endif
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
+}
+
+uint32_t ParlioDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
+  // PARLIO uses 160 MHz PLL with integer divider
+  // Round to nearest 160 MHz / N for jitter-free clock
+  uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
+  if (divider < 2)
+    divider = 2;  // Hardware minimum
+  return 160000000 / divider;
 }
 
 void ParlioDma::configure_gpio() {
@@ -301,10 +320,10 @@ void ParlioDma::configure_gpio() {
 }
 void ParlioDma::calculate_bcm_timings() {
   // Calculate base buffer transmission time
-  const float buffer_time_us = (dma_width_ * 1000000.0f) / static_cast<uint32_t>(config_.output_clock_speed);
+  const float buffer_time_us = (dma_width_ * 1000000.0f) / actual_clock_hz_;
 
   ESP_LOGI(TAG, "Buffer transmission time: %.2f µs (%u pixels @ %lu Hz)", buffer_time_us, dma_width_,
-           (unsigned long) static_cast<uint32_t>(config_.output_clock_speed));
+           (unsigned long) actual_clock_hz_);
 
   // Target refresh rate
   const uint32_t target_hz = config_.min_refresh_rate;

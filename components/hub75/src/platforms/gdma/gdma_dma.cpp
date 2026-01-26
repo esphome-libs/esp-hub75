@@ -207,7 +207,8 @@ bool GdmaDma::init() {
            is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
 
   ESP_LOGI(TAG, "LCD_CAM + GDMA initialized successfully");
-  ESP_LOGI(TAG, "Clock: %u MHz", (unsigned int) (static_cast<uint32_t>(config_.output_clock_speed) / 1000000));
+  ESP_LOGI(TAG, "Clock: %.2f MHz (requested %u MHz)", actual_clock_hz_ / 1000000.0f,
+           (unsigned int) (static_cast<uint32_t>(config_.output_clock_speed) / 1000000));
 
   // Calculate BCM timing (determines lsbMsbTransitionBit for OE control)
   calculate_bcm_timings();
@@ -250,11 +251,26 @@ bool GdmaDma::init() {
   return true;
 }
 
+uint32_t GdmaDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
+  // GDMA uses PLL_F160M (160 MHz) with integer divider
+  // Round to nearest 160 MHz / N for jitter-free clock
+  uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
+  if (divider < 2)
+    divider = 2;  // Hardware minimum
+  return 160000000 / divider;
+}
+
 void GdmaDma::configure_lcd_clock() {
   // Configure LCD clock from PLL_F160M (160 MHz)
-  // Calculate divider: 160MHz / desired_speed
-  uint32_t div_num = 160000000 / static_cast<uint32_t>(config_.output_clock_speed);
-  div_num = std::max(div_num, uint32_t{2});  // Minimum divider
+  // Round to nearest integer divider for clean clock without jitter
+  uint32_t requested_hz = static_cast<uint32_t>(config_.output_clock_speed);
+  actual_clock_hz_ = resolve_actual_clock_speed(requested_hz);
+  uint32_t div_num = 160000000 / actual_clock_hz_;
+
+  if (actual_clock_hz_ != requested_hz) {
+    ESP_LOGI(TAG, "Clock speed %u Hz rounded to %u Hz (160MHz / %u)", (unsigned int) requested_hz,
+             (unsigned int) actual_clock_hz_, (unsigned int) div_num);
+  }
 
   LCD_CAM.lcd_clock.lcd_clk_sel = 3;      // PLL_F160M_CLK (value 3, not 2!)
   LCD_CAM.lcd_clock.lcd_ck_out_edge = 0;  // PCLK low in 1st half cycle
@@ -265,8 +281,7 @@ void GdmaDma::configure_lcd_clock() {
   LCD_CAM.lcd_clock.lcd_clkm_div_a = 1;  // Fractional divider (0/1)
   LCD_CAM.lcd_clock.lcd_clkm_div_b = 0;
 
-  ESP_LOGI(TAG, "LCD clock: PLL_F160M / %u = %u MHz", (unsigned int) div_num,
-           (unsigned int) (160000000 / div_num / 1000000));
+  ESP_LOGI(TAG, "LCD clock: PLL_F160M / %u = %.2f MHz", (unsigned int) div_num, actual_clock_hz_ / 1000000.0f);
 }
 
 void GdmaDma::configure_lcd_mode() {
@@ -1190,10 +1205,10 @@ void GdmaDma::calculate_bcm_timings() {
   // Buffer contains dma_width_ pixels with LAT on last pixel
   // Latch blanking is handled via OE bits, not extra pixels
   const uint16_t buffer_pixels = dma_width_;  // LAT is on last pixel, not extra
-  const float buffer_time_us = (buffer_pixels * 1000000.0f) / static_cast<uint32_t>(config_.output_clock_speed);
+  const float buffer_time_us = (buffer_pixels * 1000000.0f) / actual_clock_hz_;
 
   ESP_LOGI(TAG, "Buffer transmission time: %.2f µs (%u pixels @ %lu Hz)", buffer_time_us, (unsigned) buffer_pixels,
-           (unsigned long) static_cast<uint32_t>(config_.output_clock_speed));
+           (unsigned long) actual_clock_hz_);
 
   // Target refresh rate from config
   const uint32_t target_hz = config_.min_refresh_rate;

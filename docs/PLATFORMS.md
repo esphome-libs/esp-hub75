@@ -23,15 +23,22 @@ The achievable clock speeds depend on platform hardware constraints. The I2S per
 on ESP32/ESP32-S2 has different clock divider limitations than the LCD_CAM and PARLIO
 peripherals on newer chips.
 
+Clock speeds are automatically resolved to the nearest achievable frequency:
+- **ESP32-S3/P4/C6**: Rounds to 160 MHz / N (integer divider, no jitter)
+- **ESP32/ESP32-S2**: Falls back to platform-supported speeds
+
 ### Clock Speed by Platform
 
-| Requested | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4/C6 |
-|-----------|-------|----------|----------|-------------|
-| **32 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 32 MHz | ✅ 32 MHz |
-| **20 MHz** | ⚠️ 10 MHz | ✅ 20 MHz | ✅ 20 MHz | ✅ 20 MHz |
-| **16 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 16 MHz | ✅ 16 MHz |
-| **10 MHz** | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz |
-| **8 MHz** | ⚠️ 5 MHz | ✅ 8 MHz | ✅ 8 MHz | ✅ 8 MHz |
+| Requested | ESP32 | ESP32-S2 | ESP32-S3/P4/C6 | Actual (S3/P4/C6) |
+|-----------|-------|----------|----------------|-------------------|
+| **32 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 32 MHz | 32.00 MHz (160/5) |
+| **27 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 26.67 MHz | 26.67 MHz (160/6) |
+| **23 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 22.86 MHz | 22.86 MHz (160/7) |
+| **20 MHz** | ⚠️ 10 MHz | ✅ 20 MHz | ✅ 20 MHz | 20.00 MHz (160/8) |
+| **18 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 17.78 MHz | 17.78 MHz (160/9) |
+| **16 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 16 MHz | 16.00 MHz (160/10) |
+| **10 MHz** | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz | 10.00 MHz (160/16) |
+| **8 MHz** | ⚠️ 5 MHz | ✅ 8 MHz | ✅ 8 MHz | 8.00 MHz (160/20) |
 
 ⚠️ = Falls back to nearest achievable frequency (warning logged at runtime)
 
@@ -78,7 +85,13 @@ These platforms use LCD_CAM or PARLIO peripherals with simpler clock dividers:
 Output = 160 MHz / div_num
 ```
 
-All standard frequencies (8/10/16/20/32 MHz) are achievable with integer dividers.
+Frequencies are rounded to the nearest 160/N MHz value to ensure integer dividers
+(avoiding fractional divider jitter). For example:
+- 27 MHz → 160/6 = 26.67 MHz
+- 23 MHz → 160/7 = 22.86 MHz
+- 18 MHz → 160/9 = 17.78 MHz
+
+All standard frequencies (8/10/16/20/32 MHz) divide evenly from 160 MHz.
 
 ### References
 

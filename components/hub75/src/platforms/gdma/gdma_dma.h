@@ -66,6 +66,11 @@ class GdmaDma : public PlatformDma {
    */
   void set_rotation(Hub75Rotation rotation) override;
 
+  /**
+   * @brief Resolve clock speed to achievable frequency (160 MHz / N)
+   */
+  uint32_t resolve_actual_clock_speed(uint32_t requested_hz) const override;
+
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
   // ============================================================================
@@ -128,6 +133,7 @@ class GdmaDma : public PlatformDma {
   gdma_channel_handle_t dma_chan_;
   const uint8_t bit_depth_;      // Bit depth from config (6, 7, 8, 10, or 12)
   uint8_t lsbMsbTransitionBit_;  // BCM optimization threshold (calculated at init)
+  uint32_t actual_clock_hz_;     // Actual achieved clock frequency after rounding
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;
