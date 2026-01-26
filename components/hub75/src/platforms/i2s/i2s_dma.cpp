@@ -245,6 +245,9 @@ bool I2sDma::init() {
   // Calculate BCM timing (determines lsbMsbTransitionBit for OE control)
   calculate_bcm_timings();
 
+  // Initialize quadratic brightness remapping coefficients
+  init_brightness_coeffs(dma_width_, config_.latch_blanking);
+
   // Allocate per-row bit-plane buffers
   if (!allocate_row_buffers()) {
     return false;
@@ -799,28 +802,15 @@ void I2sDma::set_brightness_oe_internal(RowBitPlaneBuffer *buffers, uint8_t brig
     return;
   }
 
-  // Minimum brightness floor
+  // Quadratic brightness remapping
   //
-  // At very low brightness, the formula `display_pixels = (max_pixels * brightness) >> 8`
-  // can round down to the same small value for multiple bit planes, destroying BCM ratios.
-  // For example, if all bit planes get display_pixels=1, they contribute equally instead
-  // of the 1:2:4:8:16:32 ratios needed for correct colors.
+  // Maps user brightness through a curve anchored at three points:
+  //   (1, min_brightness) - floor to preserve BCM color ratios at low brightness
+  //   (128, 128) - midpoint preserved so brightness 128 feels like the perceptual midpoint
+  //   (255, 255) - maximum unchanged
   //
-  // The floor ensures the MSB gets at least 8 display_pixels, allowing bits 5-7 to maintain
-  // distinguishable ratios (8:4:2). Lower bits contribute minimally to perceived brightness
-  // due to CIE gamma correction, so this trade-off preserves visual color accuracy.
-  //
-  // Formula: min_brightness = ceil((8 * 256) / max_pixels)
-  //   128-wide panel: min = 17 → 8+ display pixels
-  //   64-wide panel:  min = 33 → 8+ display pixels
-  //   256-wide panel: min = 8  → 8+ display pixels
-  const int max_pixels_no_shift = dma_width_ - latch_blanking;
-  const int min_brightness = std::min(255, (8 * 256 + max_pixels_no_shift - 1) / max_pixels_no_shift);
-
-  // Remap user brightness (1-255) to effective range (min_brightness-255)
-  // This preserves all 255 user-visible brightness levels while ensuring the internal
-  // value never drops below the floor. The remapping is linear, so dimming appears smooth.
-  const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
+  // See init_brightness_coeffs() for coefficient calculation.
+  const int effective_brightness = remap_brightness(brightness);
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {

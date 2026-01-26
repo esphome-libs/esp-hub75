@@ -118,6 +118,9 @@ bool ParlioDma::init() {
   // Calculate BCM timings first
   calculate_bcm_timings();
 
+  // Initialize quadratic brightness remapping coefficients
+  init_brightness_coeffs(dma_width_, config_.latch_blanking);
+
   // Configure GPIO
   configure_gpio();
 
@@ -585,26 +588,15 @@ void ParlioDma::set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brig
     return;
   }
 
-  // Minimum brightness floor to maintain BCM ratios
+  // Quadratic brightness remapping
   //
-  // Problem: At low brightness (e.g., brightness=4), the formula
-  //   display_count = (max_display * brightness) >> 8
-  // truncates multiple bit planes to the SAME value (e.g., all = 1), destroying
-  // the 1:2:4:8:16:32 BCM ratios that create correct colors.
+  // Maps user brightness through a curve anchored at three points:
+  //   (1, min_brightness) - floor to preserve BCM color ratios at low brightness
+  //   (128, 128) - midpoint preserved so brightness 128 feels like the perceptual midpoint
+  //   (255, 255) - maximum unchanged
   //
-  // Solution: Calculate minimum brightness where MSB bit (bit 7) gets ≥8 display_count.
-  // With 8 words, bits 5-7 can have ratios 8:4:2, preserving 3-bit color depth.
-  // Lower bits (0-4) contribute less visually due to CIE correction anyway.
-  //
-  // Formula: brightness >= (8 * 256) / base_display
-  // For 128-wide panel: min = 16, for 64-wide: min = 33, for 256-wide: min = 8
-  const int base_display = dma_width_ - config_.latch_blanking;
-  const int min_brightness = std::min(255, (8 * 256 + base_display - 1) / base_display);
-
-  // Remap user brightness (1-255) linearly to valid range (min_brightness-255)
-  // This preserves all 255 brightness levels while ensuring BCM ratios work correctly.
-  // User sees smooth dimming; internally we never go below the minimum.
-  const int effective_brightness = min_brightness + ((brightness * (255 - min_brightness)) / 255);
+  // See init_brightness_coeffs() for coefficient calculation.
+  const int effective_brightness = remap_brightness(brightness);
 
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {

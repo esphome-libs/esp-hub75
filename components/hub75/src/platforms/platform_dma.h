@@ -43,6 +43,56 @@ class PlatformDma {
   const uint16_t *lut_;
 
   // ============================================================================
+  // Brightness Remapping (Quadratic Curve)
+  // ============================================================================
+  //
+  // Maps user brightness (1-255) through a quadratic curve anchored at three points:
+  //   (1, min_brightness) - floor to preserve BCM color ratios
+  //   (128, 128) - midpoint preserved for consistent default brightness
+  //   (255, 255) - maximum unchanged
+  //
+  // This ensures brightness 128 feels like the perceptual midpoint while still
+  // enforcing a minimum floor for color accuracy at low brightness.
+
+  // Quadratic coefficients (16.16 fixed-point format)
+  int32_t bright_a_ = 0;        // x² coefficient
+  int32_t bright_b_ = 0;        // x coefficient
+  int32_t bright_c_ = 0;        // constant term
+  uint8_t min_brightness_ = 1;  // Floor: ensures MSB gets minimum display pixels
+
+  /**
+   * @brief Initialize quadratic brightness remapping coefficients
+   *
+   * Must be called during platform init after dma_width is known.
+   * Computes coefficients for curve through (1,min), (128,128), (255,255).
+   *
+   * @param dma_width DMA buffer width in pixels
+   * @param latch_blanking Number of blanking pixels for latch
+   */
+  void init_brightness_coeffs(uint16_t dma_width, uint8_t latch_blanking);
+
+  /**
+   * @brief Remap user brightness through quadratic curve
+   *
+   * @param brightness User brightness (0-255)
+   * @return Effective brightness after remapping (min_brightness-255)
+   */
+  inline int remap_brightness(uint8_t brightness) const {
+    if (brightness == 0)
+      return 0;
+    // Quadratic: y = ax² + bx + c (16.16 fixed-point)
+    int32_t x = brightness;
+    int32_t y_fp = bright_a_ * x * x + bright_b_ * x + bright_c_;
+    // Round and clamp: add 0.5 (32768 in 16.16), shift, clamp
+    int result = (y_fp + 32768) >> 16;
+    if (result < min_brightness_)
+      return min_brightness_;
+    if (result > 255)
+      return 255;
+    return result;
+  }
+
+  // ============================================================================
   // Coordinate Transformation Helper
   // ============================================================================
 
