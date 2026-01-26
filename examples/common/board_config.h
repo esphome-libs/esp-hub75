@@ -196,15 +196,21 @@ static inline Hub75Config getMenuConfigSettings() {
   // (idf.py menuconfig → HUB75 → Panel Settings / Color)
   // Or CMake override: -DHUB75_BIT_DEPTH=10 -DHUB75_GAMMA_MODE=0
 
-  // Clock speed
+  // Clock speed (see docs/PLATFORMS.md for actual frequencies)
 #if defined(CONFIG_HUB75_CLK_8MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_8M;
 #elif defined(CONFIG_HUB75_CLK_10MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_10M;
 #elif defined(CONFIG_HUB75_CLK_16MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_16M;
+#elif defined(CONFIG_HUB75_CLK_18MHZ)
+  config.output_clock_speed = Hub75ClockSpeed::HZ_18M;
 #elif defined(CONFIG_HUB75_CLK_20MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_20M;
+#elif defined(CONFIG_HUB75_CLK_23MHZ)
+  config.output_clock_speed = Hub75ClockSpeed::HZ_23M;
+#elif defined(CONFIG_HUB75_CLK_27MHZ)
+  config.output_clock_speed = Hub75ClockSpeed::HZ_27M;
 #elif defined(CONFIG_HUB75_CLK_32MHZ)
   config.output_clock_speed = Hub75ClockSpeed::HZ_32M;
 #endif

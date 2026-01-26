@@ -318,19 +318,28 @@ menu "HUB75 RGB LED Matrix Driver"
                   - ESP32-S3/P4/C6: 32 MHz
 
             config HUB75_CLK_8MHZ
-                bool "8 MHz (Very Conservative)"
+                bool "8 MHz"
 
             config HUB75_CLK_10MHZ
-                bool "10 MHz (Conservative)"
+                bool "10 MHz"
 
             config HUB75_CLK_16MHZ
-                bool "16 MHz (Good Balance)"
+                bool "16 MHz"
+
+            config HUB75_CLK_18MHZ
+                bool "18 MHz"
 
             config HUB75_CLK_20MHZ
                 bool "20 MHz (Recommended)"
 
+            config HUB75_CLK_23MHZ
+                bool "23 MHz"
+
+            config HUB75_CLK_27MHZ
+                bool "27 MHz"
+
             config HUB75_CLK_32MHZ
-                bool "32 MHz (ESP32-S3/P4/C6 only)"
+                bool "32 MHz"
         endchoice
 
         config HUB75_MIN_REFRESH_RATE
