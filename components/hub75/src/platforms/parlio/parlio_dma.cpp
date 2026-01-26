@@ -121,6 +121,16 @@ bool ParlioDma::init() {
   // Initialize quadratic brightness remapping coefficients
   init_brightness_coeffs(dma_width_, config_.latch_blanking);
 
+  // Adjust LUT for BCM monotonicity (only needed when lsbMsbTransitionBit > 0)
+  // With transition=0, BCM weights are always monotonically non-decreasing
+#if HUB75_GAMMA_MODE == 1 || HUB75_GAMMA_MODE == 2
+  if (lsbMsbTransitionBit_ > 0) {
+    int adjusted = adjust_lut_for_bcm(lut_, bit_depth_, lsbMsbTransitionBit_);
+    ESP_LOGI(TAG, "Adjusted %d LUT entries for BCM monotonicity (lsbMsbTransitionBit=%d)", adjusted,
+             lsbMsbTransitionBit_);
+  }
+#endif
+
   // Configure GPIO
   configure_gpio();
 
@@ -810,7 +820,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
   // Always write to active buffer (CPU drawing buffer)
   BitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_ || !buffer) [[unlikely]] {
+  if (!target_buffers || !buffer) [[unlikely]] {
     return;
   }
 
@@ -942,7 +952,7 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   // Always write to active buffer (CPU drawing buffer)
   BitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_) [[unlikely]] {
+  if (!target_buffers) [[unlikely]] {
     return;
   }
 
