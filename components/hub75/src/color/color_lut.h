@@ -211,37 +211,7 @@ static constexpr auto LUT = generate_gamma22_lut<HUB75_BIT_DEPTH>();
  * @param lsb_msb_transition The calculated lsbMsbTransitionBit value
  * @return Number of LUT entries that were adjusted
  */
-inline int adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transition) {
-  const int max_val = (1 << bit_depth) - 1;
-  int prev_weight = 0;
-  int adjusted_count = 0;
-
-  for (int i = 0; i < 256; i++) {
-    int target = lut[i];  // Start from existing gamma-corrected value
-
-    // Find first value >= target with weight >= prev_weight
-    int best = target;
-    while (best <= max_val) {
-      // Calculate BCM weight for 'best'
-      int weight = 0;
-      for (int bit = 0; bit < bit_depth; bit++) {
-        if (best & (1 << bit)) {
-          weight += (bit <= lsb_msb_transition) ? 1 : (1 << (bit - lsb_msb_transition - 1));
-        }
-      }
-      if (weight >= prev_weight) {
-        prev_weight = weight;
-        break;
-      }
-      best++;
-    }
-    if (best != target) {
-      adjusted_count++;
-    }
-    lut[i] = static_cast<uint16_t>(best > max_val ? max_val : best);
-  }
-  return adjusted_count;
-}
+int adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transition);
 
 /**
  * @brief Get active lookup table (compile-time selected)
