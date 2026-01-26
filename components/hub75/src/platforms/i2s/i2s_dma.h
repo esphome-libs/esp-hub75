@@ -124,6 +124,7 @@ class I2sDma : public PlatformDma {
   volatile i2s_dev_t *i2s_dev_;
   const uint8_t bit_depth_;      // Bit depth from config (6, 7, 8, 10, or 12)
   uint8_t lsbMsbTransitionBit_;  // BCM optimization threshold (calculated at init)
+  uint32_t actual_clock_hz_;     // Actual I2S clock frequency (may differ from config due to fallbacks)
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;

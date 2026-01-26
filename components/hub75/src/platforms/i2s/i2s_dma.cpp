@@ -97,6 +97,7 @@ I2sDma::I2sDma(const Hub75Config &config)
       i2s_dev_(nullptr),
       bit_depth_(HUB75_BIT_DEPTH),
       lsbMsbTransitionBit_(0),
+      actual_clock_hz_(0),
       panel_width_(config.panel_width),
       panel_height_(config.panel_height),
       layout_rows_(config.layout_rows),
@@ -321,6 +322,9 @@ void I2sDma::configure_i2s_timing() {
   dev->sample_rate_conf.rx_bck_div_num = 2;
   dev->sample_rate_conf.tx_bck_div_num = 2;
 
+  // Store actual clock frequency for BCM timing calculations
+  actual_clock_hz_ = actual_freq * 1000000;
+
   ESP_LOGI(TAG, "ESP32-S2 I2S clock: 160MHz / %u / 4 = %u MHz", clkm_div, actual_freq);
 
 #else
@@ -374,6 +378,9 @@ void I2sDma::configure_i2s_timing() {
   // BCK divider (must be >= 2 per TRM Section 12.6)
   dev->sample_rate_conf.tx_bck_div_num = 2;
   dev->sample_rate_conf.rx_bck_div_num = 2;
+
+  // Store actual clock frequency for BCM timing calculations
+  actual_clock_hz_ = actual_freq * 1000000;
 
   ESP_LOGI(TAG, "ESP32 I2S clock: 80MHz / %u / 4 = %u MHz", clkm_div, actual_freq);
 #endif
@@ -631,12 +638,12 @@ HUB75_CONST constexpr int I2sDma::calculate_bcm_transmissions(int bit_depth, int
 }
 
 void I2sDma::calculate_bcm_timings() {
-  // Calculate buffer transmission time
+  // Calculate buffer transmission time using actual clock (may differ from config due to fallbacks)
   const uint16_t buffer_pixels = dma_width_;
-  const float buffer_time_us = (buffer_pixels * 1000000.0f) / static_cast<uint32_t>(config_.output_clock_speed);
+  const float buffer_time_us = (buffer_pixels * 1000000.0f) / actual_clock_hz_;
 
   ESP_LOGI(TAG, "Buffer transmission time: %.2f µs (%u pixels @ %lu Hz)", buffer_time_us, (unsigned) buffer_pixels,
-           (unsigned long) static_cast<uint32_t>(config_.output_clock_speed));
+           (unsigned long) actual_clock_hz_);
 
   // Target refresh rate from config
   const uint32_t target_hz = config_.min_refresh_rate;
@@ -1039,7 +1046,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
   // Always write to active buffer (CPU drawing buffer)
   RowBitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_ || !buffer) [[unlikely]] {
+  if (!target_buffers || !buffer) [[unlikely]] {
     return;
   }
 
@@ -1169,7 +1176,7 @@ HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
   // Always write to active buffer (CPU drawing buffer)
   RowBitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_) [[unlikely]] {
+  if (!target_buffers) [[unlikely]] {
     return;
   }
 

@@ -824,7 +824,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
   // Always write to active buffer (CPU drawing buffer)
   BitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_ || !buffer) [[unlikely]] {
+  if (!target_buffers || !buffer) [[unlikely]] {
     return;
   }
 
@@ -956,7 +956,7 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   // Always write to active buffer (CPU drawing buffer)
   BitPlaneBuffer *target_buffers = row_buffers_[active_idx_];
 
-  if (!target_buffers || !lut_) [[unlikely]] {
+  if (!target_buffers) [[unlikely]] {
     return;
   }
 
