@@ -209,10 +209,12 @@ static constexpr auto LUT = generate_gamma22_lut<HUB75_BIT_DEPTH>();
  * @param lut Array to adjust in-place (256 elements, already contains gamma-corrected values)
  * @param bit_depth Target bit depth (4-12)
  * @param lsb_msb_transition The calculated lsbMsbTransitionBit value
+ * @return Number of LUT entries that were adjusted
  */
-inline void adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transition) {
+inline int adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transition) {
   const int max_val = (1 << bit_depth) - 1;
   int prev_weight = 0;
+  int adjusted_count = 0;
 
   for (int i = 0; i < 256; i++) {
     int target = lut[i];  // Start from existing gamma-corrected value
@@ -233,8 +235,12 @@ inline void adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transit
       }
       best++;
     }
+    if (best != target) {
+      adjusted_count++;
+    }
     lut[i] = static_cast<uint16_t>(best > max_val ? max_val : best);
   }
+  return adjusted_count;
 }
 
 /**
