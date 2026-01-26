@@ -57,10 +57,10 @@ class PlatformDma {
    * - GDMA/Parlio: Rounds to nearest 160 MHz / N
    * - I2S: Falls back to supported speeds (ESP32 max 10MHz, S2 max 20MHz)
    *
-   * @param requested_hz Requested frequency in Hz
+   * @param clock_speed Requested clock speed
    * @return Achievable frequency in Hz
    */
-  virtual uint32_t resolve_actual_clock_speed(uint32_t requested_hz) const = 0;
+  virtual uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const = 0;
 
   // ============================================================================
   // Brightness Remapping (Quadratic Curve)

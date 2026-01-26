@@ -71,7 +71,7 @@ class I2sDma : public PlatformDma {
    * ESP32: max 10 MHz (80 MHz / 2 / 4)
    * ESP32-S2: max 20 MHz (160 MHz / 2 / 4)
    */
-  uint32_t resolve_actual_clock_speed(uint32_t requested_hz) const override;
+  uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
 
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
@@ -128,46 +128,6 @@ class I2sDma : public PlatformDma {
 
   // BCM timing calculation (calculates lsbMsbTransitionBit for OE control)
   void calculate_bcm_timings();
-
-  // Static helper for clock resolution (usable in constructor initializer list)
-  // I2S clock constraints: freq = base_clock / clkm_div / 4, clkm_div >= 2
-  // ESP32: 80 MHz base, max 10 MHz output
-  // ESP32-S2: 160 MHz base, max 20 MHz output
-  static uint32_t resolve_clock_i2s(uint32_t requested_hz) {
-#if defined(CONFIG_IDF_TARGET_ESP32S2)
-    // ESP32-S2: max 20 MHz (160/2/4)
-    if (requested_hz > 20000000)
-      return 20000000;
-    if (requested_hz > 13333333)
-      return 20000000;  // 160/2/4
-    if (requested_hz > 10000000)
-      return 13333333;  // 160/3/4
-    if (requested_hz > 8000000)
-      return 10000000;  // 160/4/4
-    if (requested_hz > 6666666)
-      return 8000000;  // 160/5/4
-    // Round to nearest achievable
-    uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);
-    if (divider < 2)
-      divider = 2;
-    return 160000000 / (divider * 4);
-#else
-    // ESP32: max 10 MHz (80/2/4)
-    if (requested_hz > 10000000)
-      return 10000000;
-    if (requested_hz > 6666666)
-      return 10000000;  // 80/2/4
-    if (requested_hz > 5000000)
-      return 6666666;  // 80/3/4
-    if (requested_hz > 4000000)
-      return 5000000;  // 80/4/4
-    // Round to nearest achievable
-    uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);
-    if (divider < 2)
-      divider = 2;
-    return 80000000 / (divider * 4);
-#endif
-  }
 
   volatile i2s_dev_t *i2s_dev_;
   const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)

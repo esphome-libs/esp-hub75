@@ -97,7 +97,7 @@ I2sDma::I2sDma(const Hub75Config &config)
       i2s_dev_(nullptr),
       bit_depth_(HUB75_BIT_DEPTH),
       lsbMsbTransitionBit_(0),
-      actual_clock_hz_(resolve_clock_i2s(static_cast<uint32_t>(config.output_clock_speed))),
+      actual_clock_hz_(resolve_actual_clock_speed(config.output_clock_speed)),
       panel_width_(config.panel_width),
       panel_height_(config.panel_height),
       layout_rows_(config.layout_rows),
@@ -278,18 +278,30 @@ bool I2sDma::init() {
   return true;
 }
 
-uint32_t I2sDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
-  // Log warning if exceeding platform max (static helper handles the actual calculation)
+uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
+  // I2S clock: freq = base_clock / clkm_div / 4, clkm_div >= 2
+  uint32_t requested_hz = static_cast<uint32_t>(clock_speed);
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
+  // ESP32-S2: 160 MHz base, max 20 MHz output
   if (requested_hz > 20000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32-S2 max (20 MHz), using 20 MHz", (unsigned int) requested_hz);
+    return 20000000;
   }
+  uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);
+  if (divider < 2)
+    divider = 2;
+  return 160000000 / (divider * 4);
 #else
+  // ESP32: 80 MHz base, max 10 MHz output
   if (requested_hz > 10000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
+    return 10000000;
   }
+  uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);
+  if (divider < 2)
+    divider = 2;
+  return 80000000 / (divider * 4);
 #endif
-  return resolve_clock_i2s(requested_hz);
 }
 
 void I2sDma::configure_i2s_timing() {

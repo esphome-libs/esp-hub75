@@ -69,7 +69,7 @@ class GdmaDma : public PlatformDma {
   /**
    * @brief Resolve clock speed to achievable frequency (160 MHz / N)
    */
-  uint32_t resolve_actual_clock_speed(uint32_t requested_hz) const override;
+  uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
 
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
@@ -129,13 +129,6 @@ class GdmaDma : public PlatformDma {
 
   // BCM timing calculation (calculates lsbMsbTransitionBit for OE control)
   void calculate_bcm_timings();
-
-  // Static helper for clock resolution (usable in constructor initializer list)
-  static uint32_t resolve_clock_160mhz(uint32_t requested_hz) {
-    uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
-    if (divider < 2) divider = 2;
-    return 160000000 / divider;
-  }
 
   gdma_channel_handle_t dma_chan_;
   const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)
