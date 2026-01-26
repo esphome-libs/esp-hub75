@@ -118,6 +118,12 @@ bool ParlioDma::init() {
   // Calculate BCM timings first
   calculate_bcm_timings();
 
+  // Adjust LUT for BCM monotonicity (CIE and Gamma 2.2 need correction for compressed BCM)
+#if HUB75_GAMMA_MODE == 1 || HUB75_GAMMA_MODE == 2
+  adjust_lut_for_bcm(lut_, bit_depth_, lsbMsbTransitionBit_);
+  ESP_LOGI(TAG, "Adjusted LUT for BCM monotonicity (lsbMsbTransitionBit=%d)", lsbMsbTransitionBit_);
+#endif
+
   // Configure GPIO
   configure_gpio();
 

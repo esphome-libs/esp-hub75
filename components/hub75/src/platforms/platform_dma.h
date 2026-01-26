@@ -40,7 +40,7 @@ class PlatformDma {
   PlatformDma(const Hub75Config &config);
 
   const Hub75Config &config_;
-  const uint16_t *lut_;
+  uint16_t lut_[256];  // LUT storage (512 bytes, initialized at runtime)
 
   // ============================================================================
   // Coordinate Transformation Helper

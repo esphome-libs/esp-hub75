@@ -186,6 +186,57 @@ static constexpr auto LUT = generate_gamma22_lut<HUB75_BIT_DEPTH>();
 #error "Invalid HUB75_GAMMA_MODE (must be 0=LINEAR, 1=CIE1931, or 2=GAMMA_2_2)"
 #endif
 
+// ============================================================================
+// Runtime BCM LUT Adjustment
+// ============================================================================
+
+/**
+ * @brief Adjust LUT for monotonic BCM weights
+ *
+ * Takes an existing LUT (with gamma already applied) and adjusts values
+ * to ensure BCM weights are monotonically non-decreasing. Works for any
+ * gamma mode (CIE, Gamma 2.2, etc.)
+ *
+ * With lsbMsbTransitionBit optimization, lower bits all have weight 1 instead
+ * of true binary weights. This can cause non-monotonic perceived brightness
+ * for certain bit patterns. For example, with transition=1:
+ *   - Output 3 (bits 0,1) = weight 2
+ *   - Output 4 (bit 2 only) = weight 1  <-- LOWER than 3!
+ *   - Output 5 (bits 0,2) = weight 2
+ *
+ * This function adjusts outputs upward to ensure BCM weights never decrease.
+ *
+ * @param lut Array to adjust in-place (256 elements, already contains gamma-corrected values)
+ * @param bit_depth Target bit depth (4-12)
+ * @param lsb_msb_transition The calculated lsbMsbTransitionBit value
+ */
+inline void adjust_lut_for_bcm(uint16_t *lut, int bit_depth, int lsb_msb_transition) {
+  const int max_val = (1 << bit_depth) - 1;
+  int prev_weight = 0;
+
+  for (int i = 0; i < 256; i++) {
+    int target = lut[i];  // Start from existing gamma-corrected value
+
+    // Find first value >= target with weight >= prev_weight
+    int best = target;
+    while (best <= max_val) {
+      // Calculate BCM weight for 'best'
+      int weight = 0;
+      for (int bit = 0; bit < bit_depth; bit++) {
+        if (best & (1 << bit)) {
+          weight += (bit <= lsb_msb_transition) ? 1 : (1 << (bit - lsb_msb_transition - 1));
+        }
+      }
+      if (weight >= prev_weight) {
+        prev_weight = weight;
+        break;
+      }
+      best++;
+    }
+    lut[i] = static_cast<uint16_t>(best > max_val ? max_val : best);
+  }
+}
+
 /**
  * @brief Get active lookup table (compile-time selected)
  *
