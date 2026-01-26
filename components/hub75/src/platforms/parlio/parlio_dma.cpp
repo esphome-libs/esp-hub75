@@ -291,9 +291,23 @@ void ParlioDma::configure_parlio() {
 }
 
 uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
-  // Round to nearest 160 MHz / N (integer divider, no jitter)
+  // ESP32-P4/C6 PARLIO clock derivation:
+  //   Output = PLL_F160M / divider
+  //   Constraint: divider >= 2
+  //
+  // We use integer dividers only - no fractional dividers. Fractional dividers
+  // cause clock jitter because the hardware alternates between two integer
+  // dividers to approximate the fractional value. With pure integer division
+  // from the stable 160 MHz PLL, every clock cycle is identical.
+  //
+  // The resulting frequencies may not be round numbers (e.g., 160/7 = 22.86 MHz),
+  // but this is fine - what matters for signal integrity is that each clock
+  // period is exactly the same, not that the frequency is a nice decimal.
+  //
+  // Available speeds: 32 MHz (div=5), 26.67 MHz (div=6), 22.86 MHz (div=7),
+  //                   20 MHz (div=8), 17.78 MHz (div=9), 16 MHz (div=10), ...
   uint32_t requested_hz = static_cast<uint32_t>(clock_speed);
-  uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
+  uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;  // Round to nearest
   if (divider < 2)
     divider = 2;
   return 160000000 / divider;

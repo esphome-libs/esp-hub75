@@ -42,20 +42,11 @@ class PlatformDma {
   const Hub75Config &config_;
   uint16_t lut_[256];  // LUT storage (512 bytes, initialized at runtime)
 
-  // ============================================================================
-  // Clock Speed Resolution
-  // ============================================================================
-  //
-  // Each platform resolves the requested clock speed to the nearest achievable
-  // frequency based on hardware constraints. Called during init to determine
-  // actual_clock_hz_ for BCM timing calculations.
-
   /**
    * @brief Resolve requested clock speed to achievable frequency
    *
-   * Each platform implements this based on its clock divider constraints:
-   * - GDMA/Parlio: Rounds to nearest 160 MHz / N
-   * - I2S: Falls back to supported speeds (ESP32 max 10MHz, S2 max 20MHz)
+   * Called from constructor to determine actual clock frequency for BCM timing.
+   * Each platform implements based on its hardware clock divider constraints.
    *
    * @param clock_speed Requested clock speed
    * @return Achievable frequency in Hz

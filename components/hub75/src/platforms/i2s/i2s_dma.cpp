@@ -279,25 +279,47 @@ bool I2sDma::init() {
 }
 
 uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
-  // I2S clock: freq = base_clock / clkm_div / 4, clkm_div >= 2
+  // I2S LCD mode clock derivation:
+  //   Output = base_clock / clkm_div / (tx_bck_div_num * 2)
+  //   We use tx_bck_div_num = 2, so: Output = base_clock / clkm_div / 4
+  //
+  // TRM Constraints (ESP32 TRM v5.3, Section 12.6):
+  //   - clkm_div >= 2: "I2S_CLKM_DIV_NUM: Integral I2S clock divider value.
+  //     fI2S = fCLK / I2S_CLKM_DIV_NUM (I2S_CLKM_DIV_NUM >= 2)"
+  //   - tx_bck_div_num >= 2: Required for LCD mode stability
+  //
+  // These constraints limit max achievable frequency significantly compared
+  // to ESP32-S3's LCD_CAM peripheral which has no such divider requirements.
   uint32_t requested_hz = static_cast<uint32_t>(clock_speed);
+
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
-  // ESP32-S2: 160 MHz base, max 20 MHz output
+  // ESP32-S2: PLL_160M clock source (160 MHz base)
+  // Max output: 160 / 2 / 4 = 20 MHz (with minimum dividers)
+  // Available: 20 MHz (div=2), 13.33 MHz (div=3), 10 MHz (div=4), 8 MHz (div=5), ...
+  //
+  // Note: Higher speeds would require clkm_div < 2, which violates TRM constraints
+  // and causes unreliable operation.
   if (requested_hz > 20000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32-S2 max (20 MHz), using 20 MHz", (unsigned int) requested_hz);
     return 20000000;
   }
-  uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);
+  uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
   if (divider < 2)
     divider = 2;
   return 160000000 / (divider * 4);
+
 #else
-  // ESP32: 80 MHz base, max 10 MHz output
+  // ESP32: PLL_D2_CLK clock source (80 MHz base)
+  // Max output: 80 / 2 / 4 = 10 MHz (with minimum dividers)
+  // Available: 10 MHz (div=2), 6.67 MHz (div=3), 5 MHz (div=4), 4 MHz (div=5), ...
+  //
+  // The ESP32's lower base clock (80 MHz vs 160 MHz) combined with the same
+  // divider constraints results in half the max frequency of ESP32-S2.
   if (requested_hz > 10000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
     return 10000000;
   }
-  uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);
+  uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
   if (divider < 2)
     divider = 2;
   return 80000000 / (divider * 4);
