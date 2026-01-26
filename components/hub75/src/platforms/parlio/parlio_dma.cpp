@@ -66,6 +66,7 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       tx_unit_(nullptr),
       bit_depth_(HUB75_BIT_DEPTH),
       lsbMsbTransitionBit_(0),
+      actual_clock_hz_(resolve_clock_160mhz(static_cast<uint32_t>(config.output_clock_speed))),
       panel_width_(config.panel_width),
       panel_height_(config.panel_height),
       layout_rows_(config.layout_rows),
@@ -218,10 +219,8 @@ void ParlioDma::configure_parlio() {
 
   // Configure PARLIO TX unit
   // Pin layout: [CLK_GATE(15)|ADDR(14-10)|LAT(9)|OE(8)|--|--|R2(4)|R1(5)|G2(2)|G1(3)|B2(0)|B1(1)]
-  // Resolve clock to nearest 160MHz/N to ensure integer divider (no jitter)
+  // Clock already resolved to nearest 160MHz/N in constructor (no jitter)
   uint32_t requested_hz = static_cast<uint32_t>(config_.output_clock_speed);
-  actual_clock_hz_ = resolve_actual_clock_speed(requested_hz);
-
   if (actual_clock_hz_ != requested_hz) {
     ESP_LOGI(TAG, "Clock speed %u Hz rounded to %u Hz (160MHz / %u)", (unsigned int) requested_hz,
              (unsigned int) actual_clock_hz_, (unsigned int) (160000000 / actual_clock_hz_));
@@ -292,12 +291,7 @@ void ParlioDma::configure_parlio() {
 }
 
 uint32_t ParlioDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
-  // PARLIO uses 160 MHz PLL with integer divider
-  // Round to nearest 160 MHz / N for jitter-free clock
-  uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
-  if (divider < 2)
-    divider = 2;  // Hardware minimum
-  return 160000000 / divider;
+  return resolve_clock_160mhz(requested_hz);
 }
 
 void ParlioDma::configure_gpio() {

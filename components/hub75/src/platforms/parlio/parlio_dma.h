@@ -76,11 +76,19 @@ class ParlioDma : public PlatformDma {
 
   inline void set_clock_enable(uint16_t &word, bool enable) { word = enable ? (word | 0x8000) : (word & 0x7FFF); }
 
+  // Static helper for clock resolution (usable in constructor initializer list)
+  static uint32_t resolve_clock_160mhz(uint32_t requested_hz) {
+    uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
+    if (divider < 2)
+      divider = 2;
+    return 160000000 / divider;
+  }
+
   parlio_tx_unit_handle_t tx_unit_;
   parlio_transmit_config_t transmit_config_;
   const uint8_t bit_depth_;
-  uint8_t lsbMsbTransitionBit_;  // Calculated at init
-  uint32_t actual_clock_hz_;     // Actual achieved clock frequency after rounding
+  uint8_t lsbMsbTransitionBit_;     // Calculated at init
+  const uint32_t actual_clock_hz_;  // Actual achieved clock frequency after rounding
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;

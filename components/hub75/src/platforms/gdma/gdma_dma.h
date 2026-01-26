@@ -130,10 +130,17 @@ class GdmaDma : public PlatformDma {
   // BCM timing calculation (calculates lsbMsbTransitionBit for OE control)
   void calculate_bcm_timings();
 
+  // Static helper for clock resolution (usable in constructor initializer list)
+  static uint32_t resolve_clock_160mhz(uint32_t requested_hz) {
+    uint32_t divider = (160000000 + requested_hz / 2) / requested_hz;
+    if (divider < 2) divider = 2;
+    return 160000000 / divider;
+  }
+
   gdma_channel_handle_t dma_chan_;
-  const uint8_t bit_depth_;      // Bit depth from config (6, 7, 8, 10, or 12)
-  uint8_t lsbMsbTransitionBit_;  // BCM optimization threshold (calculated at init)
-  uint32_t actual_clock_hz_;     // Actual achieved clock frequency after rounding
+  const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)
+  uint8_t lsbMsbTransitionBit_;     // BCM optimization threshold (calculated at init)
+  const uint32_t actual_clock_hz_;  // Actual achieved clock frequency after rounding
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;

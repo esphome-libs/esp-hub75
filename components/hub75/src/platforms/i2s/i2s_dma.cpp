@@ -97,7 +97,7 @@ I2sDma::I2sDma(const Hub75Config &config)
       i2s_dev_(nullptr),
       bit_depth_(HUB75_BIT_DEPTH),
       lsbMsbTransitionBit_(0),
-      actual_clock_hz_(0),
+      actual_clock_hz_(resolve_clock_i2s(static_cast<uint32_t>(config.output_clock_speed))),
       panel_width_(config.panel_width),
       panel_height_(config.panel_height),
       layout_rows_(config.layout_rows),
@@ -279,52 +279,17 @@ bool I2sDma::init() {
 }
 
 uint32_t I2sDma::resolve_actual_clock_speed(uint32_t requested_hz) const {
-  // I2S clock constraints differ from GDMA:
-  // - ESP32-S2: 160MHz / clkm_div / 4, achievable: 20M, 10M, 8M, 6.67M, ...
-  // - ESP32: 80MHz / clkm_div / 4, achievable: 10M, 5M, 4M, ...
-  // Constraints: clkm_div >= 2 (TRM requirement)
-
+  // Log warning if exceeding platform max (static helper handles the actual calculation)
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
-  // ESP32-S2: max 20 MHz (160/2/4)
-  // Achievable frequencies: 160/(N*4) where N>=2 → 20, 13.33, 10, 8, 6.67, ...
   if (requested_hz > 20000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32-S2 max (20 MHz), using 20 MHz", (unsigned int) requested_hz);
-    return 20000000;
-  } else if (requested_hz > 13333333) {
-    return 20000000;  // 160/2/4
-  } else if (requested_hz > 10000000) {
-    return 13333333;  // 160/3/4
-  } else if (requested_hz > 8000000) {
-    return 10000000;  // 160/4/4
-  } else if (requested_hz > 6666666) {
-    return 8000000;  // 160/5/4
-  } else {
-    // Round to nearest achievable: 160/(N*4) where N = round(160M / (requested*4))
-    uint32_t divider = (160000000 + requested_hz * 2) / (requested_hz * 4);
-    if (divider < 2)
-      divider = 2;
-    return 160000000 / (divider * 4);
   }
 #else
-  // ESP32: max 10 MHz (80/2/4)
-  // Achievable frequencies: 80/(N*4) where N>=2 → 10, 6.67, 5, 4, ...
   if (requested_hz > 10000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
-    return 10000000;
-  } else if (requested_hz > 6666666) {
-    return 10000000;  // 80/2/4
-  } else if (requested_hz > 5000000) {
-    return 6666666;  // 80/3/4 = 6.67 MHz
-  } else if (requested_hz > 4000000) {
-    return 5000000;  // 80/4/4
-  } else {
-    // Round to nearest achievable
-    uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);
-    if (divider < 2)
-      divider = 2;
-    return 80000000 / (divider * 4);
   }
 #endif
+  return resolve_clock_i2s(requested_hz);
 }
 
 void I2sDma::configure_i2s_timing() {
@@ -335,10 +300,8 @@ void I2sDma::configure_i2s_timing() {
   dev->sample_rate_conf.rx_bits_mod = 16;  // 16-bit parallel
   dev->sample_rate_conf.tx_bits_mod = 16;
 
-  // Resolve requested clock to achievable frequency
+  // Clock already resolved in constructor
   uint32_t requested_hz = static_cast<uint32_t>(config_.output_clock_speed);
-  actual_clock_hz_ = resolve_actual_clock_speed(requested_hz);
-
   if (actual_clock_hz_ != requested_hz) {
     ESP_LOGI(TAG, "Clock speed %u Hz resolved to %u Hz", (unsigned int) requested_hz, (unsigned int) actual_clock_hz_);
   }
