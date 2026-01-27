@@ -42,6 +42,17 @@ class PlatformDma {
   const Hub75Config &config_;
   uint16_t lut_[256];  // LUT storage (512 bytes, initialized at runtime)
 
+  /**
+   * @brief Resolve requested clock speed to achievable frequency
+   *
+   * Called from constructor to determine actual clock frequency for BCM timing.
+   * Each platform implements based on its hardware clock divider constraints.
+   *
+   * @param clock_speed Requested clock speed
+   * @return Achievable frequency in Hz
+   */
+  virtual HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const = 0;
+
   // ============================================================================
   // Brightness Remapping (Quadratic Curve)
   // ============================================================================
