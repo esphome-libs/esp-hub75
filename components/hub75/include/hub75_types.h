@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef bool (*Hub75FrameCallback)(void *arg);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -40,6 +42,7 @@ enum class Hub75ColorOrder {
  * visual artifacts or instability, try reducing the clock speed.
  */
 enum class Hub75ClockSpeed : uint32_t {
+  HZ_4M = 4000000,
   HZ_8M = 8000000,
   HZ_10M = 10000000,
   HZ_16M = 16000000,

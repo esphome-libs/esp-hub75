@@ -28,6 +28,9 @@
 #include <esp_memory_utils.h>
 
 static const char *const TAG = "ParlioDma";
+static constexpr size_t kParlioMaxTransferBytes = 65534;  // Must be < 65535 per driver constraint
+static constexpr size_t kParlioMaxTransferBits = 65535;   // Conservative limit if API expects bits
+static constexpr size_t kParlioChunkMaxWords = 4080;      // Max safe chunk (must be even for 32-bit align)
 
 namespace hub75 {
 
@@ -87,16 +90,33 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       front_idx_(0),
       active_idx_(0),
       is_double_buffered_(false),
+      total_buffer_bytes_(0),
+      total_buffer_words_(0),
+      chunk_words_(0),
+      chunk_count_(0),
+      chunks_per_frame_(0),
+      segment_count_(0),
+      segment_index_(0),
+      segment_offset_words_(0),
+      tx_queue_depth_(0),
+      tx_idx_(0),
+      pending_tx_idx_(0),
+      tx_swap_pending_(false),
+      completed_chunk_index_(0),
+      tx_task_(nullptr),
+      tx_task_started_(false),
       basis_brightness_(config.brightness),
       intensity_(1.0f),
       transfer_started_(false) {
   // Initialize transmit config
   // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
   // to match the physical shift register layout
-  transmit_config_.idle_value = 0x00;
+  // Ensure output is blanked during any idle gaps between queued chunks
+  // (OE=1, clock gate off by default)
+  transmit_config_.idle_value = (1 << OE_BIT);
   transmit_config_.bitscrambler_program = nullptr;
-  transmit_config_.flags.queue_nonblocking = 0;
-  transmit_config_.flags.loop_transmission = 1;  // Continuous refresh
+  transmit_config_.flags.queue_nonblocking = 1;
+  transmit_config_.flags.loop_transmission = 0;  // Use manual chunked queueing
 }
 
 ParlioDma::~ParlioDma() { ParlioDma::shutdown(); }
@@ -164,6 +184,21 @@ bool ParlioDma::init() {
   }
   ESP_LOGI(TAG, "PARLIO TX unit enabled");
 
+  // Register callbacks for chunked transmission BEFORE queueing (needed to keep queue fed)
+  parlio_tx_event_callbacks_t cbs = {.on_trans_done = ParlioDma::on_trans_done, .on_buffer_switched = NULL};
+  parlio_tx_unit_register_event_callbacks(tx_unit_, &cbs, this);
+
+  // Start task that feeds chunks on TX done notifications
+  if (!tx_task_started_) {
+    BaseType_t ok = xTaskCreatePinnedToCore(ParlioDma::tx_task_trampoline, "parlio_tx", 4096, this,
+                                            configMAX_PRIORITIES - 2, &tx_task_, 0);
+    if (ok != pdPASS) {
+      ESP_LOGE(TAG, "Failed to create PARLIO TX task");
+      return false;
+    }
+    tx_task_started_ = true;
+  }
+
   // Build transaction queue
   if (!build_transaction_queue()) {
     ESP_LOGE(TAG, "Failed to build transaction queue");
@@ -178,6 +213,13 @@ bool ParlioDma::init() {
 void ParlioDma::shutdown() {
   if (transfer_started_) {
     ParlioDma::stop_transfer();
+  }
+
+  if (tx_task_started_ && tx_task_) {
+    TaskHandle_t task = tx_task_;
+    tx_task_ = nullptr;
+    tx_task_started_ = false;
+    vTaskDelete(task);
   }
 
   if (tx_unit_) {
@@ -248,7 +290,7 @@ void ParlioDma::configure_parlio() {
       .valid_start_delay = 0,
       .valid_stop_delay = 0,
       .trans_queue_depth = 4,  // Match ESP-IDF example (was: num_rows_ * bit_depth_)
-      .max_transfer_size = max_buffer_size * sizeof(uint16_t),
+      .max_transfer_size = std::min(max_buffer_size * sizeof(uint16_t), kParlioMaxTransferBytes),
       .dma_burst_size = 0,  // Default
       .sample_edge = PARLIO_SAMPLE_EDGE_POS,
       .bit_pack_order = PARLIO_BIT_PACK_ORDER_LSB,  // Explicit LSB to match ESP-IDF example
@@ -279,6 +321,7 @@ void ParlioDma::configure_parlio() {
   ESP_LOGI(TAG, "  Clock gating: NOT SUPPORTED");
 #endif
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
+  tx_queue_depth_ = config.trans_queue_depth;
 }
 
 void ParlioDma::configure_gpio() {
@@ -392,6 +435,14 @@ bool ParlioDma::allocate_row_buffers() {
       bp.padding_words = calculate_bcm_padding(bit);
       bp.total_words = bp.pixel_words + bp.padding_words;
 
+      // Ensure 32-bit alignment (even number of uint16_t words)
+      // ESP32-P4 PARLIO DMA requires 4-byte aligned start addresses
+      // Since buffers are packed contiguously, each buffer must be a multiple of 4 bytes
+      if (bp.total_words % 2 != 0) {
+        bp.padding_words++;
+        bp.total_words++;
+      }
+
       total_words += bp.total_words;
 
       // Log once per bit plane (sizes are identical across all rows)
@@ -501,6 +552,50 @@ void ParlioDma::stop_transfer() {
   ESP_LOGI(TAG, "Stopping PARLIO transfer");
   parlio_tx_unit_disable(tx_unit_);
   transfer_started_ = false;
+}
+
+void ParlioDma::set_frame_callback(Hub75FrameCallback callback, void *arg) {
+  PlatformDma::set_frame_callback(callback, arg);
+
+  if (tx_unit_) {
+    parlio_tx_event_callbacks_t cbs = {.on_trans_done = ParlioDma::on_trans_done, .on_buffer_switched = NULL};
+    parlio_tx_unit_register_event_callbacks(tx_unit_, &cbs, this);
+  }
+}
+
+bool IRAM_ATTR ParlioDma::on_buffer_switched(parlio_tx_unit_handle_t tx_unit,
+                                             const parlio_tx_buffer_switched_event_data_t *event_data,
+                                             void *user_data) {
+  auto *dma = static_cast<ParlioDma *>(user_data);
+  if (dma && dma->frame_callback_) {
+    return dma->frame_callback_(dma->frame_callback_arg_);
+  }
+  return false;
+}
+
+bool IRAM_ATTR ParlioDma::on_trans_done(parlio_tx_unit_handle_t tx_unit,
+                                        const parlio_tx_done_event_data_t *event_data,
+                                        void *user_data) {
+  auto *dma = static_cast<ParlioDma *>(user_data);
+  if (!dma) {
+    return false;
+  }
+  BaseType_t higher_woken = pdFALSE;
+  if (dma->tx_task_) {
+    vTaskNotifyGiveFromISR(dma->tx_task_, &higher_woken);
+  }
+
+  // Track completed chunks to detect frame boundary in ISR
+  dma->completed_chunk_index_++;
+  if (dma->completed_chunk_index_ >= dma->chunks_per_frame_) {
+    dma->completed_chunk_index_ = 0;
+    if (dma->frame_callback_) {
+      const bool cb_yield = dma->frame_callback_(dma->frame_callback_arg_);
+      return (higher_woken == pdTRUE) || cb_yield;
+    }
+  }
+
+  return higher_woken == pdTRUE;
 }
 
 void ParlioDma::initialize_buffer_internal(BitPlaneBuffer *buffers) {
@@ -767,25 +862,49 @@ bool ParlioDma::build_transaction_queue() {
     return false;
   }
 
-  ESP_LOGD(TAG, "Starting loop transmission...");
+  ESP_LOGI(TAG, "Starting chunked transmission...");
 
   // Use cached buffer size (computed once in allocate_row_buffers)
-  size_t total_words = total_buffer_bytes_ / sizeof(uint16_t);
-  size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
-
-  ESP_LOGD(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
-           total_bits);
-  ESP_LOGD(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
-
-  // Start loop transmission with front buffer (ESP-IDF example calls transmit ONCE with loop_transmission=true)
-  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to start loop transmission: %s", esp_err_to_name(err));
-    ESP_LOGE(TAG, "  Buffer: %p, bits: %zu", dma_buffers_[front_idx_], total_bits);
+  total_buffer_words_ = total_buffer_bytes_ / sizeof(uint16_t);
+  chunk_words_ = std::min(total_buffer_words_, kParlioChunkMaxWords);
+  if (chunk_words_ == 0) {
+    ESP_LOGE(TAG, "Invalid chunk size");
     return false;
   }
+  chunk_count_ = (total_buffer_words_ + chunk_words_ - 1) / chunk_words_;
+  segment_count_ = static_cast<size_t>(num_rows_) * static_cast<size_t>(bit_depth_);
+  segment_index_ = 0;
+  segment_offset_words_ = 0;
+  chunks_per_frame_ = 0;
+  for (size_t i = 0; i < segment_count_; i++) {
+    const BitPlaneBuffer &bp = row_buffers_[front_idx_][i];
+    chunks_per_frame_ += (bp.total_words + chunk_words_ - 1) / chunk_words_;
+  }
+  completed_chunk_index_ = 0;
+  tx_idx_ = front_idx_;
+  pending_tx_idx_ = tx_idx_;
+  tx_swap_pending_ = false;
 
-  ESP_LOGI(TAG, "Loop transmission started successfully");
+  const size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
+
+  ESP_LOGI(TAG, "Transmitting buffer in chunks: %zu words (%zu bytes, %zu bits)", total_buffer_words_,
+           total_buffer_bytes_, total_bits);
+  ESP_LOGI(TAG, "Chunk size: %zu words, chunks/frame: %zu, queue depth: %zu", chunk_words_, chunk_count_,
+           tx_queue_depth_);
+  ESP_LOGI(TAG, "Buffer start address: %p (tx buffer [%d])", dma_buffers_[tx_idx_], tx_idx_);
+  ESP_LOGI(TAG, "First chunk: %zu words (%zu bytes, %zu bits)", chunk_words_,
+           chunk_words_ * sizeof(uint16_t), chunk_words_ * 16);
+
+  // Prime the queue with initial chunks
+  const size_t prime_count = std::min(tx_queue_depth_, chunk_count_);
+  for (size_t i = 0; i < prime_count; i++) {
+    if (!queue_next_chunk(false)) {
+      ESP_LOGE(TAG, "Failed to queue chunk %zu/%zu", i + 1, prime_count);
+      return false;
+    }
+  }
+
+  ESP_LOGI(TAG, "Chunked transmission started successfully");
 
   return true;
 }
@@ -1057,11 +1176,85 @@ void ParlioDma::flip_buffer() {
   // Swap indices (front ↔ active)
   std::swap(front_idx_, active_idx_);
 
-  // Queue new front buffer (hardware switches seamlessly after current frame)
-  size_t total_bits = total_buffer_bytes_ * 8;
-  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
+  // Defer hardware buffer switch to frame boundary (handled in on_trans_done)
+  pending_tx_idx_ = front_idx_;
+  tx_swap_pending_ = true;
+}
+
+bool ParlioDma::queue_next_chunk(bool invoke_frame_callback) {
+  if (!tx_unit_) {
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG, "queue_next_chunk: tx_unit_ is null");
+    }
+    return false;
+  }
+  if (total_buffer_words_ == 0 || chunk_words_ == 0 || segment_count_ == 0) {
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG,
+               "queue_next_chunk: invalid sizes total_words=%zu chunk_words=%zu segments=%zu",
+               total_buffer_words_, chunk_words_, segment_count_);
+    }
+    return false;
+  }
+
+  // Use segment (bit-plane) boundaries to avoid chunk splits mid-plane
+  BitPlaneBuffer &bp = row_buffers_[tx_idx_][segment_index_];
+  const size_t remaining = bp.total_words - segment_offset_words_;
+  const size_t words = std::min(chunk_words_, remaining);
+  const size_t bits = words * 16;
+  uint16_t *chunk_ptr = bp.data + segment_offset_words_;
+
+  // Debug alignment
+  static int debug_chunks = 0;
+  if (debug_chunks < 10) {
+      ESP_LOGI(TAG, "Chunk %d: ptr=%p (align=%lu), words=%zu, bits=%zu, offset=%zu",
+               debug_chunks, chunk_ptr, ((uint32_t)chunk_ptr) & 3, words, bits, segment_offset_words_);
+      debug_chunks++;
+  }
+
+  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, chunk_ptr, bits, &transmit_config_);
   if (err != ESP_OK) {
-    ESP_LOGW(TAG, "flip_buffer: Failed to queue buffer: %s", esp_err_to_name(err));
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG,
+           "queue_next_chunk: transmit failed: %s (segment=%zu/%zu, offset=%zu, words=%zu, bits=%zu, ptr=%p)",
+           esp_err_to_name(err), segment_index_ + 1, segment_count_, segment_offset_words_, words, bits, chunk_ptr);
+    }
+    return false;
+  }
+
+  if (words == remaining) {
+    segment_offset_words_ = 0;
+    segment_index_++;
+    if (segment_index_ >= segment_count_) {
+      segment_index_ = 0;
+
+      if (tx_swap_pending_) {
+        tx_idx_ = pending_tx_idx_;
+        tx_swap_pending_ = false;
+      }
+    }
+  } else {
+    segment_offset_words_ += words;
+  }
+
+  return true;
+}
+
+void ParlioDma::tx_task_trampoline(void *arg) {
+  auto *dma = static_cast<ParlioDma *>(arg);
+  if (dma) {
+    dma->tx_task_loop();
+  }
+  vTaskDelete(NULL);
+}
+
+void ParlioDma::tx_task_loop() {
+  while (true) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (!queue_next_chunk(false)) {
+      // If transmit fails, avoid tight loop
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
   }
 }
 

@@ -57,6 +57,16 @@ class Hub75Driver {
    */
   void end();
 
+  /**
+   * @brief Register a callback to be called on each frame completion
+   *
+   * This callback is executed from an ISR.
+   *
+   * @param callback Function to call
+   * @param arg Argument to pass to the callback
+   */
+  void set_frame_callback(Hub75FrameCallback callback, void *arg);
+
   // ========================================================================
   // Pixel Drawing API
   // ========================================================================
@@ -207,6 +217,12 @@ class Hub75Driver {
    * @return true if refresh loop is active
    */
   bool is_running() const;
+
+  /**
+   * @brief Get platform-specific DMA handle for advanced use cases
+   * @return Pointer to PlatformDma implementation
+   */
+  hub75::PlatformDma* getDmaEngine() const { return dma_; }
 
  private:
   Hub75Config config_;
