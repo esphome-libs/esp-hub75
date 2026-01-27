@@ -1,6 +1,6 @@
 {
   "name": "esp-hub75",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "High-performance DMA-based driver for HUB75 RGB LED matrix panels on ESP32 platforms",
   "keywords": "hub75, led, matrix, display, rgb, dma, esp32, esp32s3, esp32p4, driver",
   "license": "MIT",
