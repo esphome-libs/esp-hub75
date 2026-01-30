@@ -15,6 +15,8 @@
 #include "../platform_dma.h"
 #include <cstddef>
 #include <driver/parlio_tx.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 namespace hub75 {
 
@@ -39,6 +41,15 @@ class ParlioDma : public PlatformDma {
   void shutdown() override;
   void start_transfer() override;
   void stop_transfer() override;
+  void set_frame_callback(Hub75FrameCallback callback, void *arg) override;
+
+  static bool IRAM_ATTR on_buffer_switched(parlio_tx_unit_handle_t tx_unit,
+                                           const parlio_tx_buffer_switched_event_data_t *event_data,
+                                           void *user_data);
+  static bool IRAM_ATTR on_trans_done(parlio_tx_unit_handle_t tx_unit,
+                                      const parlio_tx_done_event_data_t *event_data,
+                                      void *user_data);
+
   void set_basis_brightness(uint8_t brightness) override;
   void set_intensity(float intensity) override;
   void set_rotation(Hub75Rotation rotation) override;
@@ -48,6 +59,9 @@ class ParlioDma : public PlatformDma {
   void clear() override;
   void fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t r, uint8_t g, uint8_t b) override;
   void flip_buffer() override;
+
+  // Get underlying PARLIO TX unit handle (for frame sync callbacks)
+  parlio_tx_unit_handle_t getTxUnitHandle() const { return tx_unit_; }
 
   struct BitPlaneBuffer {
     uint16_t *data;
@@ -68,6 +82,9 @@ class ParlioDma : public PlatformDma {
   bool build_transaction_queue();
   void calculate_bcm_timings();
   size_t calculate_bcm_padding(uint8_t bit_plane);
+  bool IRAM_ATTR queue_next_chunk(bool invoke_frame_callback);
+  static void tx_task_trampoline(void *arg);
+  void tx_task_loop();
 
   inline void set_clock_enable(uint16_t &word, bool enable) { word = enable ? (word | 0x8000) : (word & 0x7FFF); }
 
@@ -108,6 +125,20 @@ class ParlioDma : public PlatformDma {
   bool is_double_buffered_;  // True if dma_buffers_[1] successfully allocated
 
   size_t total_buffer_bytes_;  // Cached total buffer size per buffer (computed once, never changes)
+  size_t total_buffer_words_;  // Cached total buffer size in words
+  size_t chunk_words_;         // Words per transmit chunk
+  size_t chunk_count_;         // Total number of chunks per buffer
+  size_t chunks_per_frame_;    // Total transactions per frame (all segments)
+  size_t segment_count_;       // Number of bit-plane segments per buffer
+  size_t segment_index_;       // Current segment index
+  size_t segment_offset_words_;  // Offset within current segment
+  size_t tx_queue_depth_;      // Cached queue depth for chunk priming
+  int tx_idx_;                 // Buffer index currently transmitted by PARLIO
+  int pending_tx_idx_;         // Buffer index to switch to at frame boundary
+  bool tx_swap_pending_;       // True when a buffer switch is pending
+  size_t completed_chunk_index_;  // Completed chunks in current frame (ISR)
+  TaskHandle_t tx_task_;       // Task that feeds PARLIO chunks
+  bool tx_task_started_;
   uint8_t basis_brightness_;
   float intensity_;
   bool transfer_started_;

@@ -1,10 +1,5 @@
-# ESP32 HUB75 DMA Driver - Root Project File
-# This file defines the ESP-IDF project structure
+# ESP32 HUB75 DMA Driver - ESP-IDF component wrapper
+# The actual component lives in components/hub75.
+# This wrapper allows the repo to be added under project components/.
 
-cmake_minimum_required(VERSION 3.16)
-
-# Include ESP-IDF build system
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-
-# Define the project
-project(hub75)
+include(${CMAKE_CURRENT_LIST_DIR}/components/hub75/CMakeLists.txt)
