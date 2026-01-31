@@ -65,6 +65,14 @@ class I2sDma : public PlatformDma {
    */
   void set_rotation(Hub75Rotation rotation) override;
 
+  /**
+   * @brief Resolve clock speed to achievable frequency (I2S constraints)
+   *
+   * ESP32: max 10 MHz (80 MHz / 2 / 4)
+   * ESP32-S2: max 20 MHz (160 MHz / 2 / 4)
+   */
+  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
+
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)
   // ============================================================================
@@ -122,9 +130,9 @@ class I2sDma : public PlatformDma {
   void calculate_bcm_timings();
 
   volatile i2s_dev_t *i2s_dev_;
-  const uint8_t bit_depth_;      // Bit depth from config (6, 7, 8, 10, or 12)
-  uint8_t lsbMsbTransitionBit_;  // BCM optimization threshold (calculated at init)
-  uint32_t actual_clock_hz_;     // Actual I2S clock frequency (may differ from config due to fallbacks)
+  const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)
+  uint8_t lsbMsbTransitionBit_;     // BCM optimization threshold (calculated at init)
+  const uint32_t actual_clock_hz_;  // Actual I2S clock frequency (may differ from config due to fallbacks)
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;

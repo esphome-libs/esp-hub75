@@ -43,6 +43,11 @@ class ParlioDma : public PlatformDma {
   void set_intensity(float intensity) override;
   void set_rotation(Hub75Rotation rotation) override;
 
+  /**
+   * @brief Resolve clock speed to achievable frequency (160 MHz / N)
+   */
+  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
+
   void draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *buffer, Hub75PixelFormat format,
                    Hub75ColorOrder color_order, bool big_endian) override;
   void clear() override;
@@ -74,7 +79,8 @@ class ParlioDma : public PlatformDma {
   parlio_tx_unit_handle_t tx_unit_;
   parlio_transmit_config_t transmit_config_;
   const uint8_t bit_depth_;
-  uint8_t lsbMsbTransitionBit_;  // Calculated at init
+  uint8_t lsbMsbTransitionBit_;     // Calculated at init
+  const uint32_t actual_clock_hz_;  // Actual achieved clock frequency after rounding
 
   // Panel configuration (immutable, cached from config)
   const uint16_t panel_width_;

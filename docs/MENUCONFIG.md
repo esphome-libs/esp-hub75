@@ -145,10 +145,8 @@ Choose which example to build in main/:
 ### HUB75_CLOCK_SPEED
 - **Type**: choice
 - **Default**: 20 MHz
-- **Options**:
-  - `10 MHz` - Conservative (all panels)
-  - `20 MHz` - Recommended default
-  - `40 MHz` - Experimental (may fail on long cables)
+- **Options**: 8, 10, 16, 18, 20, 23, 27, 32 MHz
+- **Details**: See [docs/PLATFORMS.md](PLATFORMS.md) for actual frequencies and platform limits
 - **Troubleshooting**: Use 10 MHz if seeing signal integrity issues
 
 ### HUB75_MIN_REFRESH_RATE
