@@ -27,6 +27,9 @@
 #include <esp_heap_caps.h>
 #include <esp_cache.h>
 #include <esp_memory_utils.h>
+#if HUB75_PPA_AVAILABLE
+#include <driver/ppa.h>
+#endif
 
 static const char *const TAG = "ParlioDma";
 static constexpr size_t kParlioMaxTransferBytes = 65534;  // Must be < 65535 per driver constraint
@@ -116,7 +119,13 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       tx_task_started_(false),
       basis_brightness_(config.brightness),
       intensity_(1.0f),
-      transfer_started_(false) {
+      transfer_started_(false)
+    #if HUB75_PPA_AVAILABLE
+      , ppa_srm_handle_(nullptr),
+      ppa_rgb888_buffer_(nullptr),
+      ppa_rgb888_buffer_size_(0)
+    #endif
+    {
   // Initialize transmit config
   // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
   // to match the physical shift register layout
@@ -201,6 +210,23 @@ bool ParlioDma::init() {
     return false;
   }
 
+#if HUB75_PPA_AVAILABLE
+  if (!ppa_srm_handle_) {
+    ppa_client_config_t ppa_cfg = {
+        .oper_type = PPA_OPERATION_SRM,
+        .max_pending_trans_num = 1,
+        .data_burst_length = PPA_DATA_BURST_LENGTH_128,
+    };
+    esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &ppa_srm_handle_);
+    if (ppa_err != ESP_OK) {
+      ESP_LOGW(TAG, "PPA SRM registration failed: %s", esp_err_to_name(ppa_err));
+      ppa_srm_handle_ = nullptr;
+    } else {
+      ESP_LOGI(TAG, "PPA SRM client registered successfully");
+    }
+  }
+#endif
+
   ESP_LOGI(TAG, "PARLIO TX initialized successfully with circular DMA");
 
   return true;
@@ -210,6 +236,18 @@ void ParlioDma::shutdown() {
   if (transfer_started_) {
     ParlioDma::stop_transfer();
   }
+
+#if HUB75_PPA_AVAILABLE
+  if (ppa_srm_handle_) {
+    ppa_unregister_client(ppa_srm_handle_);
+    ppa_srm_handle_ = nullptr;
+  }
+  if (ppa_rgb888_buffer_) {
+    heap_caps_free(ppa_rgb888_buffer_);
+    ppa_rgb888_buffer_ = nullptr;
+    ppa_rgb888_buffer_size_ = 0;
+  }
+#endif
 
   if (tx_task_started_ && tx_task_) {
     TaskHandle_t task = tx_task_;
@@ -1002,18 +1040,44 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     h = rotated_height - y;
   }
 
+  const uint8_t *src_buffer = buffer;
+  Hub75PixelFormat src_format = format;
+  Hub75ColorOrder src_color_order = color_order;
+  bool src_big_endian = big_endian;
+  Hub75Rotation effective_rotation = rotation_;
+  uint16_t effective_w = w;
+  uint16_t effective_h = h;
+
+#if HUB75_PPA_AVAILABLE
+  if (format == Hub75PixelFormat::RGB565 && color_order == Hub75ColorOrder::RGB && !big_endian) {
+    const uint8_t *ppa_buffer = nullptr;
+    if (ppa_convert_rgb565_to_rgb888(buffer, w, h, &ppa_buffer, rotation_)) {
+      src_buffer = ppa_buffer;
+      src_format = Hub75PixelFormat::RGB888;
+      src_color_order = Hub75ColorOrder::RGB;
+      src_big_endian = false;
+      effective_rotation = Hub75Rotation::ROTATE_0;  // PPA already rotated
+      // Swap dimensions if PPA rotated by 90/270
+      if (rotation_ == Hub75Rotation::ROTATE_90 || rotation_ == Hub75Rotation::ROTATE_270) {
+        effective_w = h;
+        effective_h = w;
+      }
+    }
+  }
+#endif
+
   // Pre-compute pixel stride for pointer arithmetic (avoids multiply per pixel)
-  const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
-                              : (format == Hub75PixelFormat::RGB565) ? 2
-                                                                     : /* RGB888_32 */ 4;
+  const size_t pixel_stride = (src_format == Hub75PixelFormat::RGB888)   ? 3
+                              : (src_format == Hub75PixelFormat::RGB565) ? 2
+                                                                        : /* RGB888_32 */ 4;
 
   // Check if we can use identity fast path (no coordinate transforms needed)
-  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+  const bool identity_transform = (effective_rotation == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
 
   // Process each pixel
-  const uint8_t *pixel_ptr = buffer;
-  for (uint16_t dy = 0; dy < h; dy++) {
-    for (uint16_t dx = 0; dx < w; dx++) {
+  const uint8_t *pixel_ptr = src_buffer;
+  for (uint16_t dy = 0; dy < effective_h; dy++) {
+    for (uint16_t dx = 0; dx < effective_w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
       uint16_t row;
@@ -1031,7 +1095,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
         }
       } else {
         // Full coordinate transformation pipeline
-        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+        auto transformed = transform_coordinate(px, py, effective_rotation, needs_layout_remap_, needs_scan_remap_, layout_,
                                                 scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = transformed.x;
@@ -1041,7 +1105,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
 
       // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
-      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      extract_rgb888_from_format(pixel_ptr, 0, src_format, src_color_order, src_big_endian, r8, g8, b8);
       pixel_ptr += pixel_stride;
 
       // Apply LUT correction
@@ -1204,6 +1268,132 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
     flush_cache_to_dma();
   }
 }
+
+#if HUB75_PPA_AVAILABLE
+namespace {
+constexpr size_t kPpaAlignBytes = CONFIG_CACHE_L1_CACHE_LINE_SIZE;
+inline size_t align_up(size_t value, size_t alignment) {
+  return (value + alignment - 1) & ~(alignment - 1);
+}
+}  // namespace
+
+bool ParlioDma::ensure_ppa_rgb888_buffer(size_t bytes) {
+  const size_t aligned_bytes = align_up(bytes, kPpaAlignBytes);
+  if (ppa_rgb888_buffer_ && ppa_rgb888_buffer_size_ >= aligned_bytes) {
+    return true;
+  }
+
+  if (ppa_rgb888_buffer_) {
+    heap_caps_free(ppa_rgb888_buffer_);
+    ppa_rgb888_buffer_ = nullptr;
+    ppa_rgb888_buffer_size_ = 0;
+  }
+
+  ppa_rgb888_buffer_ = static_cast<uint8_t *>(
+      heap_caps_aligned_alloc(kPpaAlignBytes, aligned_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!ppa_rgb888_buffer_) {
+    ppa_rgb888_buffer_ = static_cast<uint8_t *>(
+        heap_caps_aligned_alloc(kPpaAlignBytes, aligned_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  }
+
+  if (!ppa_rgb888_buffer_) {
+    ESP_LOGW(TAG, "PPA scratch allocation failed (%zu bytes)", aligned_bytes);
+    return false;
+  }
+
+  ppa_rgb888_buffer_size_ = aligned_bytes;
+  return true;
+}
+
+bool ParlioDma::ppa_convert_rgb565_to_rgb888(const uint8_t *src, uint16_t w, uint16_t h, const uint8_t **out, Hub75Rotation rotation) {
+  if (!ppa_srm_handle_ || !src || w == 0 || h == 0) {
+    return false;
+  }
+
+  // Map Hub75Rotation to PPA rotation angle
+  ppa_srm_rotation_angle_t ppa_angle;
+  switch (rotation) {
+    case Hub75Rotation::ROTATE_0:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_0;
+      break;
+    case Hub75Rotation::ROTATE_90:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_90;
+      break;
+    case Hub75Rotation::ROTATE_180:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_180;
+      break;
+    case Hub75Rotation::ROTATE_270:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_270;
+      break;
+    default:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_0;
+      break;
+  }
+
+  // For 90/270 degree rotations, output dimensions are swapped
+  const bool swap_dimensions = (rotation == Hub75Rotation::ROTATE_90 || rotation == Hub75Rotation::ROTATE_270);
+  const uint16_t out_w = swap_dimensions ? h : w;
+  const uint16_t out_h = swap_dimensions ? w : h;
+
+  const size_t in_bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * 2;
+  const size_t out_bytes = static_cast<size_t>(out_w) * static_cast<size_t>(out_h) * 3;
+  const size_t out_bytes_aligned = align_up(out_bytes, kPpaAlignBytes);
+
+  if (!ensure_ppa_rgb888_buffer(out_bytes)) {
+    return false;
+  }
+
+  if (esp_ptr_external_ram(src)) {
+    esp_cache_msync(const_cast<uint8_t *>(src), in_bytes,
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+  }
+
+  ppa_srm_oper_config_t srm_cfg = {};
+  srm_cfg.in.buffer = src;
+  srm_cfg.in.pic_w = w;
+  srm_cfg.in.pic_h = h;
+  srm_cfg.in.block_w = w;
+  srm_cfg.in.block_h = h;
+  srm_cfg.in.block_offset_x = 0;
+  srm_cfg.in.block_offset_y = 0;
+  srm_cfg.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+
+  srm_cfg.out.buffer = ppa_rgb888_buffer_;
+  srm_cfg.out.buffer_size = out_bytes_aligned;
+  srm_cfg.out.pic_w = out_w;
+  srm_cfg.out.pic_h = out_h;
+  srm_cfg.out.block_offset_x = 0;
+  srm_cfg.out.block_offset_y = 0;
+  srm_cfg.out.srm_cm = PPA_SRM_COLOR_MODE_RGB888;
+
+  srm_cfg.rotation_angle = ppa_angle;
+  srm_cfg.scale_x = 1.0f;
+  srm_cfg.scale_y = 1.0f;
+  srm_cfg.mirror_x = false;
+  srm_cfg.mirror_y = false;
+  srm_cfg.rgb_swap = true;  // Swap R and B channels (RGB565 is typically BGR565)
+  srm_cfg.byte_swap = false;
+  srm_cfg.alpha_update_mode = PPA_ALPHA_NO_CHANGE;
+  srm_cfg.alpha_fix_val = 0;
+  srm_cfg.mode = PPA_TRANS_MODE_BLOCKING;
+  srm_cfg.user_data = nullptr;
+
+  esp_err_t err = ppa_do_scale_rotate_mirror(ppa_srm_handle_, &srm_cfg);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "PPA RGB565->RGB888 conversion failed: %s", esp_err_to_name(err));
+    return false;
+  }
+
+  if (esp_ptr_external_ram(ppa_rgb888_buffer_)) {
+    // Invalidate cache after PPA writes to PSRAM (M2C = Memory to Cache)
+    // Buffer is already aligned via heap_caps_aligned_alloc(), no UNALIGNED flag needed
+    esp_cache_msync(ppa_rgb888_buffer_, out_bytes_aligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+  }
+
+  *out = ppa_rgb888_buffer_;
+  return true;
+}
+#endif
 
 void ParlioDma::flip_buffer() {
   // Single buffer mode: no-op (both indices point to buffer 0)

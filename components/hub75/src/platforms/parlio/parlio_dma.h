@@ -15,6 +15,13 @@
 #include "../platform_dma.h"
 #include <cstddef>
 #include <driver/parlio_tx.h>
+#if defined(CONFIG_SOC_PPA_SUPPORTED) && defined(CONFIG_IDF_TARGET_ESP32P4) && __has_include(<driver/ppa.h>)
+#define HUB75_PPA_AVAILABLE 1
+struct ppa_client_t;
+using ppa_client_handle_t = ppa_client_t *;
+#else
+#define HUB75_PPA_AVAILABLE 0
+#endif
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <vector>
@@ -98,6 +105,11 @@ class ParlioDma : public PlatformDma {
   static void tx_task_trampoline(void *arg);
   void tx_task_loop();
 
+#if HUB75_PPA_AVAILABLE
+  bool ppa_convert_rgb565_to_rgb888(const uint8_t *src, uint16_t w, uint16_t h, const uint8_t **out, Hub75Rotation rotation);
+  bool ensure_ppa_rgb888_buffer(size_t bytes);
+#endif
+
   inline void set_clock_enable(uint16_t &word, bool enable) { word = enable ? (word | 0x8000) : (word & 0x7FFF); }
 
   parlio_tx_unit_handle_t tx_unit_;
@@ -163,6 +175,12 @@ class ParlioDma : public PlatformDma {
   uint8_t basis_brightness_;
   float intensity_;
   bool transfer_started_;
+
+#if HUB75_PPA_AVAILABLE
+  ppa_client_handle_t ppa_srm_handle_;
+  uint8_t *ppa_rgb888_buffer_;
+  size_t ppa_rgb888_buffer_size_;
+#endif
 };
 
 }  // namespace hub75

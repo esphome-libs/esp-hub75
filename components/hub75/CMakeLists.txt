@@ -13,6 +13,11 @@ set(HUB75_REQUIRES
 if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
     list(APPEND HUB75_REQUIRES esp_mm)
 endif()
+
+if(IDF_TARGET STREQUAL "esp32p4")
+    list(APPEND HUB75_REQUIRES esp_driver_ppa)
+endif()
+
 # ESP-IDF 6.0+ split drivers into separate components
 if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
     list(APPEND HUB75_REQUIRES esp_driver_gpio)
