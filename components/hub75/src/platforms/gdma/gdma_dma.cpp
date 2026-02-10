@@ -198,6 +198,12 @@ bool GdmaDma::init() {
   LCD_CAM.lcd_misc.lcd_afifo_reset = 1;  // Reset LCD TX FIFO
 
   // Note: No EOF callback needed with descriptor-chain approach
+
+  // Register frame callback if already set
+  if (frame_callback_) {
+    gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof};
+    gdma_register_tx_event_callbacks(dma_chan_, &cbs, this);
+  }
   // The descriptor chain encodes all timing via repetition counts
 
   ESP_LOGI(TAG, "GDMA EOF callback registered successfully");
@@ -443,6 +449,28 @@ void GdmaDma::stop_transfer() {
   gdma_stop(dma_chan_);
 
   ESP_LOGI(TAG, "DMA transfer stopped");
+}
+
+void GdmaDma::set_frame_callback(Hub75FrameCallback callback, void *arg) {
+  PlatformDma::set_frame_callback(callback, arg);
+
+  if (dma_chan_) {
+    if (callback) {
+      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof};
+      gdma_register_tx_event_callbacks(dma_chan_, &cbs, this);
+    } else {
+      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = NULL};
+      gdma_register_tx_event_callbacks(dma_chan_, &cbs, NULL);
+    }
+  }
+}
+
+bool IRAM_ATTR GdmaDma::on_trans_eof(gdma_channel_handle_t dma_chan, gdma_event_data_t *event_data, void *user_data) {
+  auto *dma = static_cast<GdmaDma *>(user_data);
+  if (dma && dma->frame_callback_) {
+    return dma->frame_callback_(dma->frame_callback_arg_);
+  }
+  return false;
 }
 
 // No EOF callback needed - descriptor chain handles all timing

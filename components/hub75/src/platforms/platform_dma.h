@@ -32,7 +32,24 @@ class PlatformDma {
  public:
   virtual ~PlatformDma() = default;
 
+  /**
+   * @brief Register a callback to be called on each frame completion
+   *
+   * This callback is executed from an ISR (Interrupt Service Routine).
+   * Code in the callback should be minimal and IRAM_ATTR safe.
+   *
+   * @param callback Function to call
+   * @param arg Argument to pass to the callback
+   */
+  virtual void set_frame_callback(Hub75FrameCallback callback, void *arg) {
+    frame_callback_ = callback;
+    frame_callback_arg_ = arg;
+  }
+
  protected:
+   Hub75FrameCallback frame_callback_ = nullptr;
+   void *frame_callback_arg_ = nullptr;
+
   /**
    * @brief Protected constructor - initializes LUT based on config
    * @param config Hub75 configuration with gamma mode and bit depth

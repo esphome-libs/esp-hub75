@@ -204,6 +204,12 @@ void Hub75Driver::set_intensity(float intensity) {
   }
 }
 
+void Hub75Driver::set_frame_callback(Hub75FrameCallback callback, void *arg) {
+  if (dma_) {
+    dma_->set_frame_callback(callback, arg);
+  }
+}
+
 // ============================================================================
 // Information
 // ============================================================================

@@ -21,13 +21,20 @@
 #include <cassert>
 #include <cstring>
 #include <algorithm>
+#include <vector>
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
 #include <esp_cache.h>
 #include <esp_memory_utils.h>
+#if HUB75_PPA_AVAILABLE
+#include <driver/ppa.h>
+#endif
 
 static const char *const TAG = "ParlioDma";
+static constexpr size_t kParlioMaxTransferBytes = 65534;  // Must be < 65535 per driver constraint
+static constexpr size_t kParlioMaxTransferBits = 65535;   // Conservative limit if API expects bits
+static constexpr size_t kParlioChunkMaxWords = 4080;      // Max safe chunk (must be even for 32-bit align)
 
 namespace hub75 {
 
@@ -87,16 +94,47 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       front_idx_(0),
       active_idx_(0),
       is_double_buffered_(false),
+      total_buffer_bytes_(0),
+      total_buffer_words_(0),
+      chunk_words_(0),
+      chunk_count_(0),
+      chunks_per_frame_(0),
+      segment_count_(0),
+      segment_index_(0),
+      segment_offset_words_(0),
+      gen_segment_index_(0),
+      gen_segment_offset_words_(0),
+      tx_queue_depth_(0),
+      tx_idx_(0),
+      pending_tx_idx_(0),
+      tx_swap_pending_(false),
+      gen_tx_idx_(0),
+      gen_swap_pending_(false),
+      completed_chunk_index_(0),
+      chunk_ring_capacity_(0),
+      chunk_ring_head_(0),
+      chunk_ring_tail_(0),
+      chunk_ring_count_(0),
+      tx_task_(nullptr),
+      tx_task_started_(false),
       basis_brightness_(config.brightness),
       intensity_(1.0f),
-      transfer_started_(false) {
+      transfer_started_(false)
+    #if HUB75_PPA_AVAILABLE
+      , ppa_srm_handle_(nullptr),
+      ppa_rgb888_buffer_(nullptr),
+      ppa_rgb888_buffer_size_(0)
+    #endif
+    {
   // Initialize transmit config
   // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
   // to match the physical shift register layout
-  transmit_config_.idle_value = 0x00;
+  // Ensure output is blanked during any idle gaps between queued chunks
+  // (OE=1, clock gate off by default)
+  transmit_config_.idle_value = (1 << OE_BIT);
   transmit_config_.bitscrambler_program = nullptr;
-  transmit_config_.flags.queue_nonblocking = 0;
-  transmit_config_.flags.loop_transmission = 1;  // Continuous refresh
+  transmit_config_.flags.queue_nonblocking = 1;
+  transmit_config_.flags.loop_transmission = 0;  // Use manual chunked queueing
 }
 
 ParlioDma::~ParlioDma() { ParlioDma::shutdown(); }
@@ -164,11 +202,43 @@ bool ParlioDma::init() {
   }
   ESP_LOGI(TAG, "PARLIO TX unit enabled");
 
+  // Register callbacks for chunked transmission BEFORE queueing (needed to keep queue fed)
+  parlio_tx_event_callbacks_t cbs = {.on_trans_done = ParlioDma::on_trans_done, .on_buffer_switched = NULL};
+  parlio_tx_unit_register_event_callbacks(tx_unit_, &cbs, this);
+
+  // Start task that feeds chunks on TX done notifications
+  if (!tx_task_started_) {
+    BaseType_t ok = xTaskCreatePinnedToCore(ParlioDma::tx_task_trampoline, "parlio_tx", 4096, this,
+                                            configMAX_PRIORITIES - 2, &tx_task_, tskNO_AFFINITY);
+    if (ok != pdPASS) {
+      ESP_LOGE(TAG, "Failed to create PARLIO TX task");
+      return false;
+    }
+    tx_task_started_ = true;
+  }
+
   // Build transaction queue
   if (!build_transaction_queue()) {
     ESP_LOGE(TAG, "Failed to build transaction queue");
     return false;
   }
+
+#if HUB75_PPA_AVAILABLE
+  if (!ppa_srm_handle_) {
+    ppa_client_config_t ppa_cfg = {
+        .oper_type = PPA_OPERATION_SRM,
+        .max_pending_trans_num = 1,
+        .data_burst_length = PPA_DATA_BURST_LENGTH_128,
+    };
+    esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &ppa_srm_handle_);
+    if (ppa_err != ESP_OK) {
+      ESP_LOGW(TAG, "PPA SRM registration failed: %s", esp_err_to_name(ppa_err));
+      ppa_srm_handle_ = nullptr;
+    } else {
+      ESP_LOGI(TAG, "PPA SRM client registered successfully");
+    }
+  }
+#endif
 
   ESP_LOGI(TAG, "PARLIO TX initialized successfully with circular DMA");
 
@@ -178,6 +248,25 @@ bool ParlioDma::init() {
 void ParlioDma::shutdown() {
   if (transfer_started_) {
     ParlioDma::stop_transfer();
+  }
+
+#if HUB75_PPA_AVAILABLE
+  if (ppa_srm_handle_) {
+    ppa_unregister_client(ppa_srm_handle_);
+    ppa_srm_handle_ = nullptr;
+  }
+  if (ppa_rgb888_buffer_) {
+    heap_caps_free(ppa_rgb888_buffer_);
+    ppa_rgb888_buffer_ = nullptr;
+    ppa_rgb888_buffer_size_ = 0;
+  }
+#endif
+
+  if (tx_task_started_ && tx_task_) {
+    TaskHandle_t task = tx_task_;
+    tx_task_ = nullptr;
+    tx_task_started_ = false;
+    vTaskDelete(task);
   }
 
   if (tx_unit_) {
@@ -247,9 +336,9 @@ void ParlioDma::configure_parlio() {
       .valid_gpio_num = GPIO_NUM_NC,  // Not using valid signal
       .valid_start_delay = 0,
       .valid_stop_delay = 0,
-      .trans_queue_depth = 4,  // Match ESP-IDF example (was: num_rows_ * bit_depth_)
-      .max_transfer_size = max_buffer_size * sizeof(uint16_t),
-      .dma_burst_size = 0,  // Default
+      .trans_queue_depth = 256,  // Match ESP-IDF example (was: num_rows_ * bit_depth_)
+      .max_transfer_size = std::min(max_buffer_size * sizeof(uint16_t), kParlioMaxTransferBytes),
+      .dma_burst_size = 32,  // 32-byte burst for 32-byte aligned PSRAM buffers
       .sample_edge = PARLIO_SAMPLE_EDGE_POS,
       .bit_pack_order = PARLIO_BIT_PACK_ORDER_LSB,  // Explicit LSB to match ESP-IDF example
       .flags = {
@@ -279,6 +368,19 @@ void ParlioDma::configure_parlio() {
   ESP_LOGI(TAG, "  Clock gating: NOT SUPPORTED");
 #endif
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
+  tx_queue_depth_ = config.trans_queue_depth;
+
+  // GDMA Priority Configuration Note:
+  // PARLIO driver doesn't expose its internal GDMA handle, preventing direct priority configuration.
+  // Current optimizations for LED matrix performance:
+  // - 32-byte aligned PSRAM buffers for efficient burst transfers (dma_burst_size = 32)
+  // - High-priority FreeRTOS task (configMAX_PRIORITIES - 2) for feeding the TX queue
+  // - Large transaction queue depth (256) to keep the pipeline full
+  // 
+  // For true GDMA priority control, the PARLIO driver would need to be modified to expose
+  // gdma_set_transfer_ability() or similar APIs on its internal GDMA channel.
+
+  ESP_LOGI(TAG, "  DMA optimization: 32-byte aligned PSRAM buffers with burst transfers");
 }
 
 void ParlioDma::configure_gpio() {
@@ -392,6 +494,14 @@ bool ParlioDma::allocate_row_buffers() {
       bp.padding_words = calculate_bcm_padding(bit);
       bp.total_words = bp.pixel_words + bp.padding_words;
 
+      // Ensure 32-bit alignment (even number of uint16_t words)
+      // ESP32-P4 PARLIO DMA requires 4-byte aligned start addresses
+      // Since buffers are packed contiguously, each buffer must be a multiple of 4 bytes
+      if (bp.total_words % 2 != 0) {
+        bp.padding_words++;
+        bp.total_words++;
+      }
+
       total_words += bp.total_words;
 
       // Log once per bit plane (sizes are identical across all rows)
@@ -411,11 +521,14 @@ bool ParlioDma::allocate_row_buffers() {
   static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL;
   ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (internal RAM)", total_bytes, num_rows_,
            bit_depth_);
+  dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 #else
   static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM;
-  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (PSRAM)", total_bytes, num_rows_, bit_depth_);
+  // Use 32-byte (8-word) alignment for PSRAM to enable hardware burst transfers
+  static constexpr size_t PSRAM_ALIGNMENT = 32;
+  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (PSRAM, 32-byte aligned)", total_bytes, num_rows_, bit_depth_);
+  dma_buffers_[0] = (uint16_t *) heap_caps_aligned_calloc(PSRAM_ALIGNMENT, total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 #endif
-  dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 
   if (!dma_buffers_[0]) {
     ESP_LOGE(TAG, "Failed to allocate %zu bytes of DMA memory for buffer [0]", total_bytes);
@@ -443,7 +556,12 @@ bool ParlioDma::allocate_row_buffers() {
   if (config_.double_buffer) {
     ESP_LOGI(TAG, "Allocating buffer [1]: %zu bytes (double buffering enabled)", total_bytes);
     row_buffers_[1] = new BitPlaneBuffer[buffer_count];
+#ifdef CONFIG_IDF_TARGET_ESP32C6
     dma_buffers_[1] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
+#else
+    // Use 32-byte (8-word) alignment for PSRAM to enable hardware burst transfers
+    dma_buffers_[1] = (uint16_t *) heap_caps_aligned_calloc(PSRAM_ALIGNMENT, total_words, sizeof(uint16_t), DMA_MEM_CAPS);
+#endif
 
     if (!dma_buffers_[1]) {
       ESP_LOGE(TAG, "Failed to allocate %zu bytes of DMA memory for buffer [1]", total_bytes);
@@ -501,6 +619,50 @@ void ParlioDma::stop_transfer() {
   ESP_LOGI(TAG, "Stopping PARLIO transfer");
   parlio_tx_unit_disable(tx_unit_);
   transfer_started_ = false;
+}
+
+void ParlioDma::set_frame_callback(Hub75FrameCallback callback, void *arg) {
+  PlatformDma::set_frame_callback(callback, arg);
+
+  if (tx_unit_) {
+    parlio_tx_event_callbacks_t cbs = {.on_trans_done = ParlioDma::on_trans_done, .on_buffer_switched = NULL};
+    parlio_tx_unit_register_event_callbacks(tx_unit_, &cbs, this);
+  }
+}
+
+bool IRAM_ATTR ParlioDma::on_buffer_switched(parlio_tx_unit_handle_t tx_unit,
+                                             const parlio_tx_buffer_switched_event_data_t *event_data,
+                                             void *user_data) {
+  auto *dma = static_cast<ParlioDma *>(user_data);
+  if (dma && dma->frame_callback_) {
+    return dma->frame_callback_(dma->frame_callback_arg_);
+  }
+  return false;
+}
+
+bool IRAM_ATTR ParlioDma::on_trans_done(parlio_tx_unit_handle_t tx_unit,
+                                        const parlio_tx_done_event_data_t *event_data,
+                                        void *user_data) {
+  auto *dma = static_cast<ParlioDma *>(user_data);
+  if (!dma) {
+    return false;
+  }
+  BaseType_t higher_woken = pdFALSE;
+  if (dma->tx_task_) {
+    vTaskNotifyGiveFromISR(dma->tx_task_, &higher_woken);
+  }
+
+  // Track completed chunks to detect frame boundary in ISR
+  dma->completed_chunk_index_++;
+  if (dma->completed_chunk_index_ >= dma->chunks_per_frame_) {
+    dma->completed_chunk_index_ = 0;
+    if (dma->frame_callback_) {
+      const bool cb_yield = dma->frame_callback_(dma->frame_callback_arg_);
+      return (higher_woken == pdTRUE) || cb_yield;
+    }
+  }
+
+  return higher_woken == pdTRUE;
 }
 
 void ParlioDma::initialize_buffer_internal(BitPlaneBuffer *buffers) {
@@ -767,25 +929,64 @@ bool ParlioDma::build_transaction_queue() {
     return false;
   }
 
-  ESP_LOGD(TAG, "Starting loop transmission...");
+  ESP_LOGI(TAG, "Starting chunked transmission...");
 
   // Use cached buffer size (computed once in allocate_row_buffers)
-  size_t total_words = total_buffer_bytes_ / sizeof(uint16_t);
-  size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
-
-  ESP_LOGD(TAG, "Transmitting entire buffer: %zu words (%zu bytes, %zu bits)", total_words, total_buffer_bytes_,
-           total_bits);
-  ESP_LOGD(TAG, "Buffer start address: %p (front buffer [%d])", dma_buffers_[front_idx_], front_idx_);
-
-  // Start loop transmission with front buffer (ESP-IDF example calls transmit ONCE with loop_transmission=true)
-  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to start loop transmission: %s", esp_err_to_name(err));
-    ESP_LOGE(TAG, "  Buffer: %p, bits: %zu", dma_buffers_[front_idx_], total_bits);
+  total_buffer_words_ = total_buffer_bytes_ / sizeof(uint16_t);
+  chunk_words_ = std::min(total_buffer_words_, kParlioChunkMaxWords);
+  if (chunk_words_ == 0) {
+    ESP_LOGE(TAG, "Invalid chunk size");
     return false;
   }
+  chunk_count_ = (total_buffer_words_ + chunk_words_ - 1) / chunk_words_;
+  segment_count_ = static_cast<size_t>(num_rows_) * static_cast<size_t>(bit_depth_);
+  segment_index_ = 0;
+  segment_offset_words_ = 0;
+  chunks_per_frame_ = 0;
+  for (size_t i = 0; i < segment_count_; i++) {
+    const BitPlaneBuffer &bp = row_buffers_[front_idx_][i];
+    chunks_per_frame_ += (bp.total_words + chunk_words_ - 1) / chunk_words_;
+  }
+  completed_chunk_index_ = 0;
+  tx_idx_ = front_idx_;
+  pending_tx_idx_ = tx_idx_;
+  tx_swap_pending_ = false;
+  gen_segment_index_ = segment_index_;
+  gen_segment_offset_words_ = segment_offset_words_;
+  gen_tx_idx_ = tx_idx_;
+  gen_swap_pending_ = tx_swap_pending_;
 
-  ESP_LOGI(TAG, "Loop transmission started successfully");
+  // Set up chunk ring buffer sized slightly larger than the hardware queue to keep it fed
+  chunk_ring_capacity_ = std::min(chunks_per_frame_, tx_queue_depth_ + 2);
+  if (chunk_ring_capacity_ == 0) {
+    chunk_ring_capacity_ = 1;  // Safety fallback
+  }
+  chunk_ring_.assign(chunk_ring_capacity_, {});
+  chunk_ring_head_ = 0;
+  chunk_ring_tail_ = 0;
+  chunk_ring_count_ = 0;
+  fill_chunk_ring();
+
+  const size_t total_bits = total_buffer_bytes_ * 8;  // Convert bytes to bits
+
+  ESP_LOGI(TAG, "Transmitting buffer in chunks: %zu words (%zu bytes, %zu bits)", total_buffer_words_,
+           total_buffer_bytes_, total_bits);
+  ESP_LOGI(TAG, "Chunk size: %zu words, chunks/frame: %zu, queue depth: %zu, ring: %zu", chunk_words_,
+           chunk_count_, tx_queue_depth_, chunk_ring_capacity_);
+  ESP_LOGI(TAG, "Buffer start address: %p (tx buffer [%d])", dma_buffers_[tx_idx_], tx_idx_);
+  ESP_LOGI(TAG, "First chunk: %zu words (%zu bytes, %zu bits)", chunk_words_,
+           chunk_words_ * sizeof(uint16_t), chunk_words_ * 16);
+
+  // Prime the queue with initial chunks
+  const size_t prime_count = std::min(tx_queue_depth_, chunk_count_);
+  for (size_t i = 0; i < prime_count; i++) {
+    if (!queue_next_chunk(false)) {
+      ESP_LOGE(TAG, "Failed to queue chunk %zu/%zu", i + 1, prime_count);
+      return false;
+    }
+  }
+
+  ESP_LOGI(TAG, "Chunked transmission started successfully");
 
   return true;
 }
@@ -841,18 +1042,44 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
     h = rotated_height - y;
   }
 
+  const uint8_t *src_buffer = buffer;
+  Hub75PixelFormat src_format = format;
+  Hub75ColorOrder src_color_order = color_order;
+  bool src_big_endian = big_endian;
+  Hub75Rotation effective_rotation = rotation_;
+  uint16_t effective_w = w;
+  uint16_t effective_h = h;
+
+#if HUB75_PPA_AVAILABLE
+  if (format == Hub75PixelFormat::RGB565 && color_order == Hub75ColorOrder::RGB && !big_endian) {
+    const uint8_t *ppa_buffer = nullptr;
+    if (ppa_convert_rgb565_to_rgb888(buffer, w, h, &ppa_buffer, rotation_)) {
+      src_buffer = ppa_buffer;
+      src_format = Hub75PixelFormat::RGB888;
+      src_color_order = Hub75ColorOrder::RGB;
+      src_big_endian = false;
+      effective_rotation = Hub75Rotation::ROTATE_0;  // PPA already rotated
+      // Swap dimensions if PPA rotated by 90/270
+      if (rotation_ == Hub75Rotation::ROTATE_90 || rotation_ == Hub75Rotation::ROTATE_270) {
+        effective_w = h;
+        effective_h = w;
+      }
+    }
+  }
+#endif
+
   // Pre-compute pixel stride for pointer arithmetic (avoids multiply per pixel)
-  const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
-                              : (format == Hub75PixelFormat::RGB565) ? 2
-                                                                     : /* RGB888_32 */ 4;
+  const size_t pixel_stride = (src_format == Hub75PixelFormat::RGB888)   ? 3
+                              : (src_format == Hub75PixelFormat::RGB565) ? 2
+                                                                        : /* RGB888_32 */ 4;
 
   // Check if we can use identity fast path (no coordinate transforms needed)
-  const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
+  const bool identity_transform = (effective_rotation == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
 
   // Process each pixel
-  const uint8_t *pixel_ptr = buffer;
-  for (uint16_t dy = 0; dy < h; dy++) {
-    for (uint16_t dx = 0; dx < w; dx++) {
+  const uint8_t *pixel_ptr = src_buffer;
+  for (uint16_t dy = 0; dy < effective_h; dy++) {
+    for (uint16_t dx = 0; dx < effective_w; dx++) {
       uint16_t px = x + dx;
       uint16_t py = y + dy;
       uint16_t row;
@@ -870,7 +1097,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
         }
       } else {
         // Full coordinate transformation pipeline
-        auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
+        auto transformed = transform_coordinate(px, py, effective_rotation, needs_layout_remap_, needs_scan_remap_, layout_,
                                                 scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = transformed.x;
@@ -880,7 +1107,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
 
       // Extract RGB888 from pixel format (always_inline will inline the switch)
       uint8_t r8 = 0, g8 = 0, b8 = 0;
-      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      extract_rgb888_from_format(pixel_ptr, 0, src_format, src_color_order, src_big_endian, r8, g8, b8);
       pixel_ptr += pixel_stride;
 
       // Apply LUT correction
@@ -1044,6 +1271,132 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   }
 }
 
+#if HUB75_PPA_AVAILABLE
+namespace {
+constexpr size_t kPpaAlignBytes = CONFIG_CACHE_L1_CACHE_LINE_SIZE;
+inline size_t align_up(size_t value, size_t alignment) {
+  return (value + alignment - 1) & ~(alignment - 1);
+}
+}  // namespace
+
+bool ParlioDma::ensure_ppa_rgb888_buffer(size_t bytes) {
+  const size_t aligned_bytes = align_up(bytes, kPpaAlignBytes);
+  if (ppa_rgb888_buffer_ && ppa_rgb888_buffer_size_ >= aligned_bytes) {
+    return true;
+  }
+
+  if (ppa_rgb888_buffer_) {
+    heap_caps_free(ppa_rgb888_buffer_);
+    ppa_rgb888_buffer_ = nullptr;
+    ppa_rgb888_buffer_size_ = 0;
+  }
+
+  ppa_rgb888_buffer_ = static_cast<uint8_t *>(
+      heap_caps_aligned_alloc(kPpaAlignBytes, aligned_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!ppa_rgb888_buffer_) {
+    ppa_rgb888_buffer_ = static_cast<uint8_t *>(
+        heap_caps_aligned_alloc(kPpaAlignBytes, aligned_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  }
+
+  if (!ppa_rgb888_buffer_) {
+    ESP_LOGW(TAG, "PPA scratch allocation failed (%zu bytes)", aligned_bytes);
+    return false;
+  }
+
+  ppa_rgb888_buffer_size_ = aligned_bytes;
+  return true;
+}
+
+bool ParlioDma::ppa_convert_rgb565_to_rgb888(const uint8_t *src, uint16_t w, uint16_t h, const uint8_t **out, Hub75Rotation rotation) {
+  if (!ppa_srm_handle_ || !src || w == 0 || h == 0) {
+    return false;
+  }
+
+  // Map Hub75Rotation to PPA rotation angle
+  ppa_srm_rotation_angle_t ppa_angle;
+  switch (rotation) {
+    case Hub75Rotation::ROTATE_0:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_0;
+      break;
+    case Hub75Rotation::ROTATE_90:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_90;
+      break;
+    case Hub75Rotation::ROTATE_180:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_180;
+      break;
+    case Hub75Rotation::ROTATE_270:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_270;
+      break;
+    default:
+      ppa_angle = PPA_SRM_ROTATION_ANGLE_0;
+      break;
+  }
+
+  // For 90/270 degree rotations, output dimensions are swapped
+  const bool swap_dimensions = (rotation == Hub75Rotation::ROTATE_90 || rotation == Hub75Rotation::ROTATE_270);
+  const uint16_t out_w = swap_dimensions ? h : w;
+  const uint16_t out_h = swap_dimensions ? w : h;
+
+  const size_t in_bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * 2;
+  const size_t out_bytes = static_cast<size_t>(out_w) * static_cast<size_t>(out_h) * 3;
+  const size_t out_bytes_aligned = align_up(out_bytes, kPpaAlignBytes);
+
+  if (!ensure_ppa_rgb888_buffer(out_bytes)) {
+    return false;
+  }
+
+  if (esp_ptr_external_ram(src)) {
+    esp_cache_msync(const_cast<uint8_t *>(src), in_bytes,
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+  }
+
+  ppa_srm_oper_config_t srm_cfg = {};
+  srm_cfg.in.buffer = src;
+  srm_cfg.in.pic_w = w;
+  srm_cfg.in.pic_h = h;
+  srm_cfg.in.block_w = w;
+  srm_cfg.in.block_h = h;
+  srm_cfg.in.block_offset_x = 0;
+  srm_cfg.in.block_offset_y = 0;
+  srm_cfg.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+
+  srm_cfg.out.buffer = ppa_rgb888_buffer_;
+  srm_cfg.out.buffer_size = out_bytes_aligned;
+  srm_cfg.out.pic_w = out_w;
+  srm_cfg.out.pic_h = out_h;
+  srm_cfg.out.block_offset_x = 0;
+  srm_cfg.out.block_offset_y = 0;
+  srm_cfg.out.srm_cm = PPA_SRM_COLOR_MODE_RGB888;
+
+  srm_cfg.rotation_angle = ppa_angle;
+  srm_cfg.scale_x = 1.0f;
+  srm_cfg.scale_y = 1.0f;
+  srm_cfg.mirror_x = false;
+  srm_cfg.mirror_y = false;
+  srm_cfg.rgb_swap = true;  // Swap R and B channels (RGB565 is typically BGR565)
+  srm_cfg.byte_swap = false;
+  srm_cfg.alpha_update_mode = PPA_ALPHA_NO_CHANGE;
+  srm_cfg.alpha_fix_val = 0;
+  srm_cfg.mode = PPA_TRANS_MODE_BLOCKING;
+  srm_cfg.user_data = nullptr;
+
+  esp_err_t err = ppa_do_scale_rotate_mirror(ppa_srm_handle_, &srm_cfg);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "PPA RGB565->RGB888 conversion failed: %s", esp_err_to_name(err));
+    return false;
+  }
+
+  if (esp_ptr_external_ram(ppa_rgb888_buffer_)) {
+    // Invalidate cache after PPA writes to PSRAM (M2C = Memory to Cache)
+    // Buffer is already aligned via heap_caps_aligned_alloc(), no UNALIGNED flag needed
+    esp_cache_msync(ppa_rgb888_buffer_, out_bytes_aligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+  }
+
+  *out = ppa_rgb888_buffer_;
+  return true;
+}
+#endif
+
 void ParlioDma::flip_buffer() {
   // Single buffer mode: no-op (both indices point to buffer 0)
   if (!row_buffers_[1] || !dma_buffers_[1]) {
@@ -1057,11 +1410,163 @@ void ParlioDma::flip_buffer() {
   // Swap indices (front ↔ active)
   std::swap(front_idx_, active_idx_);
 
-  // Queue new front buffer (hardware switches seamlessly after current frame)
-  size_t total_bits = total_buffer_bytes_ * 8;
-  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
+  // Defer hardware buffer switch to frame boundary (handled in on_trans_done)
+  pending_tx_idx_ = front_idx_;
+  tx_swap_pending_ = true;
+
+  // Reset ring generation so subsequent descriptors respect the pending swap
+  gen_segment_index_ = segment_index_;
+  gen_segment_offset_words_ = segment_offset_words_;
+  gen_tx_idx_ = tx_idx_;
+  gen_swap_pending_ = tx_swap_pending_;
+  chunk_ring_head_ = 0;
+  chunk_ring_tail_ = 0;
+  chunk_ring_count_ = 0;
+  fill_chunk_ring();
+}
+
+bool ParlioDma::generate_next_chunk_descriptor(ChunkDescriptor &desc) {
+  if (total_buffer_words_ == 0 || chunk_words_ == 0 || segment_count_ == 0) {
+    return false;
+  }
+
+  // Use segment (bit-plane) boundaries to avoid chunk splits mid-plane
+  BitPlaneBuffer &bp = row_buffers_[gen_tx_idx_][gen_segment_index_];
+  const size_t remaining = bp.total_words - gen_segment_offset_words_;
+  const size_t words = std::min(chunk_words_, remaining);
+
+  desc.ptr = bp.data + gen_segment_offset_words_;
+  desc.words = words;
+  desc.bits = words * 16;
+
+  // Compute next state without committing so we can pre-stage descriptors in the ring
+  size_t next_segment_offset = gen_segment_offset_words_;
+  size_t next_segment_index = gen_segment_index_;
+  int next_tx_idx = gen_tx_idx_;
+  bool clear_swap_pending = false;
+  const bool swap_pending_now = gen_swap_pending_;
+
+  if (words == remaining) {
+    next_segment_offset = 0;
+    next_segment_index++;
+    if (next_segment_index >= segment_count_) {
+      next_segment_index = 0;
+      if (swap_pending_now) {
+        next_tx_idx = pending_tx_idx_;
+        clear_swap_pending = true;
+      }
+    }
+  } else {
+    next_segment_offset += words;
+  }
+
+  desc.next_segment_index = next_segment_index;
+  desc.next_segment_offset_words = next_segment_offset;
+  desc.next_tx_idx = next_tx_idx;
+  desc.swap_pending_cleared = clear_swap_pending;
+
+  // Advance generator state to reflect look-ahead descriptors
+  gen_segment_index_ = next_segment_index;
+  gen_segment_offset_words_ = next_segment_offset;
+  gen_tx_idx_ = next_tx_idx;
+  gen_swap_pending_ = swap_pending_now && !clear_swap_pending;
+
+  return true;
+}
+
+void ParlioDma::fill_chunk_ring() {
+  while (chunk_ring_count_ < chunk_ring_capacity_) {
+    ChunkDescriptor desc{};
+    if (!generate_next_chunk_descriptor(desc)) {
+      break;
+    }
+    chunk_ring_[chunk_ring_tail_] = desc;
+    chunk_ring_tail_ = (chunk_ring_tail_ + 1) % chunk_ring_capacity_;
+    chunk_ring_count_++;
+  }
+}
+
+bool ParlioDma::queue_next_chunk(bool invoke_frame_callback) {
+  if (!tx_unit_) {
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG, "queue_next_chunk: tx_unit_ is null");
+    }
+    return false;
+  }
+  if (total_buffer_words_ == 0 || chunk_words_ == 0 || segment_count_ == 0) {
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG,
+               "queue_next_chunk: invalid sizes total_words=%zu chunk_words=%zu segments=%zu",
+               total_buffer_words_, chunk_words_, segment_count_);
+    }
+    return false;
+  }
+
+  if (chunk_ring_capacity_ == 0) {
+    ESP_LOGE(TAG, "queue_next_chunk: chunk ring not initialized");
+    return false;
+  }
+
+  if (chunk_ring_count_ == 0) {
+    fill_chunk_ring();
+    if (chunk_ring_count_ == 0) {
+      ESP_LOGE(TAG, "queue_next_chunk: ring empty (no descriptor to send)");
+      return false;
+    }
+  }
+
+  const ChunkDescriptor desc = chunk_ring_[chunk_ring_head_];
+
+  // Debug alignment for first few chunks
+  static int debug_chunks = 0;
+  if (debug_chunks < 10) {
+    ESP_LOGI(TAG, "Chunk %d: ptr=%p (align=%lu), words=%zu, bits=%zu, offset=%zu", debug_chunks, desc.ptr,
+             ((uint32_t) desc.ptr) & 3, desc.words, desc.bits, segment_offset_words_);
+    debug_chunks++;
+  }
+
+  esp_err_t err = parlio_tx_unit_transmit(tx_unit_, desc.ptr, desc.bits, &transmit_config_);
   if (err != ESP_OK) {
-    ESP_LOGW(TAG, "flip_buffer: Failed to queue buffer: %s", esp_err_to_name(err));
+    if (!invoke_frame_callback) {
+      ESP_LOGE(TAG,
+               "queue_next_chunk: transmit failed: %s (segment=%zu/%zu, offset=%zu, words=%zu, bits=%zu, ptr=%p)",
+               esp_err_to_name(err), segment_index_ + 1, segment_count_, segment_offset_words_, desc.words, desc.bits,
+               desc.ptr);
+    }
+    return false;
+  }
+
+  // Commit descriptor state after successful enqueue
+  segment_index_ = desc.next_segment_index;
+  segment_offset_words_ = desc.next_segment_offset_words;
+  tx_idx_ = desc.next_tx_idx;
+  if (desc.swap_pending_cleared) {
+    tx_swap_pending_ = false;
+  }
+
+  // Consume ring entry and keep it refilled
+  chunk_ring_head_ = (chunk_ring_head_ + 1) % chunk_ring_capacity_;
+  chunk_ring_count_--;
+  fill_chunk_ring();
+
+  return true;
+}
+
+void ParlioDma::tx_task_trampoline(void *arg) {
+  auto *dma = static_cast<ParlioDma *>(arg);
+  if (dma) {
+    dma->tx_task_loop();
+  }
+  vTaskDelete(NULL);
+}
+
+void ParlioDma::tx_task_loop() {
+  while (true) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (!queue_next_chunk(false)) {
+      // If transmit fails, avoid tight loop
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
   }
 }
 
