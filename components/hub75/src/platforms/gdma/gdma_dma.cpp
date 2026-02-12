@@ -135,16 +135,23 @@ bool GdmaDma::init() {
   configure_gpio();
 
   // Allocate GDMA channel
-  gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
-                                                  .direction = GDMA_CHANNEL_DIRECTION_TX,
-                                                  .flags = {.reserve_sibling = 0
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-                                                            ,
-                                                            .isr_cache_safe = 0
+  gdma_channel_alloc_config_t dma_alloc_config = {
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
+      .sibling_chan = nullptr,
+      .direction = GDMA_CHANNEL_DIRECTION_TX,
 #endif
-                                                  }};
+      .flags = {
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
+          .reserve_sibling = 0,
+#endif
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+          .isr_cache_safe = 0
+#endif
+      }};
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_, nullptr);
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
   esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_);
 #else
   esp_err_t err = gdma_new_channel(&dma_alloc_config, &dma_chan_);
