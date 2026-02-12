@@ -14,7 +14,11 @@ if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
 endif()
 # ESP-IDF 6.0+ split drivers into separate components
 if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
-    list(APPEND HUB75_REQUIRES esp_driver_gpio)
+    list(REMOVE_ITEM HUB75_REQUIRES driver) # Remove old "driver" component
+        list(APPEND HUB75_REQUIRES esp_driver_gpio)
+    if(IDF_TARGET STREQUAL "esp32" OR IDF_TARGET STREQUAL "esp32s2")
+        list(APPEND HUB75_REQUIRES esp_driver_i2s)
+    endif()
     if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
         list(APPEND HUB75_REQUIRES esp_driver_parlio)
     endif()

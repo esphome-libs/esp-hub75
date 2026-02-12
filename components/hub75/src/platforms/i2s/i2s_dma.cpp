@@ -30,7 +30,14 @@
 #include <driver/periph_ctrl.h>
 #endif
 #include <soc/gpio_sig_map.h>
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0) && !__has_include("soc/i2s_periph.h")
+#include <driver/i2s_std.h>
+#include <soc/i2s_reg.h>
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
 #include <soc/i2s_periph.h>
+#endif
+
 #include <esp_heap_caps.h>
 
 static const char *const TAG = "I2sDma";
