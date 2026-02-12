@@ -71,7 +71,7 @@ class I2sDma : public PlatformDma {
    * ESP32: max 10 MHz (80 MHz / 2 / 4)
    * ESP32-S2: max 20 MHz (160 MHz / 2 / 4)
    */
-  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
+  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const;
 
   // ============================================================================
   // Pixel API (Direct DMA Buffer Writes)

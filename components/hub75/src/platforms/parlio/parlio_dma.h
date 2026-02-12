@@ -46,7 +46,7 @@ class ParlioDma : public PlatformDma {
   /**
    * @brief Resolve clock speed to achievable frequency (160 MHz / N)
    */
-  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const override;
+  HUB75_CONST uint32_t resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const;
 
   void draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *buffer, Hub75PixelFormat format,
                    Hub75ColorOrder color_order, bool big_endian) override;
