@@ -135,18 +135,32 @@ bool GdmaDma::init() {
   configure_gpio();
 
   // Allocate GDMA channel
+  //
+  // Both 6.0 betas report ESP_IDF_VERSION as 6.0.0, so we use __has_include to detect
+  // the beta2 API change (soc/gdma_channel.h was removed in the same refactor).
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0) && !__has_include("soc/gdma_channel.h")
+  // ESP-IDF >= 6.0-beta2: simplified config, direction via NULL parameter
+  gdma_channel_alloc_config_t dma_alloc_config = {.flags = {.isr_cache_safe = 0}};
+  esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_, nullptr);
+
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+  // ESP-IDF 5.4 - 6.0-beta1: gdma_new_ahb_channel (2-arg)
   gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
                                                   .direction = GDMA_CHANNEL_DIRECTION_TX,
-                                                  .flags = {.reserve_sibling = 0
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
-                                                            ,
-                                                            .isr_cache_safe = 0
-#endif
-                                                  }};
-
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+                                                  .flags = {.reserve_sibling = 0, .isr_cache_safe = 0}};
   esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_);
+
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+  // ESP-IDF 5.0 - 5.3: gdma_new_channel with isr_cache_safe flag
+  gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
+                                                  .direction = GDMA_CHANNEL_DIRECTION_TX,
+                                                  .flags = {.reserve_sibling = 0, .isr_cache_safe = 0}};
+  esp_err_t err = gdma_new_channel(&dma_alloc_config, &dma_chan_);
+
 #else
+  // ESP-IDF < 5.0: gdma_new_channel without isr_cache_safe
+  gdma_channel_alloc_config_t dma_alloc_config = {
+      .sibling_chan = nullptr, .direction = GDMA_CHANNEL_DIRECTION_TX, .flags = {.reserve_sibling = 0}};
   esp_err_t err = gdma_new_channel(&dma_alloc_config, &dma_chan_);
 #endif
   if (err != ESP_OK) {
