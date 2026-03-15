@@ -149,12 +149,20 @@ menu "HUB75 RGB LED Matrix Driver"
                     Uses panel-width pixel segments for coordinate remapping.
 
             config HUB75_WIRING_SCAN_1_8_32PX
-                bool "1/8 Scan (32px high panels)"
+                bool "1/8 Scan (32px, 16-pixel interleaved segments)"
                 help
                     For 32-pixel high panels with 1/8 scan (8 row addresses).
-                    Common for 64x32 panels with non-standard wiring.
+                    Uses 16-pixel interleaved segment layout.
+                    DMA buffer is doubled in width, halved in height.
 
-                    Uses 16-pixel segments for coordinate remapping.
+                    Example: 64x32 panel -> DMA buffer 128x8
+
+            config HUB75_WIRING_SCAN_1_8_32PX_FULL
+                bool "1/8 Scan (32px, full-width segments, e.g. P4-1921-64x32-8S)"
+                help
+                    For 32-pixel high panels with 1/8 scan (8 row addresses).
+                    Uses full panel-width (64-pixel) segments — no interleaving.
+                    Required for P4-1921 and similar Chinese outdoor panels.
                     DMA buffer is doubled in width, halved in height.
 
                     Example: 64x32 panel -> DMA buffer 128x8

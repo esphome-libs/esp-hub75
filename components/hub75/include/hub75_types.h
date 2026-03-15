@@ -60,7 +60,8 @@ enum class Hub75ClockSpeed : uint32_t {
 enum class Hub75ScanWiring {
   STANDARD_TWO_SCAN,   // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
   SCAN_1_4_16PX_HIGH,  // 1/4 scan, 16-pixel high panels
-  SCAN_1_8_32PX_HIGH,  // 1/8 scan, 32-pixel high panels (e.g., 64x32)
+  SCAN_1_8_32PX_HIGH,  // 1/8 scan, 32-pixel high panels (16-pixel interleaved segments)
+  SCAN_1_8_32PX_FULL,  // 1/8 scan, 32-pixel high panels (full-width 64-pixel segments, e.g. P4-1921)
   SCAN_1_8_40PX_HIGH,  // 1/8 scan, 40-pixel high panels
   SCAN_1_8_64PX_HIGH,  // 1/8 scan, 64-pixel high panels
 

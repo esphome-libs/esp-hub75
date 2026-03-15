@@ -34,7 +34,8 @@ struct Coords {
  */
 __attribute__((always_inline)) HUB75_CONST inline constexpr bool is_four_scan_wiring(Hub75ScanWiring wiring) {
   return wiring == Hub75ScanWiring::SCAN_1_4_16PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_32PX_HIGH ||
-         wiring == Hub75ScanWiring::SCAN_1_8_40PX_HIGH || wiring == Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
+         wiring == Hub75ScanWiring::SCAN_1_8_32PX_FULL || wiring == Hub75ScanWiring::SCAN_1_8_40PX_HIGH ||
+         wiring == Hub75ScanWiring::SCAN_1_8_64PX_HIGH;
 }
 
 /**
@@ -84,6 +85,10 @@ __attribute__((always_inline)) HUB75_CONST HUB75_IRAM inline constexpr uint16_t 
       if (panel_height < 8)
         return panel_width;  // Defensive check for invalid config
       return panel_width / (panel_height / 8);
+    case Hub75ScanWiring::SCAN_1_8_32PX_FULL:
+      // 32px high 1/8 scan panels with full-width segments (e.g. P4-1921-64x32-8S)
+      // Shift register: [row_N+8 x0..63 | row_N x0..63] — no interleaving
+      return panel_width;
     case Hub75ScanWiring::SCAN_1_8_40PX_HIGH:
     case Hub75ScanWiring::SCAN_1_4_16PX_HIGH:
     case Hub75ScanWiring::SCAN_1_8_64PX_HIGH:
@@ -133,6 +138,19 @@ class ScanPatternRemap {
           c.x += (((c.x / segment_size) + 1) * segment_size);
         } else {
           c.x += ((c.x / segment_size) * segment_size);
+        }
+        c.y = (c.y >> 4) * 8 + (c.y & 0b00000111);
+        return c;
+      }
+
+      case Hub75ScanWiring::SCAN_1_8_32PX_FULL: {
+        // 32px high 1/8 scan, full-width (panel_width) segments
+        // X-transform: same as SCAN_1_8_40PX_HIGH (full-width split)
+        // Y-transform: same as SCAN_1_8_32PX_HIGH (correct for 32px)
+        if ((c.y & 8) == 0) {
+          c.x += (((c.x / panel_width) + 1) * panel_width);
+        } else {
+          c.x += ((c.x / panel_width) * panel_width);
         }
         c.y = (c.y >> 4) * 8 + (c.y & 0b00000111);
         return c;
