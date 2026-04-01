@@ -521,7 +521,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 42 if IDF_TARGET_ESP32S3
             default 20 if IDF_TARGET_ESP32P4
             default 25
-            range -1 48
+            range -1 54
             help
                 Red data for upper half of panel.
 
@@ -530,7 +530,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 41 if IDF_TARGET_ESP32S3
             default 21 if IDF_TARGET_ESP32P4
             default 26
-            range -1 48
+            range -1 54
             help
                 Green data for upper half of panel.
 
@@ -539,7 +539,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 40 if IDF_TARGET_ESP32S3
             default 22 if IDF_TARGET_ESP32P4
             default 27
-            range -1 48
+            range -1 54
             help
                 Blue data for upper half of panel.
 
@@ -550,7 +550,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 38 if IDF_TARGET_ESP32S3
             default 23 if IDF_TARGET_ESP32P4
             default 14
-            range -1 48
+            range -1 54
             help
                 Red data for lower half of panel.
 
@@ -559,7 +559,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 39 if IDF_TARGET_ESP32S3
             default 26 if IDF_TARGET_ESP32P4
             default 12
-            range -1 48
+            range -1 54
             help
                 Green data for lower half of panel.
 
@@ -568,7 +568,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 37 if IDF_TARGET_ESP32S3
             default 27 if IDF_TARGET_ESP32P4
             default 13
-            range -1 48
+            range -1 54
             help
                 Blue data for lower half of panel.
 
@@ -579,7 +579,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 45 if IDF_TARGET_ESP32S3
             default 1 if IDF_TARGET_ESP32P4
             default 23
-            range -1 48
+            range -1 54
             help
                 Address line A (LSB).
 
@@ -588,7 +588,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 36 if IDF_TARGET_ESP32S3
             default 2 if IDF_TARGET_ESP32P4
             default 19
-            range -1 48
+            range -1 54
             help
                 Address line B.
 
@@ -597,7 +597,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 48 if IDF_TARGET_ESP32S3
             default 3 if IDF_TARGET_ESP32P4
             default 5
-            range -1 48
+            range -1 54
             help
                 Address line C.
 
@@ -606,7 +606,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 35 if IDF_TARGET_ESP32S3
             default 4 if IDF_TARGET_ESP32P4
             default 17
-            range -1 48
+            range -1 54
             help
                 Address line D.
 
@@ -615,7 +615,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 21 if IDF_TARGET_ESP32S3
             default 5 if IDF_TARGET_ESP32P4
             default 18
-            range -1 48
+            range -1 54
             help
                 Address line E (MSB).
 
@@ -629,7 +629,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 47 if IDF_TARGET_ESP32S3
             default 6 if IDF_TARGET_ESP32P4
             default 4
-            range -1 48
+            range -1 54
             help
                 Latch signal (transfers shift register data to output).
 
@@ -638,7 +638,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 14 if IDF_TARGET_ESP32S3
             default 45 if IDF_TARGET_ESP32P4
             default 15
-            range -1 48
+            range -1 54
             help
                 Output Enable (active low - enables LED drivers).
                 Controls brightness via PWM timing.
@@ -648,7 +648,7 @@ menu "HUB75 RGB LED Matrix Driver"
             default 2 if IDF_TARGET_ESP32S3
             default 47 if IDF_TARGET_ESP32P4
             default 16
-            range -1 48
+            range -1 54
             help
                 Clock signal (shifts data into registers).
 
