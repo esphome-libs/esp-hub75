@@ -258,7 +258,7 @@ void ParlioDma::configure_parlio() {
       .trans_queue_depth = 4,  // Match ESP-IDF example (was: num_rows_ * bit_depth_)
       .max_transfer_size = max_buffer_size * sizeof(uint16_t),
       .dma_burst_size = 0,  // Default
-      .sample_edge = PARLIO_SAMPLE_EDGE_POS,
+      .sample_edge = config_.clk_phase_inverted ? PARLIO_SAMPLE_EDGE_NEG : PARLIO_SAMPLE_EDGE_POS,
       .bit_pack_order = PARLIO_BIT_PACK_ORDER_LSB,  // Explicit LSB to match ESP-IDF example
       .flags = {
 #ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
