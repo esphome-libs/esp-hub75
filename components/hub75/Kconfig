@@ -724,6 +724,18 @@ menu "HUB75 RGB LED Matrix Driver"
                 Recommended for best performance. Uses ~2-4 KB of IRAM.
                 Disable only if IRAM space is critically constrained.
 
+        config HUB75_EXTERNAL_FRAMEBUFFERS
+            bool "Use External Framebuffers"
+            default y if IDF_TARGET_ESP32P4
+            default n
+            help
+                Allocates the Framebuffers in the external memory.
+                It reduces internal memory usage.
+                
+                If enabled, the HUB75 clock speed may need to be lowered to 
+                avoid overloading the SPIRAM bandwidth, especially since it 
+                may also be shared with other modules such as WiFi.
+
     endmenu
 
     # ========================================
