@@ -65,7 +65,7 @@ constexpr uint16_t RGB_CLEAR_MASK = ~RGB_MASK;  // Clear RGB bits 0-5
 IRAM_ATTR bool parlio_trans_done_callback(parlio_tx_unit_handle_t tx_unit, const parlio_tx_done_event_data_t *edata, void *user_ctx){
   ParlioDma* dma = (ParlioDma*)user_ctx;
   size_t total_bits = dma->total_buffer_bytes_ * 8;
-  esp_err_t err = parlio_tx_unit_transmit(dma->tx_unit_, dma->dma_buffers_[dma->front_idx_], total_bits, &dma->transmit_config_);
+  parlio_tx_unit_transmit(dma->tx_unit_, dma->dma_buffers_[dma->front_idx_], total_bits, &dma->transmit_config_);
   return false; // No Higher level Task woken
 }
 #endif
