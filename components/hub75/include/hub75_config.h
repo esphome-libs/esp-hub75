@@ -94,8 +94,8 @@ extern "C" {
 #define HUB75_EXTERNAL_FRAMEBUFFERS 0
 #endif
 #else // HUB75_EXTERNAL_FRAMEBUFFERS
-// maybe use SOC_SPIRAM_SUPPORTED
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && HUB75_EXTERNAL_FRAMEBUFFERS != 0
+#if !defined(SOC_SPIRAM_SUPPORTED) && HUB75_EXTERNAL_FRAMEBUFFERS != 0
+#pragma message "SOC does not support external framebuffer, disabling..."
 #undef HUB75_EXTERNAL_FRAMEBUFFERS
 #define HUB75_EXTERNAL_FRAMEBUFFERS 0
 #endif

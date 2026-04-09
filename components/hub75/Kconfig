@@ -726,6 +726,7 @@ menu "HUB75 RGB LED Matrix Driver"
 
         config HUB75_EXTERNAL_FRAMEBUFFERS
             bool "Use External Framebuffers"
+            depends on SOC_SPIRAM_SUPPORTED
             default y if IDF_TARGET_ESP32P4
             default n
             help
