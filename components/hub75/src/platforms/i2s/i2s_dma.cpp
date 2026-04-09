@@ -322,12 +322,12 @@ HUB75_CONST uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_sp
   //
   // The ESP32's lower base clock (80 MHz vs 160 MHz) combined with the same
   // divider constraints results in half the max frequency of ESP32-S2.
-  if (requested_hz > 10000000) {
+  if (requested_hz > 20000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
-    return 10000000;
+    return 20000000;
   }
   uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
-  return 80000000 / (std::max(divider, uint32_t{2}) * 4);
+  return 80000000 / (std::max(divider, uint32_t{1}) * 4);
 #endif
 }
 
