@@ -61,6 +61,15 @@ constexpr uint16_t RGB_MASK = RGB_UPPER_MASK | RGB_LOWER_MASK;  // 0x003F
 constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
 constexpr uint16_t RGB_CLEAR_MASK = ~RGB_MASK;  // Clear RGB bits 0-5
 
+#ifndef SOC_PARLIO_TX_SUPPORT_LOOP_TRANSMISSION  
+IRAM_ATTR bool parlio_trans_done_callback(parlio_tx_unit_handle_t tx_unit, const parlio_tx_done_event_data_t *edata, void *user_ctx){
+  ParlioDma* dma = (ParlioDma*)user_ctx;
+  size_t total_bits = dma->total_buffer_bytes_ * 8;
+  esp_err_t err = parlio_tx_unit_transmit(dma->tx_unit_, dma->dma_buffers_[dma->front_idx_], total_bits, &dma->transmit_config_);
+  return false; // No Higher level Task woken
+}
+#endif
+
 ParlioDma::ParlioDma(const Hub75Config &config)
     : PlatformDma(config),
       tx_unit_(nullptr),
@@ -94,10 +103,15 @@ ParlioDma::ParlioDma(const Hub75Config &config)
   // Initialize transmit config
   // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
   // to match the physical shift register layout
-  transmit_config_.idle_value = 0x00;
+  transmit_config_.idle_value = 1 << OE_BIT;  // make sure nothing lights up when in idle
   transmit_config_.bitscrambler_program = nullptr;
+#ifdef SOC_PARLIO_TX_SUPPORT_LOOP_TRANSMISSION
   transmit_config_.flags.queue_nonblocking = 0;
   transmit_config_.flags.loop_transmission = 1;  // Continuous refresh
+#else
+  transmit_config_.flags.queue_nonblocking = 1; // enable the restart loop
+  transmit_config_.flags.loop_transmission = 0;
+#endif
 }
 
 ParlioDma::~ParlioDma() { ParlioDma::shutdown(); }
@@ -288,6 +302,17 @@ void ParlioDma::configure_parlio() {
   ESP_LOGI(TAG, "  Clock gating: NOT SUPPORTED");
 #endif
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
+
+#ifndef SOC_PARLIO_TX_SUPPORT_LOOP_TRANSMISSION  
+  parlio_event_cbs.on_trans_done = parlio_trans_done_callback;
+  parlio_event_cbs.on_buffer_switched = nullptr;
+  err = parlio_tx_unit_register_event_callbacks(tx_unit_, &parlio_event_cbs, this);
+  if(err != ESP_OK){
+    ESP_LOGE(TAG, "Failed to register event callbacks: %s", esp_err_to_name(err));
+    return;
+  }
+  ESP_LOGI(TAG, "Event callbacks registered");
+#endif
 }
 
 HUB75_CONST uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
@@ -1090,12 +1115,14 @@ void ParlioDma::flip_buffer() {
   // Swap indices (front ↔ active)
   std::swap(front_idx_, active_idx_);
 
+#ifdef SOC_PARLIO_TX_SUPPORT_LOOP_TRANSMISSION
   // Queue new front buffer (hardware switches seamlessly after current frame)
   size_t total_bits = total_buffer_bytes_ * 8;
   esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "flip_buffer: Failed to queue buffer: %s", esp_err_to_name(err));
   }
+#endif
 }
 
 }  // namespace hub75
