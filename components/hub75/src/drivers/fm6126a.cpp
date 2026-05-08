@@ -95,6 +95,8 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
 
     case Hub75ShiftDriver::FM6126A:
     case Hub75ShiftDriver::ICN2038S:
+    case Hub75ShiftDriver::FM6124:
+      // FM6124 uses the same REG1/REG2 init sequence as FM6126A.
       fm6126a_init(config.pins, pixels_per_row);
       return ESP_OK;
 
@@ -105,10 +107,6 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
     case Hub75ShiftDriver::MBI5124:
       ESP_LOGW(TAG, "MBI5124: Ensure clk_phase_inverted is set to true");
       return ESP_OK;
-
-    case Hub75ShiftDriver::FM6124:
-      ESP_LOGW(TAG, "FM6124 initialization not yet implemented");
-      return ESP_ERR_NOT_SUPPORTED;
 
     default:
       ESP_LOGW(TAG, "Unknown shift driver: %d", (int) config.shift_driver);
