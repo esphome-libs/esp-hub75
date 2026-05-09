@@ -35,6 +35,7 @@ idf_component_register(
         "src/platforms/platform_detect.cpp"
         "src/platforms/platform_dma.cpp"
         "src/drivers/fm6126a.cpp"
+        "src/drivers/dp3246.cpp"
         # Platform-specific sources added conditionally below
     INCLUDE_DIRS
         "include"
