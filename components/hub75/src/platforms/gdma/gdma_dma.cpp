@@ -135,17 +135,17 @@ bool GdmaDma::init() {
   configure_gpio();
 
   // Allocate GDMA channel
-  gdma_channel_alloc_config_t dma_alloc_config = {
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 4, 0)
-      .direction = GDMA_CHANNEL_DIRECTION_TX,
-      .flags = {.reserve_sibling = 0, .isr_cache_safe = 0}
-#else
-      .flags = {.isr_cache_safe = 0}
+  gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
+                                                  .direction = GDMA_CHANNEL_DIRECTION_TX,
+                                                  .flags = {.reserve_sibling = 0
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+                                                            ,
+                                                            .isr_cache_safe = 0
 #endif
-  };
+                                                  }};
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
-  esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_, NULL);
+  esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_);
 #else
   esp_err_t err = gdma_new_channel(&dma_alloc_config, &dma_chan_);
 #endif
@@ -201,7 +201,7 @@ bool GdmaDma::init() {
 
   // Register frame callback if already set
   if (frame_callback_) {
-    gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof, .on_descr_err = NULL};
+    gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof};
     gdma_register_tx_event_callbacks(dma_chan_, &cbs, this);
   }
   // The descriptor chain encodes all timing via repetition counts
@@ -443,10 +443,10 @@ void GdmaDma::set_frame_callback(Hub75FrameCallback callback, void *arg) {
 
   if (dma_chan_) {
     if (callback) {
-      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof, .on_descr_err = NULL};
+      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = GdmaDma::on_trans_eof};
       gdma_register_tx_event_callbacks(dma_chan_, &cbs, this);
     } else {
-      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = NULL, .on_descr_err = NULL};
+      gdma_tx_event_callbacks_t cbs = {.on_trans_eof = NULL};
       gdma_register_tx_event_callbacks(dma_chan_, &cbs, NULL);
     }
   }
