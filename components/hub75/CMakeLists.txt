@@ -9,6 +9,8 @@ set(HUB75_REQUIRES
     esp_timer
     esp_hw_support
     freertos
+    esp_mm
+    esp_driver_dma
 )
 if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
     list(APPEND HUB75_REQUIRES esp_mm)
