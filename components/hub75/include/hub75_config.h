@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 #include "sdkconfig.h"
+#include "soc/soc_caps.h"
 
 /**
  * IRAM optimization
