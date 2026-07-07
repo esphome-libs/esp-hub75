@@ -95,8 +95,8 @@ enum class Hub75ShiftDriver {
  * row clock, BK, and row data respectively.
  */
 enum class Hub75RowDecoder {
-  BINARY,   // Standard ABCDE binary row addressing (default)
-  SM5368,   // A=row_clk, B=BK, C=row_data
+  BINARY,  // Standard ABCDE binary row addressing (default)
+  SM5368,  // A=row_clk, B=BK, C=row_data
 };
 
 /**
