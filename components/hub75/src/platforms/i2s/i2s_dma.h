@@ -129,6 +129,10 @@ class I2sDma : public PlatformDma {
   // BCM timing calculation (calculates lsbMsbTransitionBit for OE control)
   void calculate_bcm_timings();
 
+  void flush_cache_to_dma();
+
+  size_t total_buffer_bytes_;  // Cached total buffer size per buffer (computed once, never changes)
+
   volatile i2s_dev_t *i2s_dev_;
   const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)
   uint8_t lsbMsbTransitionBit_;     // BCM optimization threshold (calculated at init)

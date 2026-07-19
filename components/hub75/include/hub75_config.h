@@ -10,6 +10,9 @@
 extern "C" {
 #endif
 
+#include "sdkconfig.h"
+#include "soc/soc_caps.h"
+
 /**
  * IRAM optimization
  * Place hot-path code in instruction RAM to prevent flash cache stalls
@@ -77,6 +80,26 @@ extern "C" {
 #define HUB75_GAMMA_MODE 1  // Default: CIE1931
 #endif
 #endif
+
+/**
+ * Use external framebuffer in PSRAM / SPIRAM
+ * Ser via menuconfig or override: -D HUB75_EXTERNAL_FRAMEBUFFERS
+ */
+#ifndef HUB75_EXTERNAL_FRAMEBUFFERS
+#ifdef CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
+#define HUB75_EXTERNAL_FRAMEBUFFERS CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
+#elif defined(CONFIG_SPIRAM) && defined(CONFIG_IDF_TARGET_ESP32P4)
+#define HUB75_EXTERNAL_FRAMEBUFFERS 1
+#else
+#define HUB75_EXTERNAL_FRAMEBUFFERS 0
+#endif
+#else  // HUB75_EXTERNAL_FRAMEBUFFERS
+#if !defined(SOC_SPIRAM_SUPPORTED) && HUB75_EXTERNAL_FRAMEBUFFERS != 0
+#pragma message "SOC does not support external framebuffer, disabling..."
+#undef HUB75_EXTERNAL_FRAMEBUFFERS
+#define HUB75_EXTERNAL_FRAMEBUFFERS 0
+#endif
+#endif  // HUB75_EXTERNAL_FRAMEBUFFERS
 
 #ifdef __cplusplus
 }

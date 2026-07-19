@@ -26,7 +26,10 @@
 // Header location changed in ESP-IDF 5.0
 #if (ESP_IDF_VERSION_MAJOR >= 5)
 #include <esp_private/periph_ctrl.h>
+#include <esp_memory_utils.h>
+#include <esp_cache.h>
 #else
+#include "rom/cache.h"
 #include <driver/periph_ctrl.h>
 #endif
 #include <soc/gpio_sig_map.h>
@@ -320,12 +323,12 @@ HUB75_CONST uint32_t I2sDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_sp
   //
   // The ESP32's lower base clock (80 MHz vs 160 MHz) combined with the same
   // divider constraints results in half the max frequency of ESP32-S2.
-  if (requested_hz > 10000000) {
+  if (requested_hz > 20000000) {
     ESP_LOGW(TAG, "Requested %u Hz exceeds ESP32 max (10 MHz), using 10 MHz", (unsigned int) requested_hz);
-    return 10000000;
+    return 20000000;
   }
   uint32_t divider = (80000000 + requested_hz * 2) / (requested_hz * 4);  // Round to nearest
-  return 80000000 / (std::max(divider, uint32_t{2}) * 4);
+  return 80000000 / (std::max(divider, uint32_t{1}) * 4);
 #endif
 }
 
@@ -443,10 +446,17 @@ bool I2sDma::allocate_row_buffers() {
   size_t pixels_per_bitplane = dma_width_;  // DMA buffer width (all panels chained horizontally)
   size_t buffer_size_per_row = pixels_per_bitplane * bit_depth_ * 2;  // uint16_t = 2 bytes
   size_t total_buffer_size = num_rows_ * buffer_size_per_row;
+  total_buffer_bytes_ = total_buffer_size;
 
   // Always allocate first buffer (buffer A, index 0)
-  ESP_LOGI(TAG, "Allocating buffer A: %zu bytes for %d rows", total_buffer_size, num_rows_);
-  dma_buffers_[0] = (uint8_t *) heap_caps_calloc(1, total_buffer_size, MALLOC_CAP_DMA);
+#if HUB75_EXTERNAL_FRAMEBUFFERS == 1
+  static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM;
+  ESP_LOGI(TAG, "Allocating buffer A: %zu bytes for %d rows (PSRAM)", total_buffer_size, num_rows_);
+#else
+  static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL;
+  ESP_LOGI(TAG, "Allocating buffer A: %zu bytes for %d rows (internal RAM)", total_buffer_size, num_rows_);
+#endif
+  dma_buffers_[0] = (uint8_t *) heap_caps_calloc(1, total_buffer_size, DMA_MEM_CAPS);
   if (!dma_buffers_[0]) {
     ESP_LOGE(TAG, "Failed to allocate %zu bytes for buffer A", total_buffer_size);
     return false;
@@ -473,7 +483,7 @@ bool I2sDma::allocate_row_buffers() {
   // Conditionally allocate second buffer (buffer B, index 1)
   if (config_.double_buffer) {
     ESP_LOGI(TAG, "Allocating buffer B: %zu bytes (double buffering enabled)", total_buffer_size);
-    dma_buffers_[1] = (uint8_t *) heap_caps_calloc(1, total_buffer_size, MALLOC_CAP_DMA);
+    dma_buffers_[1] = (uint8_t *) heap_caps_calloc(1, total_buffer_size, DMA_MEM_CAPS);
     if (!dma_buffers_[1]) {
       ESP_LOGE(TAG, "Failed to allocate %zu bytes for buffer B", total_buffer_size);
       // Continue in single-buffer mode
@@ -903,6 +913,8 @@ void I2sDma::set_brightness_oe() {
     }
   }
 
+  flush_cache_to_dma();
+
   ESP_LOGD(TAG, "Brightness OE configuration complete");
 }
 
@@ -1138,6 +1150,9 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       HUB75_PROFILE_PIXEL();
     }
   }
+  if (!config_.double_buffer) {
+    flush_cache_to_dma();
+  }
 }
 
 void I2sDma::clear() {
@@ -1158,6 +1173,9 @@ void I2sDma::clear() {
         buf[fifo_adjust_x(x)] &= ~RGB_MASK;
       }
     }
+  }
+  if (!config_.double_buffer) {
+    flush_cache_to_dma();
   }
 }
 
@@ -1245,6 +1263,9 @@ HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
       }
     }
   }
+  if (!config_.double_buffer) {
+    flush_cache_to_dma();
+  }
 }
 
 void I2sDma::flip_buffer() {
@@ -1252,6 +1273,10 @@ void I2sDma::flip_buffer() {
   if (!row_buffers_[1] || !descriptors_[1]) {
     return;
   }
+
+  // Flush CPU cache for active buffer BEFORE swap (buffer we were drawing to)
+  // Only needed in double buffer mode (draw/clear skip flush, defer to here)
+  flush_cache_to_dma();
 
   // Seamless descriptor chain redirection (no stop/start!)
   //
@@ -1274,6 +1299,31 @@ void I2sDma::flip_buffer() {
   std::swap(front_idx_, active_idx_);
 
   // DMA seamlessly transitions at next frame boundary - no interruption!
+}
+
+void I2sDma::flush_cache_to_dma() {
+#if HUB75_EXTERNAL_FRAMEBUFFERS == 1
+  // Only flush for PSRAM (external RAM) - internal SRAM doesn't need cache sync
+  // This handles ESP32-C6 automatically: C6 uses internal RAM, so esp_ptr_external_ram()
+  // returns false and we skip the msync (which would be unnecessary overhead).
+#if (ESP_IDF_VERSION_MAJOR >= 5)
+  if (!dma_buffers_[active_idx_] || !esp_ptr_external_ram(dma_buffers_[active_idx_])) {
+    return;
+  }
+
+  // Flush cache: CPU cache → PSRAM (C2M = Cache to Memory)
+  // Flush the active buffer (CPU drawing buffer)
+  esp_err_t err = esp_cache_msync(dma_buffers_[active_idx_], total_buffer_bytes_,
+                                  ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Cache sync failed: %s", esp_err_to_name(err));
+  }
+#else
+#ifndef CONFIG_IDF_TARGET_ESP32  // ESP32 has no cache writeback in IDF < v5
+  Cache_WriteBack_Addr((uint32_t) &p[x_coord], sizeof(ESP32_I2S_DMA_STORAGE_TYPE));
+#endif
+#endif
+#endif
 }
 
 // ============================================================================
