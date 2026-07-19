@@ -1101,35 +1101,52 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
 
       HUB75_PROFILE_STAGE(PROFILE_TRANSFORM);
 
-      // Extract RGB888 from pixel format (always_inline will inline the switch)
-      uint8_t r8 = 0, g8 = 0, b8 = 0;
-      extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+      // Pack raw pixel bytes into uint32_t for fast comparison
+      uint32_t current_raw;
+      if (format == Hub75PixelFormat::RGB565) {
+        current_raw = *reinterpret_cast<const uint16_t *>(pixel_ptr);
+      } else if (format == Hub75PixelFormat::RGB888) {
+        current_raw = pixel_ptr[0] | (pixel_ptr[1] << 8) | (pixel_ptr[2] << 16);
+      } else {
+        current_raw = *reinterpret_cast<const uint32_t *>(pixel_ptr);
+      }
+
+      // Only recompute patterns if raw pixel changed (skips extraction, LUT, and pattern computation)
+      if (current_raw != cached_raw_pixel_) {
+        // Extract RGB888 from pixel format (always_inline will inline the switch)
+        uint8_t r8 = 0, g8 = 0, b8 = 0;
+        extract_rgb888_from_format(pixel_ptr, 0, format, color_order, big_endian, r8, g8, b8);
+
+        HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
+
+        // Apply LUT correction
+        const uint16_t r_corrected = lut_[r8];
+        const uint16_t g_corrected = lut_[g8];
+        const uint16_t b_corrected = lut_[b8];
+
+        HUB75_PROFILE_STAGE(PROFILE_LUT);
+
+        // Pre-compute bit patterns for all bit planes using branchless bit extraction
+        for (int bit = 0; bit < bit_depth_; bit++) {
+          const uint16_t r_bit = (r_corrected >> bit) & 1;
+          const uint16_t g_bit = (g_corrected >> bit) & 1;
+          const uint16_t b_bit = (b_corrected >> bit) & 1;
+          cached_upper_patterns_[bit] = (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
+          cached_lower_patterns_[bit] = (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
+        }
+        cached_raw_pixel_ = current_raw;
+      }
       pixel_ptr += pixel_stride;
 
-      HUB75_PROFILE_STAGE(PROFILE_EXTRACT);
-
-      // Apply LUT correction
-      const uint16_t r_corrected = lut_[r8];
-      const uint16_t g_corrected = lut_[g8];
-      const uint16_t b_corrected = lut_[b8];
-
-      HUB75_PROFILE_STAGE(PROFILE_LUT);
-
-      // Branchless bit-plane update using shift+and (avoids ternary branches on Xtensa)
+      // Apply cached patterns to all bit planes
       uint8_t *base_ptr = target_buffers[row].data;
       for (int bit = 0; bit < bit_depth_; bit++) {
         uint16_t *buf = (uint16_t *) (base_ptr + (bit * bit_plane_stride));
-
-        // Extract single bits (0 or 1) without branches using shift+and
-        const uint16_t r_bit = (r_corrected >> bit) & 1;
-        const uint16_t g_bit = (g_corrected >> bit) & 1;
-        const uint16_t b_bit = (b_corrected >> bit) & 1;
-
         uint16_t word = buf[px];
         if (is_lower) {
-          word = (word & ~RGB_LOWER_MASK) | (r_bit << R2_BIT) | (g_bit << G2_BIT) | (b_bit << B2_BIT);
+          word = (word & ~RGB_LOWER_MASK) | cached_lower_patterns_[bit];
         } else {
-          word = (word & ~RGB_UPPER_MASK) | (r_bit << R1_BIT) | (g_bit << G1_BIT) | (b_bit << B1_BIT);
+          word = (word & ~RGB_UPPER_MASK) | cached_upper_patterns_[bit];
         }
         buf[px] = word;
       }
