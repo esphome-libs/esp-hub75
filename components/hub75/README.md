@@ -69,6 +69,7 @@ void app_main() {
     config.panel_height = 64;
     config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;  // Most panels
     config.shift_driver = Hub75ShiftDriver::FM6126A;          // Or GENERIC
+    config.row_decoder = Hub75RowDecoder::BINARY;             // Default row addressing
 
     // Set GPIO pins
     config.pins.r1 = 25;
@@ -113,6 +114,12 @@ void app_main() {
 - `Hub75Driver(config)` - Create driver with configuration
 - `bool begin()` - Initialize hardware and start continuous refresh loop
 - `void end()` - Stop refresh and cleanup resources
+
+**Row Decoder Modes:**
+- `Hub75RowDecoder::BINARY` - Standard HUB75 row addressing using A/B/C/D/E as a binary row number
+- `Hub75RowDecoder::SM5368` - SM5368-style row selection using A=row clock, B=BK, C=row data
+
+`SM5368` is currently implemented on the ESP32-S3 GDMA backend only.
 
 ### Drawing
 
@@ -196,6 +203,15 @@ config.panel_height = 64;
 config.shift_driver = Hub75ShiftDriver::FM6126A;  // Try this if GENERIC doesn't work
 ```
 
+**SM5368 row decoder panel (ESP32-S3 GDMA):**
+```cpp
+Hub75Config config{};
+config.panel_width = 64;
+config.panel_height = 32;
+config.scan_wiring = Hub75ScanWiring::SCAN_1_8_32PX_FULL;
+config.row_decoder = Hub75RowDecoder::SM5368;
+```
+
 **Two panels side-by-side:**
 ```cpp
 config.layout_cols = 2;  // Two panels horizontally
@@ -260,6 +276,7 @@ Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4 with platform-specific optimiza
 - **Black screen** → Try `shift_driver = Hub75ShiftDriver::FM6126A` (most modern panels)
 - **Wrong colors** → Check R1/G1/B1/R2/G2/B2 pin mapping
 - **Scrambled display** → Try `FOUR_SCAN_32PX_HIGH` scan wiring for 32px panels with 1/8 scan
+- **Rows shift/jump incorrectly** → If panel uses SM5368-style row logic, try `row_decoder = Hub75RowDecoder::SM5368` on ESP32-S3 GDMA
 
 **For complete debugging guide** (ghosting, flickering, multi-panel issues, platform-specific problems, error messages), see **[Troubleshooting Guide](../../docs/TROUBLESHOOTING.md)**.
 
