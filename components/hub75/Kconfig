@@ -211,6 +211,13 @@ menu "HUB75 RGB LED Matrix Driver"
 
             config HUB75_DRIVER_DP3246
                 bool "DP3246"
+                help
+                    DP3246 driver chips with SM5368 row addressing.
+                    Auto-enables CLK_PHASE_INVERTED (rising-edge clock).
+
+                    Note: runtime 3-cycle LAT widening is not yet implemented;
+                    only the bit-bang init sequence runs. Panels may show
+                    artifacts until the DMA-side LAT widening is added.
         endchoice
 
         choice HUB75_BIT_DEPTH_CHOICE
@@ -705,12 +712,14 @@ menu "HUB75 RGB LED Matrix Driver"
         config HUB75_CLK_PHASE_INVERTED
             bool "Invert clock phase"
             default y if HUB75_DRIVER_MBI5124
+            default y if HUB75_DRIVER_DP3246
             default n
             help
                 Inverts the clock signal phase.
 
-                Required for MBI5124 driver chips (auto-enabled when MBI5124
-                is selected). Most other driver chips do not need this.
+                Required for MBI5124 and DP3246 driver chips (auto-enabled
+                when either is selected). Most other driver chips do not
+                need this.
 
                 Leave disabled unless your panel specifically requires it.
 

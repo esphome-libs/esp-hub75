@@ -80,11 +80,6 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
   ESP_LOGI(TAG, "FM6126A initialized successfully");
 }
 
-void DriverInit::dp3246_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
-  // TODO: Port from reference library when hardware available
-  ESP_LOGW(TAG, "DP3246 initialization not yet implemented");
-}
-
 esp_err_t DriverInit::initialize(const Hub75Config &config) {
   uint16_t pixels_per_row = config.panel_width * config.layout_cols;
 
@@ -101,6 +96,9 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
       return ESP_OK;
 
     case Hub75ShiftDriver::DP3246:
+      if (!config.clk_phase_inverted) {
+        ESP_LOGW(TAG, "DP3246: clk_phase_inverted should be true (rising-edge clock)");
+      }
       dp3246_init(config.pins, pixels_per_row);
       return ESP_OK;
 
