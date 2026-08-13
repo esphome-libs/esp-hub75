@@ -53,6 +53,21 @@ class Hub75Driver {
   bool begin();
 
   /**
+   * @brief Set the minimum refresh rate before begin() allocates BCM timing.
+   * @return false if the driver is already running.
+   */
+  bool set_min_refresh_rate(uint16_t refresh_rate);
+
+  /**
+   * @brief Set the HUB75 shift clock before begin() initializes the transport.
+   * @return false if the driver is already running.
+   */
+  bool set_output_clock_speed(Hub75ClockSpeed clock_speed);
+
+  /** Configure the physical color data-pin order before begin(). */
+  bool set_pin_color_order(Hub75PinColorOrder order);
+
+  /**
    * @brief Stop refresh and release hardware resources
    */
   void end();
@@ -226,6 +241,7 @@ class Hub75Driver {
 
  private:
   Hub75Config config_;
+  Hub75Pins original_pins_;
   bool running_;
 
   // Platform-specific DMA engine

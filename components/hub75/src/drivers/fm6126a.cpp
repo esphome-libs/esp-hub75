@@ -98,6 +98,14 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
       fm6126a_init(config.pins, pixels_per_row);
       return ESP_OK;
 
+    case Hub75ShiftDriver::ICN2069:
+      // SRAM-based, hardware-PWM chip family (same as FM6363/FM6565S) — needs its
+      // own multi-register init + independent GCLK timing, NOT the FM6126A
+      // 2-register shift-only scheme. No working sequence confirmed yet; see
+      // https://github.com/hzeller/rpi-rgb-led-matrix/issues/466
+      ESP_LOGW(TAG, "ICN2069 initialization not yet implemented");
+      return ESP_ERR_NOT_SUPPORTED;
+
     case Hub75ShiftDriver::DP3246:
       dp3246_init(config.pins, pixels_per_row);
       return ESP_OK;

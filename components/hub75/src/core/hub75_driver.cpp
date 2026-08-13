@@ -44,7 +44,8 @@ using PlatformDMAImpl = ParlioDma;
 // Constructor / Destructor
 // ============================================================================
 
-Hub75Driver::Hub75Driver(const Hub75Config &config) : config_(config), running_(false), dma_(nullptr) {
+Hub75Driver::Hub75Driver(const Hub75Config &config)
+    : config_(config), original_pins_(config.pins), running_(false), dma_(nullptr) {
   ESP_LOGI(TAG, "Driver created for %s (%s)", getPlatformName(), getDMAEngineName());
   ESP_LOGI(TAG, "Panel: %dx%d, Layout: %dx%d, Virtual: %dx%d", (unsigned int) config_.panel_width,
            (unsigned int) config_.panel_height, (unsigned int) config_.layout_cols, (unsigned int) config_.layout_rows,
@@ -56,6 +57,54 @@ Hub75Driver::Hub75Driver(const Hub75Config &config) : config_(config), running_(
 }
 
 Hub75Driver::~Hub75Driver() { end(); }
+
+bool Hub75Driver::set_min_refresh_rate(uint16_t refresh_rate) {
+  if (running_) {
+    ESP_LOGW(TAG, "Cannot change refresh rate while the driver is running");
+    return false;
+  }
+  if (refresh_rate == 0) {
+    ESP_LOGE(TAG, "Refresh rate must be greater than zero");
+    return false;
+  }
+
+  config_.min_refresh_rate = refresh_rate;
+  return true;
+}
+
+bool Hub75Driver::set_output_clock_speed(Hub75ClockSpeed clock_speed) {
+  if (running_) {
+    ESP_LOGW(TAG, "Cannot change output clock while the driver is running");
+    return false;
+  }
+
+  config_.output_clock_speed = clock_speed;
+  return true;
+}
+
+bool Hub75Driver::set_pin_color_order(Hub75PinColorOrder order) {
+  if (running_) {
+    ESP_LOGW(TAG, "Cannot change color channel pins while the driver is running");
+    return false;
+  }
+
+  const int8_t upper[] = {original_pins_.r1, original_pins_.g1, original_pins_.b1};
+  const int8_t lower[] = {original_pins_.r2, original_pins_.g2, original_pins_.b2};
+  static constexpr uint8_t permutations[][3] = {
+      {0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0},
+  };
+  if (static_cast<uint8_t>(order) >= sizeof(permutations) / sizeof(permutations[0])) {
+    return false;
+  }
+  const auto& permutation = permutations[static_cast<uint8_t>(order)];
+  config_.pins.r1 = upper[permutation[0]];
+  config_.pins.g1 = upper[permutation[1]];
+  config_.pins.b1 = upper[permutation[2]];
+  config_.pins.r2 = lower[permutation[0]];
+  config_.pins.g2 = lower[permutation[1]];
+  config_.pins.b2 = lower[permutation[2]];
+  return true;
+}
 
 // ============================================================================
 // Initialization

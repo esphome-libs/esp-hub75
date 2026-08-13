@@ -32,6 +32,16 @@ enum class Hub75ColorOrder {
   BGR,  // Blue-Green-Red (xBGR or BGRx)
 };
 
+/** Physical ordering of the HUB75 red, green, and blue data pins. */
+enum class Hub75PinColorOrder {
+  RGB,
+  RBG,
+  GRB,
+  GBR,
+  BRG,
+  BGR,
+};
+
 /**
  * @brief Output clock speed options
  *
@@ -79,6 +89,7 @@ enum class Hub75ShiftDriver {
   GENERIC,   // Standard shift register (no special init)
   FM6126A,   // FM6126A / ICN2038S (very common in modern panels!)
   ICN2038S,  // Alias for FM6126A
+  ICN2069,   // ICN2069 / FM6565S — embedded-PWM constant-current family, drop-in compatible with FM6126A init
   FM6124,    // FM6124 family
   MBI5124,   // MBI5124 (requires positive clock edge)
   DP3246     // DP3246 (special timing requirements)
@@ -201,6 +212,11 @@ struct Hub75Config {
 
   Hub75ClockSpeed output_clock_speed = Hub75ClockSpeed::HZ_20M;  // Output clock speed (default: 20MHz)
   uint16_t min_refresh_rate = 60;                                // Minimum refresh rate in Hz (default: 60)
+  // Row whose final BCM descriptor raises the once-per-refresh callback.
+  // -1 keeps the conventional callback at the end of the frame. A preceding
+  // row can be selected when a single live DMA buffer must be updated only
+  // after a latency-sensitive region has already been scanned.
+  int8_t frame_sync_row = -1;
 
   // ========================================
   // Timing

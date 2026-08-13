@@ -1109,6 +1109,11 @@ bool GdmaDma::build_descriptor_chain_internal(RowBitPlaneBuffer *buffers, dma_de
 
   // Link descriptors with BCM repetitions
   size_t desc_idx = 0;
+  const int configured_sync_row = config_.frame_sync_row;
+  const int sync_row =
+      (configured_sync_row >= 0 && configured_sync_row < num_rows_)
+          ? configured_sync_row
+          : (num_rows_ - 1);
   for (int row = 0; row < num_rows_; row++) {
     for (int bit = 0; bit < bit_depth_; bit++) {
       uint8_t *const bit_buffer = buffers[row].data + (bit * bytes_per_bitplane);
@@ -1135,11 +1140,17 @@ bool GdmaDma::build_descriptor_chain_internal(RowBitPlaneBuffer *buffers, dma_de
         desc_idx++;
       }
     }
+
+    // Keep exactly one EOF per refresh. On a single-buffer display this may
+    // sit just after a latency-sensitive region, leaving the remaining rows
+    // as a safe window to update that region before the chain wraps.
+    if (row == sync_row) {
+      descriptors[desc_idx - 1].dw0.suc_eof = 1;
+    }
   }
 
   // Last descriptor loops back to first (continuous refresh)
   descriptors[descriptor_count_ - 1].next = &descriptors[0];
-  descriptors[descriptor_count_ - 1].dw0.suc_eof = 1;  // Optional: EOF once per frame
 
   return true;
 }
