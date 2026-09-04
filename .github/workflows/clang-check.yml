@@ -47,6 +47,11 @@ jobs:
         run: |
           # Re-source export.sh to pick up newly installed esp-clang
           . $IDF_PATH/export.sh
+          if [ "${{ matrix.idf_target }}" = "esp32p4" ]; then
+            # ESP-IDF 5.5.5's Clang toolchain does not support P4 revision 3.x.
+            # Keep this override local to analysis; GCC builds use the IDF defaults.
+            echo "CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y" >> sdkconfig.defaults
+          fi
           idf.py set-target ${{ matrix.idf_target }}
           idf.py clang-check --run-clang-tidy-py run-clang-tidy --run-clang-tidy-options ""
 

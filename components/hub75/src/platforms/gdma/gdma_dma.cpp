@@ -141,7 +141,8 @@ bool GdmaDma::init() {
   // Allocate GDMA channel
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
   // ESP-IDF 6.0+: simplified config, direction via NULL parameter
-  gdma_channel_alloc_config_t dma_alloc_config = {.flags = {.isr_cache_safe = 0}};
+  // Zero-initialize all fields, including intr_priority added in ESP-IDF 6.1.
+  gdma_channel_alloc_config_t dma_alloc_config = {};
   esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_, nullptr);
 
 #elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
