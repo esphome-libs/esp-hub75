@@ -212,7 +212,8 @@ menu "HUB75 RGB LED Matrix Driver"
             config HUB75_DRIVER_DP3246
                 bool "DP3246"
                 help
-                    DP3246 driver chips with SM5368 row addressing.
+                    Initializes DP3246 column driver chips. Row addressing
+                    must be configured separately to match the panel.
                     Auto-enables CLK_PHASE_INVERTED (rising-edge clock).
 
                     Note: runtime 3-cycle LAT widening is not yet implemented;
