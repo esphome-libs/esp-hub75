@@ -27,7 +27,7 @@ jobs:
             build-mode: manual
 
     container:
-      image: ${{ matrix.language == 'c-cpp' && 'espressif/idf:v5.5.2' || '' }}
+      image: ${{ matrix.language == 'c-cpp' && 'espressif/idf:v5.5.5' || '' }}
 
     steps:
       - name: Checkout repository
