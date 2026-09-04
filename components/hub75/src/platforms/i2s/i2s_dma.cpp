@@ -147,6 +147,11 @@ bool I2sDma::init() {
   ESP_LOGI(TAG, "Pin config: A=%d B=%d C=%d D=%d E=%d LAT=%d OE=%d CLK=%d", config_.pins.a, config_.pins.b,
            config_.pins.c, config_.pins.d, config_.pins.e, config_.pins.lat, config_.pins.oe, config_.pins.clk);
 
+  if (config_.row_decoder != Hub75RowDecoder::BINARY) {
+    ESP_LOGE(TAG, "Row decoder mode is not supported on I2S backend yet");
+    return false;
+  }
+
   // Get I2S device
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
   i2s_dev_ = &I2S0;

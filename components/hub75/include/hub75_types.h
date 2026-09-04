@@ -87,6 +87,19 @@ enum class Hub75ShiftDriver {
 };
 
 /**
+ * @brief Row decoder / row addressing mode
+ *
+ * This controls how the panel row-select pins are interpreted by the backend.
+ * Most HUB75 panels use binary ABCDE row addressing.
+ * Some panels use SM5368-style shift row selection where A/B/C act as
+ * row clock, BK, and row data respectively.
+ */
+enum class Hub75RowDecoder {
+  BINARY,  // Standard ABCDE binary row addressing (default)
+  SM5368,  // A=row_clk, B=BK, C=row_data
+};
+
+/**
  * @brief Multi-panel physical layout/wiring pattern
  *
  * Defines how multiple panels are physically chained together.
@@ -222,6 +235,9 @@ struct Hub75Config {
   // ========================================
 
   uint8_t brightness = 128;  // Initial brightness 0-255 (default: 128)
+
+  // Row decoder / row addressing mode (appended to preserve positional aggregate initialization)
+  Hub75RowDecoder row_decoder = Hub75RowDecoder::BINARY;
 };
 
 // ============================================================================

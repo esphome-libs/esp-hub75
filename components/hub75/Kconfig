@@ -213,6 +213,33 @@ menu "HUB75 RGB LED Matrix Driver"
                 bool "DP3246"
         endchoice
 
+        choice HUB75_ROW_DECODER
+            prompt "Row Decoder"
+            default HUB75_ROW_DECODER_BINARY
+            help
+                Row selection / row addressing mode used by the panel.
+
+                Most HUB75 panels use standard binary ABCDE row addressing.
+                Some panels use SM5368-style row logic where A/B/C are used as
+                row clock, BK, and row data instead of binary row address bits.
+
+                Note: SM5368 row decoding is currently implemented only on the
+                ESP32-S3 GDMA backend.
+
+            config HUB75_ROW_DECODER_BINARY
+                bool "Binary ABCDE (Most Panels)"
+                help
+                    Standard HUB75 row addressing using A/B/C/D/E as a binary
+                    row number.
+
+            config HUB75_ROW_DECODER_SM5368
+                bool "SM5368 Shift Row Decoder"
+                help
+                    SM5368-style row selection where A=row clock, B=BK, and
+                    C=row data. Use this for panels that require shift-style
+                    row selection instead of binary row addressing.
+        endchoice
+
         choice HUB75_BIT_DEPTH_CHOICE
             prompt "Bit Depth"
             # Backward compatibility: honor deprecated DEPTH_* option names

@@ -116,6 +116,11 @@ bool ParlioDma::init() {
            is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
   ESP_LOGI(TAG, "Bit depth: %d", bit_depth_);
 
+  if (config_.row_decoder != Hub75RowDecoder::BINARY) {
+    ESP_LOGE(TAG, "Row decoder mode is not supported on PARLIO backend yet");
+    return false;
+  }
+
   // Calculate BCM timings first
   calculate_bcm_timings();
 
