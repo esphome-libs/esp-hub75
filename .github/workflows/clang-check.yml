@@ -20,14 +20,14 @@ jobs:
         idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
 
     container:
-      image: espressif/idf:v5.5.2
+      image: espressif/idf:v5.5.5
 
     env:
       IDF_TOOLCHAIN: clang
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 
@@ -47,6 +47,11 @@ jobs:
         run: |
           # Re-source export.sh to pick up newly installed esp-clang
           . $IDF_PATH/export.sh
+          if [ "${{ matrix.idf_target }}" = "esp32p4" ]; then
+            # ESP-IDF 5.5.5's Clang toolchain does not support P4 revision 3.x.
+            # Keep this override local to analysis; GCC builds use the IDF defaults.
+            echo "CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y" >> sdkconfig.defaults
+          fi
           idf.py set-target ${{ matrix.idf_target }}
           idf.py clang-check --run-clang-tidy-py run-clang-tidy --run-clang-tidy-options ""
 
@@ -61,7 +66,7 @@ jobs:
 
       - name: Upload SARIF file
         if: always()
-        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           sarif_file: results.sarif
           category: clang-tidy-${{ matrix.idf_target }}

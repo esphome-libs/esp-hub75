@@ -28,6 +28,8 @@ static inline Hub75Config getMenuConfigSettings() {
   config.scan_wiring = Hub75ScanWiring::SCAN_1_4_16PX_HIGH;
 #elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_32PX)
   config.scan_wiring = Hub75ScanWiring::SCAN_1_8_32PX_HIGH;
+#elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_32PX_FULL)
+  config.scan_wiring = Hub75ScanWiring::SCAN_1_8_32PX_FULL;
 #elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_40PX)
   config.scan_wiring = Hub75ScanWiring::SCAN_1_8_40PX_HIGH;
 #elif defined(CONFIG_HUB75_WIRING_SCAN_1_8_64PX)
@@ -45,6 +47,13 @@ static inline Hub75Config getMenuConfigSettings() {
   config.shift_driver = Hub75ShiftDriver::MBI5124;
 #elif defined(CONFIG_HUB75_DRIVER_DP3246)
   config.shift_driver = Hub75ShiftDriver::DP3246;
+#endif
+
+  // Row decoder
+#if defined(CONFIG_HUB75_ROW_DECODER_SM5368)
+  config.row_decoder = Hub75RowDecoder::SM5368;
+#else
+  config.row_decoder = Hub75RowDecoder::BINARY;
 #endif
 
   // Pin configuration (board preset or custom)

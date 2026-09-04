@@ -17,10 +17,10 @@ jobs:
       fail-fast: false
       matrix:
         idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
-        idf_ver: [v4.4.8, v5.5.2, release-v6.0]
+        idf_ver: [v4.4.8, v5.5.5, v6.1]
         # v4.4.8: Latest 4.4 bugfix release (legacy support)
-        # v5.5.2: Current stable release
-        # release-v6.0: Latest 6.0 release branch
+        # v5.5.5: Latest 5.5 bugfix release
+        # v6.1: Latest stable 6.x release
         exclude:
           # ESP32-C6 only supported on ESP-IDF 5.x+
           - idf_target: esp32c6
@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
 

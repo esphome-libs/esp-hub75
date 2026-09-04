@@ -68,6 +68,9 @@ enum HUB75WordBits : uint16_t {
 // Address field (not individual bits)
 constexpr int ADDR_SHIFT = 6;
 constexpr uint16_t ADDR_MASK = 0x1F;  // 5-bit address (0-31)
+constexpr uint16_t SM5368_CLK_MASK = 1u << (ADDR_SHIFT + 0);
+constexpr uint16_t SM5368_BK_MASK = 1u << (ADDR_SHIFT + 1);
+constexpr uint16_t SM5368_DATA_MASK = 1u << (ADDR_SHIFT + 2);
 
 // Combined RGB masks
 constexpr uint16_t RGB_UPPER_MASK = (1 << R1_BIT) | (1 << G1_BIT) | (1 << B1_BIT);
@@ -139,16 +142,14 @@ bool GdmaDma::init() {
   configure_gpio();
 
   // Allocate GDMA channel
-  //
-  // Both 6.0 betas report ESP_IDF_VERSION as 6.0.0, so we use __has_include to detect
-  // the beta2 API change (soc/gdma_channel.h was removed in the same refactor).
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0) && !__has_include("soc/gdma_channel.h")
-  // ESP-IDF >= 6.0-beta2: simplified config, direction via NULL parameter
-  gdma_channel_alloc_config_t dma_alloc_config = {.flags = {.isr_cache_safe = 0}};
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  // ESP-IDF 6.0+: simplified config, direction via NULL parameter
+  // Zero-initialize all fields, including intr_priority added in ESP-IDF 6.1.
+  gdma_channel_alloc_config_t dma_alloc_config = {};
   esp_err_t err = gdma_new_ahb_channel(&dma_alloc_config, &dma_chan_, nullptr);
 
 #elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
-  // ESP-IDF 5.4 - 6.0-beta1: gdma_new_ahb_channel (2-arg)
+  // ESP-IDF 5.4 - 5.x: gdma_new_ahb_channel (2-arg)
   gdma_channel_alloc_config_t dma_alloc_config = {.sibling_chan = nullptr,
                                                   .direction = GDMA_CHANNEL_DIRECTION_TX,
                                                   .flags = {.reserve_sibling = 0, .isr_cache_safe = 0}};
@@ -223,6 +224,7 @@ bool GdmaDma::init() {
            layout_rows_, virtual_width_, virtual_height_);
   ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), four-scan: %s", dma_width_, num_rows_,
            is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
+  ESP_LOGI(TAG, "Row decoder: %s", config_.row_decoder == Hub75RowDecoder::SM5368 ? "SM5368" : "binary");
 
   ESP_LOGI(TAG, "LCD_CAM + GDMA initialized successfully");
   ESP_LOGI(TAG, "Clock: %.2f MHz (requested %u MHz)", actual_clock_hz_ / 1000000.0f,
@@ -889,7 +891,8 @@ void GdmaDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
   }
 
   for (int row = 0; row < num_rows_; row++) {
-    uint16_t row_addr = row & ADDR_MASK;
+    const uint16_t row_addr = row & ADDR_MASK;
+    const bool is_sm5368 = config_.row_decoder == Hub75RowDecoder::SM5368;
 
     for (int bit = 0; bit < bit_depth_; bit++) {
       uint16_t *buf = (uint16_t *) (buffers[row].data + (bit * dma_width_ * 2));
@@ -915,20 +918,34 @@ void GdmaDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       // This prevents corruption when transitioning from row 31 (last) to row 0 (first).
       // Without wrap-around, the address would change from 31→0 during row 31's LAT settling,
       // causing ghosting on row 0.
-      uint16_t addr_for_buffer;
-      if (bit == 0) {
-        // LSB bit plane uses previous row (wraps row 0 to last row)
-        addr_for_buffer = ((row == 0 ? num_rows_ : row) - 1) & ADDR_MASK;
-        ESP_LOGD(TAG, "Row %d Bit 0: Using previous row address 0x%02X (current: 0x%02X)", row, addr_for_buffer,
-                 row_addr);
-      } else {
-        // All other bit planes use current row
-        addr_for_buffer = row_addr;
+      uint16_t addr_for_buffer = row_addr;
+      if (!is_sm5368) {
+        if (bit == 0) {
+          // LSB bit plane uses previous row (wraps row 0 to last row)
+          addr_for_buffer = ((row == 0 ? num_rows_ : row) - 1) & ADDR_MASK;
+          ESP_LOGD(TAG, "Row %d Bit 0: Using previous row address 0x%02X (current: 0x%02X)", row, addr_for_buffer,
+                   row_addr);
+        } else {
+          // All other bit planes use current row
+          addr_for_buffer = row_addr;
+        }
       }
 
       // Fill all pixels with control bits (RGB=0, row address, OE=HIGH)
       for (uint16_t x = 0; x < dma_width_; x++) {
-        buf[x] = (addr_for_buffer << ADDR_SHIFT) | (1 << OE_BIT);
+        buf[x] = (1 << OE_BIT);
+        if (!is_sm5368) {
+          buf[x] |= (addr_for_buffer << ADDR_SHIFT);
+        }
+      }
+
+      // SM5368 panels use shift-style row selection instead of binary ABCDE address lines.
+      // Encode the row pulse at the tail of bit-plane 0 so the panel advances row selection
+      // during the LAT settling window while leaving other bit planes unchanged.
+      if (is_sm5368 && bit == 0 && dma_width_ >= 2) {
+        const uint16_t row_data = (row == 0) ? SM5368_DATA_MASK : 0;
+        buf[dma_width_ - 2] |= row_data | SM5368_BK_MASK;
+        buf[dma_width_ - 1] |= row_data | SM5368_BK_MASK | SM5368_CLK_MASK;
       }
 
       // Set LAT bit on last pixel

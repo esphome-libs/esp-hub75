@@ -211,6 +211,41 @@ menu "HUB75 RGB LED Matrix Driver"
 
             config HUB75_DRIVER_DP3246
                 bool "DP3246"
+                help
+                    Initializes DP3246 column driver chips. Row addressing
+                    must be configured separately to match the panel.
+                    Auto-enables CLK_PHASE_INVERTED (rising-edge clock).
+
+                    Note: runtime 3-cycle LAT widening is not yet implemented;
+                    only the bit-bang init sequence runs. Panels may show
+                    artifacts until the DMA-side LAT widening is added.
+        endchoice
+
+        choice HUB75_ROW_DECODER
+            prompt "Row Decoder"
+            default HUB75_ROW_DECODER_BINARY
+            help
+                Row selection / row addressing mode used by the panel.
+
+                Most HUB75 panels use standard binary ABCDE row addressing.
+                Some panels use SM5368-style row logic where A/B/C are used as
+                row clock, BK, and row data instead of binary row address bits.
+
+                Note: SM5368 row decoding is currently implemented only on the
+                ESP32-S3 GDMA backend.
+
+            config HUB75_ROW_DECODER_BINARY
+                bool "Binary ABCDE (Most Panels)"
+                help
+                    Standard HUB75 row addressing using A/B/C/D/E as a binary
+                    row number.
+
+            config HUB75_ROW_DECODER_SM5368
+                bool "SM5368 Shift Row Decoder"
+                help
+                    SM5368-style row selection where A=row clock, B=BK, and
+                    C=row data. Use this for panels that require shift-style
+                    row selection instead of binary row addressing.
         endchoice
 
         choice HUB75_BIT_DEPTH_CHOICE
@@ -321,8 +356,7 @@ menu "HUB75 RGB LED Matrix Driver"
                 issues on long cables or with some panels.
 
                 Platform limits (falls back with warning if exceeded):
-                  - ESP32: 10 MHz max
-                  - ESP32-S2: 20 MHz max
+                  - ESP32/ESP32-S2: 20 MHz max
                   - ESP32-S3/P4/C6: 32 MHz
 
             config HUB75_CLK_8MHZ
@@ -705,12 +739,14 @@ menu "HUB75 RGB LED Matrix Driver"
         config HUB75_CLK_PHASE_INVERTED
             bool "Invert clock phase"
             default y if HUB75_DRIVER_MBI5124
+            default y if HUB75_DRIVER_DP3246
             default n
             help
                 Inverts the clock signal phase.
 
-                Required for MBI5124 driver chips (auto-enabled when MBI5124
-                is selected). Most other driver chips do not need this.
+                Required for MBI5124 and DP3246 driver chips (auto-enabled
+                when either is selected). Most other driver chips do not
+                need this.
 
                 Leave disabled unless your panel specifically requires it.
 
