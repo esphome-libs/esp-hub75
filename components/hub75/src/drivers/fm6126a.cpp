@@ -7,6 +7,7 @@
 // Based on https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA
 
 #include "driver_init.h"
+#include "../panels/scan_patterns.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include <initializer_list>
@@ -80,11 +81,6 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
   ESP_LOGI(TAG, "FM6126A initialized successfully");
 }
 
-void DriverInit::dp3246_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
-  // TODO: Port from reference library when hardware available
-  ESP_LOGW(TAG, "DP3246 initialization not yet implemented");
-}
-
 esp_err_t DriverInit::initialize(const Hub75Config &config) {
   uint16_t pixels_per_row = config.panel_width * config.layout_cols;
 
@@ -101,7 +97,12 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
       return ESP_OK;
 
     case Hub75ShiftDriver::DP3246:
-      dp3246_init(config.pins, pixels_per_row);
+      if (!config.clk_phase_inverted) {
+        ESP_LOGW(TAG, "DP3246: clk_phase_inverted should be true (rising-edge clock)");
+      }
+      // Program the entire physical shift chain, including vertical panels and four-scan expansion.
+      dp3246_init(config.pins, get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows,
+                                                       config.layout_cols));
       return ESP_OK;
 
     case Hub75ShiftDriver::MBI5124:
