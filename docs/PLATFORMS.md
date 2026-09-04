@@ -12,7 +12,7 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 | **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | ~284 KB |
 | **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Buffer padding |
 | **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
-| **Max Clock** | 10 MHz | 20 MHz | 40 MHz | 40 MHz+ | 40 MHz+ |
+| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ | 40 MHz+ |
 | **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | ⏳ Planned |
 
 ---
@@ -31,51 +31,45 @@ Clock speeds are automatically resolved to the nearest achievable frequency:
 
 | Requested | ESP32 | ESP32-S2 | ESP32-S3/P4/C6 | Actual (S3/P4/C6) |
 |-----------|-------|----------|----------------|-------------------|
-| **32 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 32 MHz | 32.00 MHz (160/5) |
-| **27 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 26.67 MHz | 26.67 MHz (160/6) |
-| **23 MHz** | ⚠️ 10 MHz | ⚠️ 20 MHz | ✅ 22.86 MHz | 22.86 MHz (160/7) |
-| **20 MHz** | ⚠️ 10 MHz | ✅ 20 MHz | ✅ 20 MHz | 20.00 MHz (160/8) |
-| **18 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 17.78 MHz | 17.78 MHz (160/9) |
-| **16 MHz** | ⚠️ 10 MHz | ⚠️ 10 MHz | ✅ 16 MHz | 16.00 MHz (160/10) |
+| **32 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 32 MHz | 32.00 MHz (160/5) |
+| **27 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 26.67 MHz | 26.67 MHz (160/6) |
+| **23 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 22.86 MHz | 22.86 MHz (160/7) |
+| **20 MHz** | ✅ 20 MHz | ✅ 20 MHz | ✅ 20 MHz | 20.00 MHz (160/8) |
+| **18 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 17.78 MHz | 17.78 MHz (160/9) |
+| **16 MHz** | ⚠️ 13.33 MHz | ⚠️ 13.33 MHz | ✅ 16 MHz | 16.00 MHz (160/10) |
 | **10 MHz** | ✅ 10 MHz | ✅ 10 MHz | ✅ 10 MHz | 10.00 MHz (160/16) |
-| **8 MHz** | ⚠️ 5 MHz | ✅ 8 MHz | ✅ 8 MHz | 8.00 MHz (160/20) |
+| **8 MHz** | ✅ 8 MHz | ✅ 8 MHz | ✅ 8 MHz | 8.00 MHz (160/20) |
 
-⚠️ = Falls back to nearest achievable frequency (warning logged at runtime)
+⚠️ = Resolves to a different frequency (logged at runtime; requests above the platform maximum also produce a warning)
 
-### ESP32 Clock Limitations
+### ESP32 / ESP32-S2 Clock Configuration
 
-The ESP32 uses PLL_D2_CLK (80 MHz) as the I2S clock source. The output frequency is:
-
-```
-Output = 80 MHz / clkm_div_num / (tx_bck_div_num × 2)
-```
-
-Per the ESP32 TRM (Section 12.6), both `clkm_div_num` and `tx_bck_div_num` must be ≥ 2.
-With minimum dividers (2, 2), the maximum achievable frequency is:
-
-```
-80 MHz / 2 / 4 = 10 MHz (maximum)
-```
-
-Higher frequencies (16/20 MHz) would require `clkm_div_num < 2`, which violates TRM
-constraints and produces undefined behavior.
-
-### ESP32-S2 Clock Configuration
-
-The ESP32-S2 uses PLL_160M (160 MHz) as the I2S clock source:
+Both chips use a 160 MHz PLL source. On ESP32, clearing `clka_en` selects
+PLL_F160M_CLK (historically named PLL_D2_CLK); on ESP32-S2, `clk_sel = 2`
+selects PLL_160M_CLK. In LCD mode, the output WS clock is half the BCK frequency:
 
 ```
 Output = 160 MHz / clkm_div_num / (tx_bck_div_num × 2)
 ```
 
-With the same divider constraints, more frequencies are achievable:
+Both dividers must be ≥ 2. With the driver's fixed `tx_bck_div_num = 2`, the
+maximum supported output is `160 MHz / 2 / 4 = 20 MHz`. Requests above 20 MHz
+are capped; other requests round the CLKM divider to the nearest integer.
+Fractional dividers are not used, avoiding clock jitter.
 
-| Speed | clkm_div | Formula | Result |
-|-------|----------|---------|--------|
-| 20 MHz | 2 | 160/2/4 | 20 MHz ✓ |
-| 16 MHz | — | Not achievable with integer dividers | Falls back to 10 MHz |
-| 10 MHz | 4 | 160/4/4 | 10 MHz ✓ |
-| 8 MHz | 5 | 160/5/4 | 8 MHz ✓ |
+| Requested | clkm_div | Formula | Actual |
+|-----------|----------|---------|--------|
+| 20 MHz | 2 | 160/2/4 | 20 MHz |
+| 18 MHz | 2 | 160/2/4 | 20 MHz |
+| 16 MHz | 3 | 160/3/4 | 13.33 MHz |
+| 10 MHz | 4 | 160/4/4 | 10 MHz |
+| 8 MHz | 5 | 160/5/4 | 8 MHz |
+
+Earlier ESP32 code assumed an 80 MHz source, so its reported frequency and BCM
+refresh calculations were half the frequency implied by the programmed dividers.
+For example, the old 10 MHz setting programmed dividers 2 and 2, which produce
+20 MHz. The corrected 10 MHz setting uses dividers 4 and 2; a 20 MHz request
+keeps dividers 2 and 2 and accounts for that frequency correctly.
 
 ### ESP32-S3 / ESP32-P4 / ESP32-C6
 
@@ -95,7 +89,7 @@ All standard frequencies (8/10/16/20/32 MHz) divide evenly from 160 MHz.
 
 ### References
 
-- ESP32 TRM v5.3, Section 12.5-12.6 (I2S Clock)
+- [ESP32 TRM v5.8](https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf), Sections 22.3 (I2S Clock) and 22.5 (LCD mode)
 - ESP32-S2 TRM v1.5, Section 12.5-12.6 (I2S Clock)
 - ESP32-S3 TRM, Chapter 26 (LCD_CAM)
 
@@ -150,7 +144,7 @@ All standard frequencies (8/10/16/20/32 MHz) divide evenly from 160 MHz.
 ### Limitations
 
 - **I2S peripheral misuse**: Designed for audio, not parallel data
-- **Clock speed limits**: ESP32 max 10 MHz, ESP32-S2 max 20 MHz (see [Clock Speed Reference](#clock-speed-reference))
+- **Clock speed limits**: ESP32 and ESP32-S2 max 20 MHz (see [Clock Speed Reference](#clock-speed-reference))
 - **No PSRAM support**: All buffers must be internal SRAM
 
 ### Advantages

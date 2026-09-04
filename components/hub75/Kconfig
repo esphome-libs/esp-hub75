@@ -356,8 +356,7 @@ menu "HUB75 RGB LED Matrix Driver"
                 issues on long cables or with some panels.
 
                 Platform limits (falls back with warning if exceeded):
-                  - ESP32: 10 MHz max
-                  - ESP32-S2: 20 MHz max
+                  - ESP32/ESP32-S2: 20 MHz max
                   - ESP32-S3/P4/C6: 32 MHz
 
             config HUB75_CLK_8MHZ
