@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Stuart Parmenter
 // SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include <algorithm>
@@ -23,16 +24,19 @@ class StreamEncoder {
                  uint32_t min_refresh_hz, size_t chunk_words = 8192) {
     configured_ = false;
     done_ = true;
+
     if (width == 0 || width > 65535 || row_pairs == 0 || row_pairs > 32 || depth == 0 || depth > 16 || clock_hz == 0 ||
         min_refresh_hz == 0 || chunk_words < 4 || chunk_words > MAX_CHUNK_WORDS || (chunk_words & 1U) != 0 ||
         width > chunk_words - 2) {
       return false;
     }
+
     width_ = width;
     rows_ = row_pairs;
     depth_ = depth;
     blanking_ = std::max<unsigned>(1, latch_blanking);
     chunk_words_ = chunk_words;
+
     const uint64_t storage = uint64_t(width_) * rows_ * 2 * 3 * (depth_ <= 8 ? 1 : 2);
     if (storage > std::numeric_limits<size_t>::max()) {
       return false;
@@ -46,6 +50,7 @@ class StreamEncoder {
     if (words_for_dwell(1) > budget) {
       return false;
     }
+
     size_t low = 1;
     size_t high = width_;
     while (low < high) {
@@ -56,9 +61,11 @@ class StreamEncoder {
         high = middle - 1;
       }
     }
+
     dwell_unit_ = low;
     frame_words_ = static_cast<size_t>(words_for_dwell(dwell_unit_));
     configured_ = true;
+
     return true;
   }
 
@@ -67,6 +74,7 @@ class StreamEncoder {
     if (!configured_ || !done_ || pixels == nullptr) {
       return false;
     }
+
     pixels_ = pixels;
     brightness_ = brightness;
     row_ = 0;
@@ -74,6 +82,7 @@ class StreamEncoder {
     phase_ = Phase::PRE_BLANK;
     phase_offset_ = 0;
     done_ = false;
+
     return true;
   }
 
@@ -85,9 +94,11 @@ class StreamEncoder {
     if (done_ || output == nullptr || capacity < chunk_words_) {
       return 0;
     }
+
     const size_t payload_capacity = chunk_words_ - 2;
     size_t produced = 0;
     uint16_t last_address = static_cast<uint16_t>(row_ << ADDR_SHIFT);
+
     while (produced < payload_capacity && !done_) {
       // OE blanks LEDs, but never stops their shift registers. A complete row
       // must reach LAT without a transaction trailer injecting extra clocks.
@@ -96,6 +107,7 @@ class StreamEncoder {
         produced = payload_capacity;
         break;
       }
+
       const size_t remaining = phase_words() - phase_offset_;
       const size_t count = std::min(remaining, payload_capacity - produced);
       last_address = static_cast<uint16_t>(row_ << ADDR_SHIFT);
@@ -108,12 +120,14 @@ class StreamEncoder {
         const uint16_t word = static_cast<uint16_t>(last_address | (phase_ == Phase::DISPLAY ? 0 : OE));
         std::fill_n(output + produced, count, word);
       }
+
       produced += count;
       phase_offset_ += count;
       if (phase_offset_ == phase_words()) {
         advance_phase();
       }
     }
+
     // Only the last payload can be odd; preserve 32-bit DMA length alignment.
     const uint16_t blank = static_cast<uint16_t>(last_address | OE);
     if ((produced & 1U) != 0) {
@@ -121,6 +135,7 @@ class StreamEncoder {
     }
     output[produced++] = blank;
     output[produced++] = blank;
+
     return produced;
   }
 
@@ -146,6 +161,7 @@ class StreamEncoder {
         content += width_ + blanking_ + (uint64_t(dwell) << bit) + 1;
       }
     }
+
     const uint64_t aligned = (content + 1) & ~uint64_t(1);
     return aligned + 2 * ((aligned + payload - 1) / payload);
   }
@@ -164,6 +180,7 @@ class StreamEncoder {
       case Phase::END_BLANK:
         return 1;
     }
+
     return 0;
   }
 
@@ -192,6 +209,7 @@ class StreamEncoder {
   uint16_t rgb_word(size_t x) const {
     const size_t upper = (row_ * width_ + x) * 3;
     const size_t lower = ((row_ + rows_) * width_ + x) * 3;
+
     // Match the hardware-looping PARLIO backend's data-pin order.
     return static_cast<uint16_t>((((channel(upper) >> bit_) & 1U) << 5) | (((channel(lower) >> bit_) & 1U) << 4) |
                                  (((channel(upper + 1) >> bit_) & 1U) << 3) |
@@ -207,6 +225,7 @@ class StreamEncoder {
   size_t storage_bytes_{0};
   size_t frame_words_{0};
   uint8_t depth_{0};
+
   const void *pixels_{nullptr};
   uint8_t brightness_{0};
   size_t row_{0};
