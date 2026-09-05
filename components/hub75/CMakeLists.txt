@@ -3,6 +3,10 @@
 
 # Build REQUIRES list conditionally for cache and PSRAM support.
 # Use IDF_TARGET (CMake variable) not CONFIG_IDF_TARGET_* (Kconfig, not yet available)
+if(IDF_TARGET STREQUAL "esp32c6" AND (IDF_VERSION_MAJOR LESS 5 OR (IDF_VERSION_MAJOR EQUAL 5 AND IDF_VERSION_MINOR LESS 5)))
+    message(FATAL_ERROR "The ESP32-C6 streaming backend requires ESP-IDF 5.5 or newer")
+endif()
+
 set(HUB75_REQUIRES
     driver
     esp_timer
@@ -57,10 +61,14 @@ elseif(CONFIG_IDF_TARGET_ESP32S3)
     target_sources(${COMPONENT_LIB} PRIVATE
         "src/platforms/gdma/gdma_dma.cpp"
     )
-elseif(CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32C6)
-    # PARLIO peripheral (ESP32-P4 has clock gating, ESP32-C6 does not)
+elseif(CONFIG_IDF_TARGET_ESP32P4)
+    # PARLIO hardware loop transmission
     target_sources(${COMPONENT_LIB} PRIVATE
         "src/platforms/parlio/parlio_dma.cpp"
+    )
+elseif(CONFIG_IDF_TARGET_ESP32C6)
+    target_sources(${COMPONENT_LIB} PRIVATE
+        "src/platforms/parlio_stream/parlio_stream_dma.cpp"
     )
 endif()
 

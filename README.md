@@ -3,13 +3,15 @@
 [![ESP Component Registry](https://components.espressif.com/components/esphome/esp-hub75/badge.svg)](https://components.espressif.com/components/esphome/esp-hub75)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/esphome/library/esp-hub75.svg)](https://registry.platformio.org/libraries/esphome/esp-hub75)
 
-High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, and ESP32-P4.
+High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-P4 requires 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+
+ESP32-C6 uses a [streaming backend](docs/C6_STREAMING.md) with compact pixel storage and continuous CPU conversion. C6 hardware validation is pending.
 
 ## Features
 
-- ✅ **Static circular DMA refresh** - No interrupts, no CPU intervention after `begin()`
+- ✅ **Static circular DMA refresh** - ESP32/S2/S3/P4 refresh without ongoing CPU work; C6 uses streaming
 - ✅ **Multi-platform support** - ESP32-S3 (GDMA), ESP32/S2 (I2S), ESP32-P4 (PARLIO)
 - ✅ **BCM timing** - Descriptor duplication (GDMA/I2S) or buffer padding (PARLIO)
 - ✅ **Scan pattern support** - 1/4, 1/8, 1/16, 1/32 scan panels with coordinate remapping
@@ -22,9 +24,9 @@ High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ES
 - ✅ **CIE 1931 gamma correction** - Native bit-depth LUTs (4-12 bit)
 - ✅ **Dual-mode brightness** - Basis (1-255) + intensity (0.0-1.0) control
 - ✅ **Multiple pixel formats** - RGB888, RGB888_32, RGB565 input
-- ✅ **Direct buffer writes** - No separate framebuffer copy, IRAM optimized
+- ✅ **Direct buffer writes** - Looping backends write DMA memory directly; C6 expands compact RGB storage
 - ✅ **Double buffering** - Tear-free animation with `flipBuffer()`
-- ✅ **Ghosting prevention** - LSB bit plane previous row address technique
+- ✅ **Ghosting prevention** - Backend-specific row and latch blanking
 - ✅ **PSRAM support** - P4 uses PSRAM framebuffers by default; S3 can opt in. See [RAM mode and speed requirements](docs/MENUCONFIG.md#psram-mode-and-speed).
 
 ## Installation
@@ -157,7 +159,8 @@ esp-hub75/                    # Repository root
 │           └── platforms/    # Platform-specific DMA implementations
 │               ├── i2s/      # ESP32/ESP32-S2
 │               ├── gdma/     # ESP32-S3
-│               └── parlio/   # ESP32-P4
+│               ├── parlio/   # ESP32-P4 hardware looping
+│               └── parlio_stream/ # ESP32-C6 streaming
 └── examples/
     ├── common/               # Pin configuration examples
     ├── 01_basic/             # Simple color tests
