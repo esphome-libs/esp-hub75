@@ -138,7 +138,7 @@ Last descriptor of last row points back to first descriptor of Row 0:
 
 **Peripheral**: LCD_CAM peripheral
 **DMA**: Generic DMA (GDMA) with AHB channels
-**Memory**: Internal SRAM only
+**Memory**: Internal SRAM by default; optional PSRAM framebuffers (descriptors remain internal)
 
 **Implementation**:
 - Static circular `gdma_descriptor_t` chain (~2,112 descriptors for 32-row panel)
@@ -155,7 +155,7 @@ Last descriptor of last row points back to first descriptor of Row 0:
 
 **Peripheral**: Parallel I/O (PARLIO)
 **DMA**: Enhanced DMA (EDMA) with PSRAM support
-**Memory**: **PSRAM via EDMA** (not internal SRAM)
+**Memory**: PSRAM by default; internal RAM is selectable
 
 **Implementation**:
 - **Different BCM method**: Buffer padding (not descriptor duplication)
@@ -190,14 +190,14 @@ The driver uses several memory categories, each serving a specific purpose:
 1. **Framebuffer** - Stores current display image in platform-native format (internal SRAM)
 2. **Row Buffers** - Bit plane data transmitted by DMA (location varies by platform)
 3. **DMA Descriptors** - Hardware instructions for the DMA engine (GDMA/I2S only)
-4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4/C6, PSRAM)
+4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4/C6; P4 defaults to PSRAM)
 
 **Platform Memory Strategies:**
 
-- **GDMA/I2S (ESP32/S2/S3)**: All buffers in internal SRAM, BCM timing via descriptor duplication
+- **GDMA/I2S (ESP32/S2/S3)**: Internal SRAM by default, BCM timing via descriptor duplication. S3 can place DMA framebuffers in PSRAM; descriptors remain internal. ESP32/S2 require internal DMA buffers.
   - Example (64×64, 8-bit): ~57 KB total (framebuffer + row buffers + descriptors)
 
-- **PARLIO (ESP32-P4/C6)**: Buffers in PSRAM, BCM timing via buffer padding
+- **PARLIO (ESP32-P4/C6)**: BCM timing via buffer padding. P4 defaults to PSRAM and can select internal RAM; C6 uses internal RAM.
   - Example (64×64, 8-bit): ~16 KB internal SRAM + ~284 KB PSRAM
   - Advantage: Frees internal SRAM for application code
 

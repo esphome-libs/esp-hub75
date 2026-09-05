@@ -69,7 +69,7 @@ class ParlioDma : public PlatformDma {
   void initialize_buffer_internal(BitPlaneBuffer *buffers);  // Helper: initialize one buffer set
   void set_brightness_oe();
   void set_brightness_oe_internal(BitPlaneBuffer *buffers, uint8_t brightness);  // Helper: set OE for one buffer
-  void flush_cache_to_dma();
+  void flush_cache_to_dma(int buffer_idx);
   bool build_transaction_queue();
   void calculate_bcm_timings();
   size_t calculate_bcm_padding(uint8_t bit_plane);
@@ -113,7 +113,7 @@ class ParlioDma : public PlatformDma {
   int active_idx_;           // CPU draws to buffers[active_idx_]
   bool is_double_buffered_;  // True if dma_buffers_[1] successfully allocated
 
-  size_t total_buffer_bytes_;  // Cached total buffer size per buffer (computed once, never changes)
+  size_t total_buffer_bytes_ = 0;  // Cached total buffer size per buffer (computed once, never changes)
   uint8_t basis_brightness_;
   float intensity_;
   bool transfer_started_;

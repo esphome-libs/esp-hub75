@@ -3,6 +3,13 @@
 
 menu "HUB75 RGB LED Matrix Driver"
 
+    config HUB75_KCONFIG_PRESENT
+        bool
+        default y
+        help
+            Distinguishes disabled menuconfig options from standalone builds
+            that do not load this component's Kconfig.
+
     # ========================================
     # Board Presets (Quick Pin Setup)
     # ========================================
@@ -759,6 +766,27 @@ menu "HUB75 RGB LED Matrix Driver"
 
                 Recommended for best performance. Uses ~2-4 KB of IRAM.
                 Disable only if IRAM space is critically constrained.
+
+        config HUB75_EXTERNAL_FRAMEBUFFERS
+            bool "Use External Framebuffers"
+            depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4
+            depends on SPIRAM
+            default y if IDF_TARGET_ESP32P4
+            default n
+            help
+                Allocates DMA framebuffers in PSRAM instead of internal RAM.
+                Supported on ESP32-S3 and ESP32-P4. DMA descriptors remain
+                in internal RAM. ESP32 and ESP32-S2 use internal buffers only.
+
+                Enable PSRAM initialization and heap allocation in the ESP-IDF
+                PSRAM settings. Disable this option to keep framebuffers in
+                internal RAM even when PSRAM is available.
+
+                Configure RAM mode and speed separately: use fast PSRAM on P4
+                (200 MHz starting point), and prefer octal PSRAM at 80 MHz on S3.
+                Quad S3 PSRAM has much less bandwidth; prefer internal buffers
+                or lower the HUB75 clock. Validate with normal application traffic.
+                See docs/MENUCONFIG.md for memory speed guidance.
 
     endmenu
 

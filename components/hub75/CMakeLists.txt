@@ -1,7 +1,7 @@
 # ESP32 HUB75 DMA Driver
 # CMakeLists.txt for ESP-IDF component
 
-# Build REQUIRES list conditionally (esp_mm only exists in ESP-IDF 5.x for P4/C6)
+# Build REQUIRES list conditionally for cache and PSRAM support.
 # Use IDF_TARGET (CMake variable) not CONFIG_IDF_TARGET_* (Kconfig, not yet available)
 set(HUB75_REQUIRES
     driver
@@ -9,8 +9,12 @@ set(HUB75_REQUIRES
     esp_hw_support
     freertos
 )
-if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
+if(IDF_VERSION_MAJOR GREATER 5 OR (IDF_VERSION_MAJOR EQUAL 5 AND IDF_VERSION_MINOR GREATER_EQUAL 1))
     list(APPEND HUB75_REQUIRES esp_mm)
+endif()
+if(IDF_VERSION_MAJOR GREATER_EQUAL 5 AND (IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4"))
+    # Make the PSRAM Kconfig options available when using this component.
+    list(APPEND HUB75_REQUIRES esp_psram)
 endif()
 # ESP-IDF 6.0+ split drivers into separate components
 if(IDF_VERSION_MAJOR GREATER_EQUAL 6)

@@ -25,7 +25,6 @@
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
 #include <esp_cache.h>
-#include <esp_memory_utils.h>
 
 static const char *const TAG = "ParlioDma";
 
@@ -94,7 +93,7 @@ ParlioDma::ParlioDma(const Hub75Config &config)
   // Initialize transmit config
   // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
   // to match the physical shift register layout
-  transmit_config_.idle_value = 0x00;
+  transmit_config_.idle_value = 1 << OE_BIT;  // make sure nothing lights up when in idle
   transmit_config_.bitscrambler_program = nullptr;
   transmit_config_.flags.queue_nonblocking = 0;
   transmit_config_.flags.loop_transmission = 1;  // Continuous refresh
@@ -441,14 +440,14 @@ bool ParlioDma::allocate_row_buffers() {
   total_buffer_bytes_ = total_bytes;  // Cache for flush_cache_to_dma() and build_transaction_queue()
 
   // Always allocate first buffer (buffer 0)
-  // ESP32-C6 has no PSRAM, so use internal DMA-capable memory
-#ifdef CONFIG_IDF_TARGET_ESP32C6
+#if HUB75_EXTERNAL_FRAMEBUFFERS == 1
+  static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM;
+  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (PSRAM)", total_bytes, num_rows_, bit_depth_);
+#else
+  // Internal mode is also available on ESP32-P4.
   static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL;
   ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (internal RAM)", total_bytes, num_rows_,
            bit_depth_);
-#else
-  static constexpr uint32_t DMA_MEM_CAPS = MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM;
-  ESP_LOGI(TAG, "Allocating buffer [0]: %zu bytes for %d rows × %d bits (PSRAM)", total_bytes, num_rows_, bit_depth_);
 #endif
   dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 
@@ -502,12 +501,8 @@ bool ParlioDma::allocate_row_buffers() {
       }
       // Set indices for double-buffer mode (front=0, active=1)
       active_idx_ = 1;
-#ifdef CONFIG_IDF_TARGET_ESP32C6
-      ESP_LOGI(TAG, "Double buffering: 2 × %zu KB = %zu KB total internal RAM", total_bytes / 1024,
-               (total_bytes * 2) / 1024);
-#else
-      ESP_LOGI(TAG, "Double buffering: 2 × %zu KB = %zu KB total PSRAM", total_bytes / 1024, (total_bytes * 2) / 1024);
-#endif
+      ESP_LOGI(TAG, "Double buffering: 2 × %zu KB = %zu KB total %s", total_bytes / 1024, (total_bytes * 2) / 1024,
+               HUB75_EXTERNAL_FRAMEBUFFERS ? "PSRAM" : "internal RAM");
     }
   }
 
@@ -767,33 +762,28 @@ void ParlioDma::set_brightness_oe() {
            intensity_);
 
   // Update all allocated buffers
-  for (auto &row_buffer : row_buffers_) {
-    if (row_buffer) {
-      set_brightness_oe_internal(row_buffer, brightness);
+  for (int i = 0; i < 2; i++) {
+    if (row_buffers_[i]) {
+      set_brightness_oe_internal(row_buffers_[i], brightness);
+      flush_cache_to_dma(i);
     }
   }
-
-  // Flush cache after brightness update
-  flush_cache_to_dma();
 
   ESP_LOGD(TAG, "Brightness OE updated");
 }
 
-void ParlioDma::flush_cache_to_dma() {
-  // Only flush for PSRAM (external RAM) - internal SRAM doesn't need cache sync
-  // This handles ESP32-C6 automatically: C6 uses internal RAM, so esp_ptr_external_ram()
-  // returns false and we skip the msync (which would be unnecessary overhead).
-  if (!dma_buffers_[active_idx_] || !esp_ptr_external_ram(dma_buffers_[active_idx_])) {
+void ParlioDma::flush_cache_to_dma(int buffer_idx) {
+#if SOC_CACHE_WRITEBACK_SUPPORTED
+  // P4 internal SRAM is cached too; both memory choices need synchronization.
+  if (!dma_buffers_[buffer_idx]) {
     return;
   }
-
-  // Flush cache: CPU cache → PSRAM (C2M = Cache to Memory)
-  // Flush the active buffer (CPU drawing buffer)
-  esp_err_t err = esp_cache_msync(dma_buffers_[active_idx_], total_buffer_bytes_,
+  esp_err_t err = esp_cache_msync(dma_buffers_[buffer_idx], total_buffer_bytes_,
                                   ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "Cache sync failed: %s", esp_err_to_name(err));
   }
+#endif
 }
 
 bool ParlioDma::build_transaction_queue() {
@@ -950,7 +940,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
   // Flush cache for DMA visibility (if not in double buffer mode)
   // In double buffer mode, flush happens on flip_buffer()
   if (!is_double_buffered_) {
-    flush_cache_to_dma();
+    flush_cache_to_dma(active_idx_);
   }
 }
 
@@ -979,7 +969,7 @@ void ParlioDma::clear() {
   // Flush cache for DMA visibility (if not in double buffer mode)
   // In double buffer mode, flush happens on flip_buffer()
   if (!is_double_buffered_) {
-    flush_cache_to_dma();
+    flush_cache_to_dma(active_idx_);
   }
 }
 
@@ -1075,7 +1065,7 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   // Flush cache for DMA visibility (if not in double buffer mode)
   // In double buffer mode, flush happens on flip_buffer()
   if (!is_double_buffered_) {
-    flush_cache_to_dma();
+    flush_cache_to_dma(active_idx_);
   }
 }
 
@@ -1087,7 +1077,7 @@ void ParlioDma::flip_buffer() {
 
   // Flush CPU cache for active buffer BEFORE swap (buffer we were drawing to)
   // Only needed in double buffer mode (draw/clear skip flush, defer to here)
-  flush_cache_to_dma();
+  flush_cache_to_dma(active_idx_);
 
   // Swap indices (front ↔ active)
   std::swap(front_idx_, active_idx_);

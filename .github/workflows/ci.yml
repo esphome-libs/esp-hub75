@@ -5,35 +5,60 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays at 04:17 UTC
 
 permissions:
   contents: read
 
 jobs:
+  build-matrix:
+    name: Select build coverage
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select matrix
+        id: matrix
+        run: |
+          matrix="$(python3 .github/ci/build_matrix.py)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
-    name: Build for ${{ matrix.idf_target }} (IDF ${{ matrix.idf_ver }})
+    name: Build for ${{ matrix.idf_target }} (IDF ${{ matrix.idf_ver }}, ${{ matrix.framebuffer }})
+    needs: build-matrix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        idf_target: [esp32, esp32s2, esp32s3, esp32c6, esp32p4]
-        idf_ver: [v4.4.8, v5.5.5, v6.1]
-        # v4.4.8: Latest 4.4 bugfix release (legacy support)
-        # v5.5.5: Latest 5.5 bugfix release
-        # v6.1: Latest stable 6.x release
-        exclude:
-          # ESP32-C6 only supported on ESP-IDF 5.x+
-          - idf_target: esp32c6
-            idf_ver: v4.4.8
-          # ESP32-P4 only supported on ESP-IDF 5.x+
-          - idf_target: esp32p4
-            idf_ver: v4.4.8
+      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+
+      - name: Configure framebuffer variant
+        if: matrix.framebuffer != 'default'
+        env:
+          FRAMEBUFFER: ${{ matrix.framebuffer }}
+          IDF_VERSION: ${{ matrix.idf_ver }}
+          IDF_TARGET: ${{ matrix.idf_target }}
+        run: |
+          cat ".github/ci/sdkconfig.${FRAMEBUFFER}" >> sdkconfig.defaults
+          if [ "$IDF_TARGET" = "esp32s3" ]; then
+            echo 'CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS=y' >> sdkconfig.defaults
+            echo 'CONFIG_SPIRAM_MODE_OCT=y' >> sdkconfig.defaults
+            echo 'CONFIG_SPIRAM_SPEED_80M=y' >> sdkconfig.defaults
+          else
+            echo 'CONFIG_SPIRAM_SPEED_200M=y' >> sdkconfig.defaults
+          fi
+          if [ "$IDF_VERSION" = "v4.4.8" ]; then
+            echo 'CONFIG_ESP32S3_SPIRAM_SUPPORT=y' >> sdkconfig.defaults
+          fi
 
       - name: Build with ESP-IDF
         uses: espressif/esp-idf-ci-action@e6f5c74232b1ccd4c97ed641f1e48553853f1fd5 # v1.2.0
@@ -42,13 +67,29 @@ jobs:
           target: ${{ matrix.idf_target }}
           path: '.'
 
+      - name: Verify framebuffer configuration
+        if: matrix.framebuffer != 'default'
+        env:
+          FRAMEBUFFER: ${{ matrix.framebuffer }}
+        run: |
+          grep -q '^#define CONFIG_SPIRAM 1$' build/config/sdkconfig.h
+          grep -q '^#define CONFIG_HUB75_KCONFIG_PRESENT 1$' build/config/sdkconfig.h
+          if [ "$FRAMEBUFFER" = "psram" ]; then
+            grep -q '^#define CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS 1$' build/config/sdkconfig.h
+          else
+            ! grep -q '^#define CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS ' build/config/sdkconfig.h
+          fi
+
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-matrix, build]
     if: always()
     steps:
       - name: Check build results
+        env:
+          MATRIX_RESULT: ${{ needs.build-matrix.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
         run: |
-          echo "Build workflow completed"
-          echo "Check individual jobs for details"
+          test "$MATRIX_RESULT" = success
+          test "$BUILD_RESULT" = success

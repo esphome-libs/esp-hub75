@@ -149,6 +149,54 @@ Choose which example to build in main/:
 - **Details**: See [docs/PLATFORMS.md](PLATFORMS.md) for actual frequencies and platform limits
 - **Troubleshooting**: Use 10 MHz if seeing signal integrity issues
 
+### HUB75_EXTERNAL_FRAMEBUFFERS
+- **Type**: bool
+- **Supported**: ESP32-S3 and ESP32-P4 with PSRAM enabled
+- **Default**: Enabled on P4 when PSRAM is configured; disabled on S3
+- **Description**: Places DMA framebuffers in PSRAM. DMA descriptors stay in internal RAM.
+- **Requirements**: Enable PSRAM initialization and heap allocation in the ESP-IDF PSRAM settings. On IDF 4.4, enable ESP32-S3 SPI RAM support.
+- **Internal buffers**: Disable this option to use internal RAM even when PSRAM is available. P4 still needs cache synchronization for internal buffers.
+- **Standalone Arduino**: Use `-DHUB75_EXTERNAL_FRAMEBUFFERS=1` on S3 or `=0` to disable P4's PSRAM default. Enabling external buffers requires S3/P4 with PSRAM support; `=0` is valid on any target.
+- **Limits**: S3's effective DMA width must be a multiple of 8 pixels and at most 2040 pixels with external buffers. Larger bitplanes exceed the current single-descriptor size limit. PSRAM bandwidth also depends on RAM mode/speed and concurrent traffic.
+
+#### PSRAM mode and speed
+
+Enabling external framebuffers does **not** configure the RAM clock. Set the RAM
+mode and speed separately under **Component config → ESP PSRAM** (the menu name
+varies by ESP-IDF version), matching the memory fitted to your board.
+
+| Target | Framebuffer default | Recommended memory configuration |
+|--------|---------------------|----------------------------------|
+| ESP32-P4 | PSRAM | Start with **200 MHz PSRAM**, supported by the board. This is the ESP-IDF 5.5/6.1 default; check existing project settings for a slower override. |
+| ESP32-S3 with octal PSRAM | Internal RAM; external buffers are opt-in | **Octal mode, 80 MHz** is the recommended starting point for external buffers. Hardware validation is still needed for your display and workload. |
+| ESP32-S3 with quad PSRAM | Internal RAM | Prefer internal framebuffers. External buffers may work at lower HUB75 clocks, but reliable operation has not been established. |
+
+P4 has worked well in hardware testing with fast PSRAM. Slower RAM settings can
+starve DMA; successful PSRAM allocation alone does not establish adequate
+bandwidth. Use `CONFIG_SPIRAM_SPEED_200M=y` for the recommended P4 starting point.
+
+For an S3 board **fitted with octal PSRAM**, use `CONFIG_SPIRAM_MODE_OCT=y` and
+`CONFIG_SPIRAM_SPEED_80M=y`. Selecting octal mode cannot turn a quad-memory board
+into an octal one. ESP-IDF's S3 RAM clock defaults to 40 MHz, so check it explicitly.
+S3 flash and PSRAM share the MSPI bus and clock, so choose a supported combination
+of flash and RAM modes/speeds. Do not use experimental 120 MHz octal operation as
+the baseline. See Espressif's
+[S3 flash/PSRAM mode and speed requirements](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-guides/flash_psram_config.html)
+and [P4 PSRAM clock settings](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32p4/api-reference/kconfig-reference.html#config-spiram-speed).
+
+The bandwidth difference is substantial: at 80 MHz, S3 quad SDR has a theoretical
+40 MB/s data rate, while octal DDR has 160 MB/s. A 20 MHz HUB75 stream reads
+16-bit words at 40 MB/s during output. Quad therefore has no bandwidth margin
+at that setting even before protocol overhead, CPU access, and other traffic.
+These are raw rates, not measured sustained throughput. Espressif documents
+[LCD DMA starvation when PSRAM bandwidth is shared](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/peripherals/lcd/rgb_lcd.html#single-frame-buffer-in-psram).
+
+If external buffers produce corruption, flicker, or unstable refresh, verify the
+RAM mode/speed, reduce `HUB75_CLOCK_SPEED` (start at 10 MHz or lower), and test
+with Wi-Fi and normal rendering traffic active. On S3, also test flash traffic
+such as filesystem access and OTA updates. If bandwidth is still insufficient,
+disable `HUB75_EXTERNAL_FRAMEBUFFERS` and use internal RAM, subject to capacity.
+
 ### HUB75_MIN_REFRESH_RATE
 - **Type**: int (30-240)
 - **Default**: 60 Hz

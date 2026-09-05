@@ -492,7 +492,7 @@ See working examples:
 **Practical limits**:
 - **Power**: PSU must supply adequate amperage
 - **Signal integrity**: Long chains may need buffering
-- **Memory**: GDMA limited by internal SRAM, PARLIO by PSRAM
+- **Memory**: S3 GDMA uses internal SRAM by default and can opt into PSRAM. P4 PARLIO uses PSRAM framebuffers by default. See [PSRAM mode and speed](MENUCONFIG.md#psram-mode-and-speed).
 - **Refresh rate**: More panels = more data = potentially lower refresh
 
 ---

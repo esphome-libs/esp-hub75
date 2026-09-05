@@ -390,6 +390,18 @@ Not a bug: PSRAM requires cache synchronization
 
 ## Color & Gamma Issues
 
+### Corruption or Flicker With PSRAM Framebuffers
+
+Check the RAM clock separately from the HUB75 output clock. On P4, start with
+200 MHz PSRAM if supported by the board. On S3, prefer octal PSRAM at 80 MHz;
+quad PSRAM may not sustain the display's DMA traffic. A build completing or an
+allocation succeeding does not verify memory bandwidth.
+
+Lower `HUB75_CLOCK_SPEED` and test while Wi-Fi and normal rendering are active.
+If necessary, disable `HUB75_EXTERNAL_FRAMEBUFFERS` to use internal RAM.
+See [PSRAM mode and speed](MENUCONFIG.md#psram-mode-and-speed) for configuration
+settings, bandwidth calculations, and validation limits.
+
 ### Banding in Gradients
 
 **Solution**:
@@ -467,10 +479,12 @@ Solutions:
 2. Reduce bit depth (saves buffer memory):
    8-bit uses less than 10/12-bit
 
-3. ESP32-P4: Use PARLIO (PSRAM) instead of GDMA (SRAM)
+3. ESP32-S3/P4 with PSRAM: Enable HUB75_EXTERNAL_FRAMEBUFFERS
 
 4. Reduce panel size or layout
 ```
+
+Before enabling external buffers, check the [PSRAM mode and speed requirements](MENUCONFIG.md#psram-mode-and-speed).
 
 ---
 
@@ -597,8 +611,11 @@ Solution: Avoid GPIO 6-11 on ESP32
 Solutions:
 - Reduce bit depth
 - Use fewer panels
-- ESP32-P4: Switch to PARLIO (uses PSRAM)
+- ESP32-S3/P4 with PSRAM: Enable HUB75_EXTERNAL_FRAMEBUFFERS
 ```
+
+The DMA backend is selected by target. External buffers require sufficient
+PSRAM capacity and bandwidth; see [PSRAM mode and speed](MENUCONFIG.md#psram-mode-and-speed).
 
 ---
 
