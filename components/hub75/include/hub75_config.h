@@ -82,24 +82,31 @@ extern "C" {
 #endif
 
 /**
- * Use external framebuffer in PSRAM / SPIRAM
- * Ser via menuconfig or override: -D HUB75_EXTERNAL_FRAMEBUFFERS
+ * Use external framebuffers in PSRAM on ESP32-S3 / ESP32-P4.
+ * Set via menuconfig or override: -DHUB75_EXTERNAL_FRAMEBUFFERS=0 or 1.
  */
 #ifndef HUB75_EXTERNAL_FRAMEBUFFERS
 #ifdef CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
 #define HUB75_EXTERNAL_FRAMEBUFFERS CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
-#elif defined(CONFIG_SPIRAM) && defined(CONFIG_IDF_TARGET_ESP32P4)
+#elif !defined(CONFIG_HUB75_KCONFIG_PRESENT) && defined(CONFIG_SPIRAM) && defined(CONFIG_IDF_TARGET_ESP32P4)
+// Standalone Arduino builds do not load this component's Kconfig defaults.
 #define HUB75_EXTERNAL_FRAMEBUFFERS 1
 #else
 #define HUB75_EXTERNAL_FRAMEBUFFERS 0
 #endif
-#else  // HUB75_EXTERNAL_FRAMEBUFFERS
-#if !defined(SOC_SPIRAM_SUPPORTED) && HUB75_EXTERNAL_FRAMEBUFFERS != 0
-#pragma message "SOC does not support external framebuffer, disabling..."
-#undef HUB75_EXTERNAL_FRAMEBUFFERS
-#define HUB75_EXTERNAL_FRAMEBUFFERS 0
 #endif
-#endif  // HUB75_EXTERNAL_FRAMEBUFFERS
+
+#if HUB75_EXTERNAL_FRAMEBUFFERS != 0 && HUB75_EXTERNAL_FRAMEBUFFERS != 1
+#error "HUB75_EXTERNAL_FRAMEBUFFERS must be 0 or 1"
+#endif
+#if HUB75_EXTERNAL_FRAMEBUFFERS
+#if !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32P4)
+#error "External HUB75 framebuffers require ESP32-S3 or ESP32-P4; ESP32 and ESP32-S2 I2S DMA uses internal RAM"
+#endif
+#ifndef CONFIG_SPIRAM
+#error "External HUB75 framebuffers require PSRAM support (CONFIG_SPIRAM)"
+#endif
+#endif
 
 #ifdef __cplusplus
 }

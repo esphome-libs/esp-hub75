@@ -25,7 +25,7 @@ High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ES
 - ✅ **Direct buffer writes** - No separate framebuffer copy, IRAM optimized
 - ✅ **Double buffering** - Tear-free animation with `flipBuffer()`
 - ✅ **Ghosting prevention** - LSB bit plane previous row address technique
-- ✅ **PSRAM support** - ESP32-P4 PARLIO uses PSRAM for large buffers (frees internal SRAM)
+- ✅ **PSRAM support** - P4 uses PSRAM framebuffers by default; S3 can opt in. See [RAM mode and speed requirements](docs/MENUCONFIG.md#psram-mode-and-speed).
 
 ## Installation
 

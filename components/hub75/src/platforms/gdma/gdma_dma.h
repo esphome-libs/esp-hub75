@@ -130,9 +130,9 @@ class GdmaDma : public PlatformDma {
   // BCM timing calculation (calculates lsbMsbTransitionBit for OE control)
   void calculate_bcm_timings();
 
-  void flush_cache_to_dma();
+  void flush_cache_to_dma(int buffer_idx);
 
-  size_t total_buffer_bytes_;  // Cached total buffer size per buffer (computed once, never changes)
+  size_t total_buffer_bytes_ = 0;  // Cached total buffer size per buffer (computed once, never changes)
 
   gdma_channel_handle_t dma_chan_;
   const uint8_t bit_depth_;         // Bit depth from config (6, 7, 8, 10, or 12)

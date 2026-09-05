@@ -8,7 +8,7 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 |---------|-------|----------|----------|----------|----------|
 | **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO | PARLIO |
 | **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA | EDMA |
-| **Memory** | Internal SRAM | Internal SRAM | Internal SRAM | **PSRAM** | Internal SRAM |
+| **Memory** | Internal SRAM | Internal SRAM | SRAM or PSRAM | PSRAM or SRAM | Internal SRAM |
 | **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | ~284 KB |
 | **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Buffer padding |
 | **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
@@ -161,7 +161,7 @@ All standard frequencies (8/10/16/20/32 MHz) divide evenly from 160 MHz.
 
 **Peripheral**: LCD_CAM peripheral (proper parallel data interface)
 **DMA**: Generic DMA (GDMA) with AHB channels
-**Memory**: Internal SRAM only
+**Memory**: Internal SRAM by default; optional PSRAM framebuffers (DMA descriptors remain internal)
 
 ### Implementation
 
@@ -210,7 +210,7 @@ All standard frequencies (8/10/16/20/32 MHz) divide evenly from 160 MHz.
 
 1. Allocate GDMA AHB channel
 2. Configure LCD_CAM peripheral (16-bit parallel mode)
-3. Allocate row buffers in DMA-capable SRAM
+3. Allocate row buffers in internal SRAM or aligned PSRAM, according to `HUB75_EXTERNAL_FRAMEBUFFERS`
 4. Build static descriptor chain with BCM repetitions
 5. Configure GDMA channel (connect to LCD_CAM)
 6. Link last descriptor → first (circular)
@@ -241,7 +241,7 @@ This gives LAT signal extra settling time during fast LSB transitions.
 
 ### Limitations
 
-- **No PSRAM**: All buffers in internal SRAM
+- **PSRAM bandwidth**: Prefer octal PSRAM at 80 MHz for external buffers. Quad PSRAM has little bandwidth margin; internal buffers are preferred. See [RAM mode and speed requirements](MENUCONFIG.md#psram-mode-and-speed).
 - **Complex registers**: Requires deep ESP32-S3 TRM knowledge
 
 ---
@@ -252,7 +252,11 @@ This gives LAT signal extra settling time during fast LSB transitions.
 
 **Peripheral**: Parallel I/O (PARLIO) - dedicated parallel data interface
 **DMA**: Enhanced DMA (EDMA) with **PSRAM support**
-**Memory**: **PSRAM via EDMA** (not internal SRAM)
+**Memory**: PSRAM by default; internal RAM is selectable via `HUB75_EXTERNAL_FRAMEBUFFERS`
+
+Use fast PSRAM for stable DMA output: **200 MHz** is the recommended starting
+point on boards supporting it. Check existing project settings even though current
+ESP-IDF defaults to this speed. See [RAM mode and speed requirements](MENUCONFIG.md#psram-mode-and-speed).
 
 ### Implementation
 
@@ -322,29 +326,26 @@ dma_buffer_ = heap_caps_malloc(
 **Total Memory** (64×64 panel, 8-bit):
 - Row buffers: ~284 KB PSRAM
 - Transaction handles: ~512 bytes (negligible)
-- **Total: ~284 KB PSRAM** (not internal SRAM!)
+- **Total: ~284 KB PSRAM** with external buffers enabled; otherwise this storage comes from internal RAM
 
 ### Cache Synchronization
 
-PSRAM is cached on ESP32-P4. CPU writes must be flushed for DMA visibility:
+Both PSRAM and internal RAM are cached on ESP32-P4. CPU writes to either must
+be synchronized with `esp_cache_msync` before DMA reads them. ESP32-S3 needs
+synchronization for its optional PSRAM buffers; internal S3 SRAM is uncached.
 
-```cpp
-void flush_cache_to_dma() {
-    if (esp_ptr_external_ram(dma_buffer_)) {
-        // Flush CPU cache → PSRAM (Cache to Memory)
-        esp_cache_msync(dma_buffer_, total_buffer_bytes_,
-                       ESP_CACHE_MSYNC_FLAG_DIR_C2M |
-                       ESP_CACHE_MSYNC_FLAG_UNALIGNED);
-    }
-}
-```
+Single-buffer drawing, clearing, and filling synchronize the drawing buffer.
+Double-buffer drawing defers synchronization until `flip_buffer()`. Initialization
+and brightness changes synchronize **both** allocated buffers because they modify
+the control bits used by DMA in both buffers.
 
-Called after updating framebuffer pixels.
+See [external framebuffer configuration](MENUCONFIG.md#hub75_external_framebuffers)
+for supported targets, defaults, and bandwidth considerations.
 
 ### Initialization Sequence
 
 1. Allocate PARLIO TX unit: `parlio_new_tx_unit()`
-2. Allocate single contiguous PSRAM buffer
+2. Allocate a contiguous buffer in the selected memory pool (PSRAM by default)
 3. Build buffer with pixel data + padding (all bit planes for all rows)
 4. Cache metadata (offsets) for each bit plane
 5. Enable PARLIO unit: `parlio_tx_unit_enable()`
@@ -514,7 +515,7 @@ Same as ESP32-P4 PARLIO **but NO clock gating support**.
 | 10-bit | 10 | ~84 KB | ~34 KB | ~134 KB |
 | 12-bit | 12 | ~101 KB | ~41 KB | ~158 KB |
 
-**Note**: PARLIO scales similarly but uses PSRAM (not SRAM).
+**Note**: These P4 estimates assume PSRAM framebuffers. Selecting internal buffers uses SRAM for the same data.
 
 ### Panel Size
 
