@@ -7,9 +7,11 @@
 #include <cmath>
 #include <cstring>
 #include <driver/gpio.h>
+#include <esp_clk_tree.h>
 #include <esp_heap_caps.h>
 #include <esp_idf_version.h>
 #include <esp_log.h>
+#include <hal/parlio_ll.h>
 
 #if !CONFIG_PARLIO_TX_ISR_CACHE_SAFE
 #error "C6 streaming requires CONFIG_PARLIO_TX_ISR_CACHE_SAFE in the ESP-IDF build"
@@ -47,9 +49,27 @@ bool ParlioStreamDma::init() {
     return false;
   }
 
-  // C6's PARLIO PLL is 240 MHz. Pass an already achievable integer-divider
-  // frequency to ESP-IDF, and use that same frequency for the encoder budget.
-  clock_hz_ = 240000000 / std::max<uint32_t>(2, (240000000 + requested / 2) / requested);
+  uint32_t source_hz = 0;
+  const esp_err_t err = esp_clk_tree_src_get_freq_hz(static_cast<soc_module_clk_t>(PARLIO_CLK_SRC_DEFAULT),
+                                                     ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &source_hz);
+  if (err != ESP_OK || source_hz == 0) {
+    ESP_LOGE(TAG, "Failed to query PARLIO clock source: %s", esp_err_to_name(err));
+    return false;
+  }
+  if (requested > source_hz) {
+    ESP_LOGE(TAG, "Requested PARLIO clock exceeds source frequency");
+    return false;
+  }
+
+  // Preserve nearest-integer divider selection. Pass the achievable frequency
+  // to ESP-IDF, and use that same frequency for the encoder's timing budget.
+  const uint32_t divider = (source_hz + requested / 2) / requested;
+  if (divider >= PARLIO_LL_TX_MAX_CLK_INT_DIV) {
+    ESP_LOGE(TAG, "Requested PARLIO clock exceeds divider range");
+    return false;
+  }
+  clock_hz_ = source_hz / divider;
+
   if (!encoder_.configure(dma_width_, num_rows_, HUB75_BIT_DEPTH, config_.latch_blanking, clock_hz_,
                           config_.min_refresh_rate, CHUNK_WORDS)) {
     ESP_LOGE(TAG, "Geometry/bit depth cannot meet requested wire-time refresh budget");
@@ -71,8 +91,8 @@ bool ParlioStreamDma::init() {
   }
 
   for (auto &slot : staging_) {
-    slot = static_cast<uint16_t *>(
-        heap_caps_aligned_calloc(4, CHUNK_WORDS, sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    slot =
+        static_cast<uint16_t *>(heap_caps_calloc(CHUNK_WORDS, sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
   }
 
   if (!state_mutex_ || !flip_mutex_ || !flip_done_ || !startup_done_ || !worker_done_ || !pixels_[0] ||
@@ -98,7 +118,7 @@ bool ParlioStreamDma::init() {
 
 bool ParlioStreamDma::configure_unit() {
   parlio_tx_unit_config_t cfg{};
-  cfg.clk_src = PARLIO_CLK_SRC_PLL_F240M;
+  cfg.clk_src = PARLIO_CLK_SRC_DEFAULT;
   cfg.clk_in_gpio_num = GPIO_NUM_NC;
   cfg.output_clk_freq_hz = clock_hz_;
   cfg.data_width = 16;
