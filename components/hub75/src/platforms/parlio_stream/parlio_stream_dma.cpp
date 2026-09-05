@@ -101,7 +101,9 @@ bool ParlioStreamDma::configure_unit() {
   cfg.valid_gpio_num = GPIO_NUM_NC;
   cfg.trans_queue_depth = SLOT_COUNT;
   cfg.max_transfer_size = CHUNK_WORDS * sizeof(uint16_t);
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 1, 0)
+// shift_edge was introduced in 6.1 and backported to 5.5.5 and 6.0.1.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 1) || \
+    (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 5) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0))
   // Transmitter shift edge is opposite the panel's sampling edge.
   cfg.shift_edge = config_.clk_phase_inverted ? PARLIO_SHIFT_EDGE_POS : PARLIO_SHIFT_EDGE_NEG;
 #else
