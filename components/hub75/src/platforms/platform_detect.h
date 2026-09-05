@@ -65,6 +65,8 @@ inline constexpr const char *getDMAEngineName() {
   return "I2S";
 #elif defined(HUB75_DMA_ENGINE_GDMA)
   return "LCD_CAM+GDMA";
+#elif defined(HUB75_PLATFORM_ESP32C6)
+  return "PARLIO streaming";
 #elif defined(HUB75_DMA_ENGINE_PARLIO)
   return "PARLIO";
 #else

@@ -16,7 +16,7 @@ Comprehensive guide to the HUB75 driver's core architecture: Binary Code Modulat
 
 ## Core Concept
 
-The HUB75 driver achieves **hardware-driven continuous refresh** with **no CPU intervention** using these key principles:
+The ESP32/S2/S3/P4 backends achieve **hardware-driven continuous refresh** with **no CPU intervention** using these key principles:
 
 1. **Static DMA descriptor chain** - Allocated once at startup, never modified
 2. **Circular linking** - Last descriptor points back to first (infinite loop)
@@ -177,9 +177,9 @@ Bit 7 buffer has 32× more padding than Bit 0.
 
 **Status**: ✅ Tested and working on ESP32-P4
 
-### ESP32-C6: PARLIO (Planned)
+### ESP32-C6: PARLIO Streaming
 
-Same as ESP32-P4 **but NO clock gating** (MSB bit unused, BCM via padding only).
+C6 uses compact RGB storage, a producer task, and three 8 KiB DMA staging buffers. The SDK ISR starts the next prepared transaction. It consumes CPU continuously and blanks the panel between finite transfers. See [C6 streaming](C6_STREAMING.md); the circular-refresh discussion below applies to the other backends.
 
 ---
 
@@ -190,14 +190,14 @@ The driver uses several memory categories, each serving a specific purpose:
 1. **Framebuffer** - Stores current display image in platform-native format (internal SRAM)
 2. **Row Buffers** - Bit plane data transmitted by DMA (location varies by platform)
 3. **DMA Descriptors** - Hardware instructions for the DMA engine (GDMA/I2S only)
-4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4/C6, PSRAM)
+4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4, PSRAM)
 
 **Platform Memory Strategies:**
 
 - **GDMA/I2S (ESP32/S2/S3)**: All buffers in internal SRAM, BCM timing via descriptor duplication
   - Example (64×64, 8-bit): ~57 KB total (framebuffer + row buffers + descriptors)
 
-- **PARLIO (ESP32-P4/C6)**: Buffers in PSRAM, BCM timing via buffer padding
+- **PARLIO (ESP32-P4)**: Buffers in PSRAM, BCM timing via buffer padding
   - Example (64×64, 8-bit): ~16 KB internal SRAM + ~284 KB PSRAM
   - Advantage: Frees internal SRAM for application code
 

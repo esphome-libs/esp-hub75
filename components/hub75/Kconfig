@@ -3,6 +3,15 @@
 
 menu "HUB75 RGB LED Matrix Driver"
 
+    config HUB75_C6_STREAM_ISR
+        bool
+        default y if IDF_TARGET_ESP32C6
+        select PARLIO_TX_ISR_CACHE_SAFE
+        help
+            Keep queued C6 transfers advancing in the SDK ISR while flash cache
+            is unavailable. Long stalls can still exhaust the prepared buffers;
+            transaction boundaries and idle output blank the panel.
+
     # ========================================
     # Board Presets (Quick Pin Setup)
     # ========================================
