@@ -32,6 +32,10 @@
 #define HUB75_PLATFORM_ESP32P4
 #define HUB75_DMA_ENGINE_PARLIO
 
+#elif defined(CONFIG_IDF_TARGET_ESP32S31)
+#define HUB75_PLATFORM_ESP32S31
+#define HUB75_DMA_ENGINE_PARLIO
+
 #else
 #error "Unsupported ESP32 variant for HUB75 driver"
 #endif
@@ -52,6 +56,8 @@ inline constexpr const char *getPlatformName() {
   return "ESP32-C6";
 #elif defined(HUB75_PLATFORM_ESP32P4)
   return "ESP32-P4";
+#elif defined(HUB75_PLATFORM_ESP32S31)
+  return "ESP32-S31";
 #else
   return "Unknown";
 #endif
