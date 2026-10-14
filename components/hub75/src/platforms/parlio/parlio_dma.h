@@ -15,7 +15,9 @@
 #include "../platform_dma.h"
 #include <cstddef>
 #include <driver/parlio_tx.h>
-#if defined(CONFIG_SOC_PPA_SUPPORTED) && defined(CONFIG_IDF_TARGET_ESP32P4) && __has_include(<driver/ppa.h>)
+#if defined(CONFIG_SOC_PPA_SUPPORTED) && \
+    (defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31)) && \
+    __has_include(<driver/ppa.h>)
 #define HUB75_PPA_AVAILABLE 1
 struct ppa_client_t;
 using ppa_client_handle_t = ppa_client_t *;

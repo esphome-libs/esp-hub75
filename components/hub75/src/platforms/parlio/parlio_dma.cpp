@@ -217,6 +217,7 @@ bool ParlioDma::init() {
         .oper_type = PPA_OPERATION_SRM,
         .max_pending_trans_num = 1,
         .data_burst_length = PPA_DATA_BURST_LENGTH_128,
+        .flags = {},
     };
     esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &ppa_srm_handle_);
     if (ppa_err != ESP_OK) {
@@ -1219,7 +1220,11 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
 
 #if HUB75_PPA_AVAILABLE
 namespace {
+#if defined(CONFIG_CACHE_L1_CACHE_LINE_SIZE)
 constexpr size_t kPpaAlignBytes = CONFIG_CACHE_L1_CACHE_LINE_SIZE;
+#else
+constexpr size_t kPpaAlignBytes = CONFIG_CACHE_L1_DCACHE_LINE_SIZE;
+#endif
 inline size_t align_up(size_t value, size_t alignment) { return (value + alignment - 1) & ~(alignment - 1); }
 }  // namespace
 

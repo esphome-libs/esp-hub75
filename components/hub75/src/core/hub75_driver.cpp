@@ -18,7 +18,8 @@
 #include "../platforms/gdma/gdma_dma.h"
 #elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 #include "../platforms/i2s/i2s_dma.h"
-#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31) || \
+    defined(CONFIG_IDF_TARGET_ESP32C6)
 #include "../platforms/parlio/parlio_dma.h"
 #endif
 
@@ -36,7 +37,8 @@ using namespace hub75;
 using PlatformDMAImpl = GdmaDma;
 #elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 using PlatformDMAImpl = I2sDma;
-#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31) || \
+    defined(CONFIG_IDF_TARGET_ESP32C6)
 using PlatformDMAImpl = ParlioDma;
 #endif
 
