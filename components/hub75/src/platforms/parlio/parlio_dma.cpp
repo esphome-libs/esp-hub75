@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 //
 // @file parlio_dma.cpp
-// @brief PARLIO implementation for HUB75 (ESP32-P4/C6)
+// @brief PARLIO implementation for HUB75 (ESP32-P4/S31/C6)
 //
 // Uses PARLIO TX peripheral with optional clock gating (MSB bit controls PCLK on P4)
 // to embed BCM timing directly in buffer data, eliminating descriptor repetition.
@@ -25,10 +25,56 @@
 #include <driver/gpio.h>
 #include <esp_heap_caps.h>
 #include <esp_cache.h>
+#include <esp_attr.h>
+
+#if defined(CONFIG_IDF_TARGET_ESP32S31)
+// ESP32-S31: a software reset (esp_restart, panic, task WDT) does not stop the AXI-DMA channel
+// that feeds PARLIO in loop mode. IDF then resets the AXI-DMA group mid-transfer on the next boot,
+// which wedges the channel (parlio_tx_unit_transmit() spins forever waiting for tx_ready).
+// ESP32-P4 aborts AXI-DMA channels in esp_system_reset_modules_on_exit(); S31 does not (yet),
+// so do it here.
+#include <esp_system.h>
+#include <esp_rom_sys.h>
+#include <hal/axi_dma_ll.h>
+#include <hal/gdma_channel.h>
+#include <soc/hp_sys_clkrst_struct.h>
+#define HUB75_S31_AXI_DMA_WORKAROUND 1
+#endif
 
 static const char *const TAG = "ParlioDma";
 
 namespace hub75 {
+
+#if defined(HUB75_S31_AXI_DMA_WORKAROUND)
+// Abort any AXI-DMA TX channel still connected to PARLIO (left running by a previous boot or about
+// to be left running by a restart). Safe to call when the channels are idle.
+static void s31_abort_parlio_axi_dma(bool log) {
+  if (!HP_SYS_CLKRST.axi_pdma_ctrl0.reg_axi_pdma_sys_clk_en) {
+    return;  // AXI-DMA clock off: nothing can be running
+  }
+  axi_dma_dev_t *dev = AXI_DMA_LL_GET_HW(0);
+  for (uint32_t ch = 0; ch < GDMA_LL_AXI_PAIRS_PER_GROUP; ch++) {
+    if (dev->out[ch].conf.out_peri_sel.peri_out_sel_chn != SOC_GDMA_TRIG_PERIPH_PARLIO0) {
+      continue;
+    }
+    axi_dma_ll_tx_abort(dev, ch, true);
+    uint32_t wait_us = 0;
+    while (!axi_dma_ll_tx_is_reset_avail(dev, ch) && wait_us < 10000) {
+      esp_rom_delay_us(10);
+      wait_us += 10;
+    }
+    axi_dma_ll_tx_reset_channel(dev, ch);
+    axi_dma_ll_tx_abort(dev, ch, false);
+    axi_dma_ll_tx_connect_to_periph(dev, ch, 63);  // back to reset default (unconnected)
+    if (log) {
+      ESP_LOGW(TAG, "Stopped stale AXI-DMA channel %u left running by previous boot (%s after %u us)", (unsigned) ch,
+               wait_us < 10000 ? "idle" : "timeout", (unsigned) wait_us);
+    }
+  }
+}
+
+static void s31_shutdown_handler() { s31_abort_parlio_axi_dma(false); }
+#endif
 
 // HUB75 16-bit word layout for PARLIO peripheral
 // Bit layout: [CLK|ADDR(5-bit)|LAT|OE|--|--|R1|R2|G1|G2|B1|B2]
@@ -103,7 +149,7 @@ ParlioDma::~ParlioDma() { ParlioDma::shutdown(); }
 
 bool ParlioDma::init() {
   ESP_LOGI(TAG, "Initializing PARLIO TX peripheral%s...",
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
            " with clock gating"
 #else
            ""
@@ -119,6 +165,15 @@ bool ParlioDma::init() {
     ESP_LOGE(TAG, "Row decoder mode is not supported on PARLIO backend yet");
     return false;
   }
+
+#if defined(HUB75_S31_AXI_DMA_WORKAROUND)
+  // Must run before parlio_new_tx_unit(): allocating the AXI-DMA channel resets the whole group.
+  s31_abort_parlio_axi_dma(true);
+  static bool shutdown_handler_registered = false;
+  if (!shutdown_handler_registered) {
+    shutdown_handler_registered = esp_register_shutdown_handler(s31_shutdown_handler) == ESP_OK;
+  }
+#endif
 
   // Calculate BCM timings first
   calculate_bcm_timings();
@@ -190,6 +245,12 @@ void ParlioDma::shutdown() {
     parlio_del_tx_unit(tx_unit_);
     tx_unit_ = nullptr;
   }
+
+  if (buffer_switched_sem_) {
+    vSemaphoreDelete(buffer_switched_sem_);
+    buffer_switched_sem_ = nullptr;
+  }
+  switch_cb_registered_ = false;
 
   // Free all allocated resources (using array structure)
   for (int i = 0; i < 2; i++) {
@@ -265,7 +326,7 @@ void ParlioDma::configure_parlio() {
       .sample_edge = config_.clk_phase_inverted ? PARLIO_SAMPLE_EDGE_NEG : PARLIO_SAMPLE_EDGE_POS,
       .bit_pack_order = PARLIO_BIT_PACK_ORDER_LSB,  // Explicit LSB to match ESP-IDF example
       .flags = {
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
           .clk_gate_en = 1,  // Clock gating enabled (MSB controls PCLK)
 #else
           .clk_gate_en = 0,  // Clock gating not supported on this chip
@@ -286,16 +347,16 @@ void ParlioDma::configure_parlio() {
   ESP_LOGI(TAG, "PARLIO TX unit created successfully");
   ESP_LOGI(TAG, "  Data width: 16 bits, Clock: %.2f MHz (requested %u MHz)", actual_clock_hz_ / 1000000.0f,
            (unsigned int) (requested_hz / 1000000));
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
   ESP_LOGI(TAG, "  Clock gating: ENABLED (MSB bit controls PCLK)");
 #else
-  ESP_LOGI(TAG, "  Clock gating: NOT SUPPORTED");
+  ESP_LOGI(TAG, "  Clock gating: DISABLED");
 #endif
   ESP_LOGI(TAG, "  Transaction queue depth: %zu", config.trans_queue_depth);
 }
 
 HUB75_CONST uint32_t ParlioDma::resolve_actual_clock_speed(Hub75ClockSpeed clock_speed) const {
-  // ESP32-P4/C6 PARLIO clock derivation:
+  // ESP32-P4/S31/C6 PARLIO clock derivation:
   //   Output = PLL_F160M / divider
   //   Constraint: divider >= 2
   //
@@ -508,6 +569,9 @@ bool ParlioDma::allocate_row_buffers() {
 
   // Set double buffer flag based on actual allocation result
   is_double_buffered_ = (dma_buffers_[1] != nullptr);
+  if (is_double_buffered_) {
+    setup_buffer_switch_sync();
+  }
 
   ESP_LOGI(TAG, "Successfully allocated row buffers");
   return true;
@@ -554,7 +618,7 @@ void ParlioDma::initialize_buffer_internal(BitPlaneBuffer *buffers) {
       // Initialize pixel section (LAT on last pixel)
       for (size_t x = 0; x < bp.pixel_words; x++) {
         uint16_t word = 0;
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
         word |= (1 << CLK_GATE_BIT);  // MSB=1: enable clock during pixel shift (clock gating)
 #endif
         word |= (row_addr << ADDR_SHIFT);  // Row address
@@ -590,7 +654,7 @@ void ParlioDma::initialize_blank_buffers() {
   }
 
   ESP_LOGI(TAG, "Initializing blank DMA buffers%s...",
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
            " with clock gating"
 #else
            ""
@@ -605,7 +669,7 @@ void ParlioDma::initialize_blank_buffers() {
   }
 
   ESP_LOGI(TAG, "Blank buffers initialized%s",
-#ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
+#if HUB75_PARLIO_CLK_GATING
            " (clock gating via MSB)"
 #else
            ""
@@ -778,6 +842,13 @@ void ParlioDma::flush_cache_to_dma(int buffer_idx) {
   if (!dma_buffers_[buffer_idx]) {
     return;
   }
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  // On other chips (e.g. ESP32-S31) internal SRAM is not behind the cache, so skip it there.
+  // esp_cache_get_line_size_by_addr() exists since ESP-IDF 6.0; S31 needs 6.1+ anyway.
+  if (esp_cache_get_line_size_by_addr(dma_buffers_[buffer_idx]) == 0) {
+    return;
+  }
+#endif
   esp_err_t err = esp_cache_msync(dma_buffers_[buffer_idx], total_buffer_bytes_,
                                   ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   if (err != ESP_OK) {
@@ -1069,6 +1140,39 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
   }
 }
 
+// ISR context (GDMA). user_ctx = semaphore handle (internal RAM, cache-safe).
+static bool IRAM_ATTR parlio_buffer_switched_cb(parlio_tx_unit_handle_t, const parlio_tx_buffer_switched_event_data_t *,
+                                                void *user_ctx) {
+  BaseType_t woken = pdFALSE;
+  xSemaphoreGiveFromISR(static_cast<SemaphoreHandle_t>(user_ctx), &woken);
+  return woken == pdTRUE;
+}
+
+void ParlioDma::setup_buffer_switch_sync() {
+  // Duration of one full buffer round: 16-bit words clocked out at actual_clock_hz_
+  frame_time_us_ = (uint32_t) (((uint64_t) (total_buffer_bytes_ / 2) * 1000000ULL) / actual_clock_hz_);
+
+  if (!tx_unit_ || buffer_switched_sem_) {
+    return;
+  }
+  buffer_switched_sem_ = xSemaphoreCreateBinary();
+  if (!buffer_switched_sem_) {
+    ESP_LOGW(TAG, "Buffer switch sync: semaphore alloc failed, using %u us delay", (unsigned) frame_time_us_);
+    return;
+  }
+
+  parlio_tx_event_callbacks_t cbs = {};
+  cbs.on_buffer_switched = parlio_buffer_switched_cb;
+  esp_err_t err = parlio_tx_unit_register_event_callbacks(tx_unit_, &cbs, buffer_switched_sem_);
+  if (err == ESP_OK) {
+    switch_cb_registered_ = true;
+    ESP_LOGI(TAG, "Buffer switch sync: on_buffer_switched (frame %u us)", (unsigned) frame_time_us_);
+  } else {
+    ESP_LOGW(TAG, "Buffer switch sync: on_buffer_switched not available (%s), using %u us delay", esp_err_to_name(err),
+             (unsigned) frame_time_us_);
+  }
+}
+
 void ParlioDma::flip_buffer() {
   // Single buffer mode: no-op (both indices point to buffer 0)
   if (!row_buffers_[1] || !dma_buffers_[1]) {
@@ -1079,14 +1183,31 @@ void ParlioDma::flip_buffer() {
   // Only needed in double buffer mode (draw/clear skip flush, defer to here)
   flush_cache_to_dma(active_idx_);
 
-  // Swap indices (front ↔ active)
+  // Swap indices (front <-> active)
   std::swap(front_idx_, active_idx_);
 
-  // Queue new front buffer (hardware switches seamlessly after current frame)
+  if (switch_cb_registered_) {
+    xSemaphoreTake(buffer_switched_sem_, 0);  // drop a stale signal
+  }
+
+  // Queue new front buffer (hardware switches after the current round finishes)
   size_t total_bits = total_buffer_bytes_ * 8;
   esp_err_t err = parlio_tx_unit_transmit(tx_unit_, dma_buffers_[front_idx_], total_bits, &transmit_config_);
   if (err != ESP_OK) {
     ESP_LOGW(TAG, "flip_buffer: Failed to queue buffer: %s", esp_err_to_name(err));
+    return;
+  }
+
+  // Wait until hardware really scans the new front buffer. Until then it still reads
+  // the old one (now active_idx_) - drawing into it would tear / show black stripes.
+  const uint32_t frame_ms = frame_time_us_ / 1000 + 1;
+  if (switch_cb_registered_) {
+    // worst case: one full round + margin
+    if (xSemaphoreTake(buffer_switched_sem_, pdMS_TO_TICKS(2 * frame_ms + 10)) != pdTRUE) {
+      ESP_LOGW(TAG, "flip_buffer: buffer switch not confirmed (timeout)");
+    }
+  } else if (frame_time_us_ > 0) {
+    vTaskDelay(pdMS_TO_TICKS(frame_ms) + 1);  // fallback: wait one full round
   }
 }
 

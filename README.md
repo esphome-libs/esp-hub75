@@ -3,14 +3,14 @@
 [![ESP Component Registry](https://components.espressif.com/components/esphome/esp-hub75/badge.svg)](https://components.espressif.com/components/esphome/esp-hub75)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/esphome/library/esp-hub75.svg)](https://registry.platformio.org/libraries/esphome/esp-hub75)
 
-High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
+High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, ESP32-P4 and ESP32-S31.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+). Tested with 4.4.8, 5.5.5, and 6.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+), (ESP32-S31 require 6.1+). Tested with 4.4.8, 5.5.5, and 6.1.
 
 ## Features
 
 - ✅ **Static circular DMA refresh** - No interrupts, no CPU intervention after `begin()`
-- ✅ **Multi-platform support** - ESP32-S3 (GDMA), ESP32/S2 (I2S), ESP32-P4 (PARLIO)
+- ✅ **Multi-platform support** - ESP32-S3 (GDMA), ESP32/S2 (I2S), ESP32-P4 (PARLIO), ESP32-S31 (PARLIO)
 - ✅ **BCM timing** - Descriptor duplication (GDMA/I2S) or buffer padding (PARLIO)
 - ✅ **Scan pattern support** - 1/4, 1/8, 1/16, 1/32 scan panels with coordinate remapping
 - ✅ **Shift driver initialization** - FM6126A/ICN2038S, FM6124, MBI5124, DP3246

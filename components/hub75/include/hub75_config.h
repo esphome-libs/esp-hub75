@@ -82,13 +82,14 @@ extern "C" {
 #endif
 
 /**
- * Use external framebuffers in PSRAM on ESP32-S3 / ESP32-P4.
+ * Use external framebuffers in PSRAM on ESP32-S3 / ESP32-P4 / ESP32-S31.
  * Set via menuconfig or override: -DHUB75_EXTERNAL_FRAMEBUFFERS=0 or 1.
  */
 #ifndef HUB75_EXTERNAL_FRAMEBUFFERS
 #ifdef CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
 #define HUB75_EXTERNAL_FRAMEBUFFERS CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS
-#elif !defined(CONFIG_HUB75_KCONFIG_PRESENT) && defined(CONFIG_SPIRAM) && defined(CONFIG_IDF_TARGET_ESP32P4)
+#elif !defined(CONFIG_HUB75_KCONFIG_PRESENT) && defined(CONFIG_SPIRAM) && \
+    (defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32S31))
 // Standalone Arduino builds do not load this component's Kconfig defaults.
 #define HUB75_EXTERNAL_FRAMEBUFFERS 1
 #else
@@ -100,8 +101,8 @@ extern "C" {
 #error "HUB75_EXTERNAL_FRAMEBUFFERS must be 0 or 1"
 #endif
 #if HUB75_EXTERNAL_FRAMEBUFFERS
-#if !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32P4)
-#error "External HUB75 framebuffers require ESP32-S3 or ESP32-P4; ESP32 and ESP32-S2 I2S DMA uses internal RAM"
+#if !defined(CONFIG_IDF_TARGET_ESP32S3) && !defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(CONFIG_IDF_TARGET_ESP32S31)
+#error "External HUB75 framebuffers require ESP32-S3, -P4 or -S31; ESP32 and ESP32-S2 I2S DMA uses internal RAM"
 #endif
 #ifndef CONFIG_SPIRAM
 #error "External HUB75 framebuffers require PSRAM support (CONFIG_SPIRAM)"
