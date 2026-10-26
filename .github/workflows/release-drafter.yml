@@ -9,9 +9,15 @@ permissions:
   contents: write
   pull-requests: write
 
+# One run at a time, so a queued run sees the previous run's version-bump commit.
+concurrency:
+  group: release-drafter
+  cancel-in-progress: false
+
 jobs:
   release-drafter:
     name: Release Drafter
+    # Holds DEPLOY_KEY, which the branch ruleset allows to push to main.
     environment: release-drafter
     runs-on: ubuntu-latest
     steps:
@@ -20,23 +26,30 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.ref }}
           ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       - name: Update version files
+        env:
+          VERSION: ${{ steps.drafter.outputs.resolved_version }}
         run: |
-          sed -i "s/\"version\": .*/\"version\": \"${{ steps.drafter.outputs.resolved_version }}\",/g" library.json
-          sed -i "s/^version = .*/version = \"${{ steps.drafter.outputs.resolved_version }}\"/" pyproject.toml
+          sed -i "s/\"version\": .*/\"version\": \"${VERSION}\",/g" library.json
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
 
       - name: Regenerate lockfile
         run: uv lock
 
       - name: Commit changes
+        env:
+          VERSION: ${{ steps.drafter.outputs.resolved_version }}
         run: |
-          if ! git diff --quiet; then
+          paths=(library.json pyproject.toml uv.lock)
+          if ! git diff --quiet -- "${paths[@]}"; then
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -am "Bump version to ${{ steps.drafter.outputs.resolved_version }} [skip ci]"
+            git add -- "${paths[@]}"
+            git commit -m "Bump version to ${VERSION} [skip ci]"
             git push
           fi
