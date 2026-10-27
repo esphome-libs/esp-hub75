@@ -34,6 +34,7 @@
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
 #include <driver/i2s_std.h>
 #include <soc/i2s_reg.h>
+#include <hal/i2s_ll.h>
 #else
 #include <soc/i2s_periph.h>
 #endif
@@ -159,7 +160,7 @@ bool I2sDma::init() {
   i2s_dev_ = (ESP32_I2S_DEVICE == 0) ? &I2S0 : &I2S1;
 #endif
 
-  // Reset and enable I2S peripheral (IDF < 6.0 only - auto-managed in 6.0+)
+  // Reset and enable I2S peripheral
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
   if (ESP32_I2S_DEVICE == 0) {
     periph_module_reset(PERIPH_I2S0_MODULE);
@@ -169,6 +170,11 @@ bool I2sDma::init() {
     periph_module_reset(PERIPH_I2S1_MODULE);
     periph_module_enable(PERIPH_I2S1_MODULE);
 #endif
+  }
+#else
+  PERIPH_RCC_ATOMIC() {
+    i2s_ll_enable_bus_clock(ESP32_I2S_DEVICE, true);
+    i2s_ll_reset_register(ESP32_I2S_DEVICE);
   }
 #endif
 
