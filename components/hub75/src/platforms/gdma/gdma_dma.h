@@ -117,6 +117,7 @@ class GdmaDma : public PlatformDma {
   };
 
  private:
+  bool run_buffer_benchmark();  // Optional startup verification, before DMA starts
   void configure_lcd_clock();
   void configure_lcd_mode();
   void configure_gpio();

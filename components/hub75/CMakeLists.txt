@@ -50,9 +50,19 @@ if(CONFIG_IDF_TARGET_ESP32 OR CONFIG_IDF_TARGET_ESP32S2)
         "${HUB75_COMPONENT_DIR}/src/platforms/i2s/i2s_dma.cpp"
     )
 elseif(CONFIG_IDF_TARGET_ESP32S3)
+    option(HUB75_GDMA_SIMD "Use ESP32-S3 SIMD for HUB75 buffer updates" ON)
+    option(HUB75_GDMA_BENCHMARK "Run HUB75 correctness and timing checks at startup" OFF)
     target_sources(${COMPONENT_LIB} PRIVATE
         "${HUB75_COMPONENT_DIR}/src/platforms/gdma/gdma_dma.cpp"
     )
+    if(HUB75_GDMA_SIMD)
+        target_sources(${COMPONENT_LIB} PRIVATE
+            "${HUB75_COMPONENT_DIR}/src/platforms/gdma/gdma_simd_s3.S")
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE HUB75_GDMA_SIMD=1)
+    endif()
+    if(HUB75_GDMA_BENCHMARK AND HUB75_GDMA_SIMD)
+        target_compile_definitions(${COMPONENT_LIB} PRIVATE HUB75_GDMA_BENCHMARK=1)
+    endif()
 elseif(CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32C6 OR CONFIG_IDF_TARGET_ESP32S31)
     # PARLIO peripheral (ESP32-P4 has clock gating, ESP32-C6 does not)
     target_sources(${COMPONENT_LIB} PRIVATE

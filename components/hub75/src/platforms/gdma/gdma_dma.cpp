@@ -14,6 +14,9 @@
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 
 #include "gdma_dma.h"
+#ifdef HUB75_GDMA_SIMD
+#include "gdma_simd.h"
+#endif
 #include "../../color/color_convert.h"    // For RGB565 scaling utilities
 #include "../../panels/scan_patterns.h"   // For scan pattern remapping
 #include "../../panels/panel_layout.h"    // For panel layout remapping
@@ -41,10 +44,20 @@
 #include <driver/periph_ctrl.h>
 #endif
 #include <esp_heap_caps.h>
+#ifdef HUB75_GDMA_BENCHMARK
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#endif
 
 static const char *const TAG = "GdmaDma";
 
 namespace hub75 {
+
+#ifdef HUB75_GDMA_BENCHMARK
+// Used only by the synchronous startup test, before the driver is published.
+static bool benchmark_scalar_ = false;
+#endif
 
 // HUB75 16-bit word layout for LCD_CAM peripheral
 // Bit layout: [--|--|OE|LAT|ADDR(5-bit)|R2|G2|B2|R1|G1|B1]
@@ -253,6 +266,11 @@ bool GdmaDma::init() {
   }
 
   ESP_LOGI(TAG, "Descriptor-chain DMA setup complete");
+#ifdef HUB75_GDMA_BENCHMARK
+  if (!run_buffer_benchmark()) {
+    return false;
+  }
+#endif
   return true;
 }
 
@@ -592,6 +610,29 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
   // Pre-compute bit plane stride (bytes between bit planes)
   const size_t bit_plane_stride = dma_width_ * 2;
 
+#ifdef HUB75_GDMA_SIMD
+  if (identity_transform && (bit_depth_ == 8 || bit_depth_ == 10) && w >= 8 &&
+      format == Hub75PixelFormat::RGB565 && !big_endian &&
+      (bit_plane_stride % 16 == 0)
+#ifdef HUB75_GDMA_BENCHMARK
+      && !benchmark_scalar_
+#endif
+  ) {
+    for (uint16_t dy = 0; dy < h; ++dy) {
+      const uint16_t py = y + dy;
+      const bool lower = py >= num_rows_;
+      const uint16_t row = lower ? py - num_rows_ : py;
+      auto *dst = reinterpret_cast<uint16_t *>(target_buffers[row].data) + x;
+      if (bit_depth_ == 8) {
+        simd::draw_rgb565_row<8>(dst, bit_plane_stride, w, buffer + size_t(dy) * w * 2, lut_, lower);
+      } else {
+        simd::draw_rgb565_row<10>(dst, bit_plane_stride, w, buffer + size_t(dy) * w * 2, lut_, lower);
+      }
+    }
+    return;
+  }
+#endif
+
   // Process each pixel
   const uint8_t *pixel_ptr = buffer;
   for (uint16_t dy = 0; dy < h; dy++) {
@@ -677,6 +718,16 @@ void GdmaDma::clear() {
     for (int bit = 0; bit < bit_depth_; bit++) {
       uint16_t *buf = (uint16_t *) (target_buffers[row].data + (bit * dma_width_ * 2));
 
+#ifdef HUB75_GDMA_SIMD
+#ifdef HUB75_GDMA_BENCHMARK
+      if (!benchmark_scalar_)
+#endif
+      {
+        simd::mask_fill(buf, dma_width_, static_cast<uint16_t>(~RGB_MASK), 0);
+        continue;
+      }
+#endif
+
       for (uint16_t x = 0; x < dma_width_; x++) {
         // Clear RGB bits but preserve row address, LAT, OE
         buf[x] &= ~RGB_MASK;
@@ -731,6 +782,26 @@ HUB75_IRAM void GdmaDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
   const size_t bit_plane_stride = dma_width_ * 2;
   const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
 
+#ifdef HUB75_GDMA_SIMD
+  if (identity_transform
+#ifdef HUB75_GDMA_BENCHMARK
+      && !benchmark_scalar_
+#endif
+  ) {
+    for (uint16_t dy = 0; dy < h; ++dy) {
+      const uint16_t py = y + dy;
+      const bool lower = py >= num_rows_;
+      const uint16_t row = lower ? py - num_rows_ : py;
+      const uint16_t keep = static_cast<uint16_t>(~(lower ? RGB_LOWER_MASK : RGB_UPPER_MASK));
+      for (int bit = 0; bit < bit_depth_; ++bit) {
+        auto *dst = reinterpret_cast<uint16_t *>(target_buffers[row].data + bit * bit_plane_stride) + x;
+        simd::mask_fill(dst, w, keep, lower ? lower_patterns[bit] : upper_patterns[bit]);
+      }
+    }
+    return;
+  }
+#endif
+
   // Fill loop
   for (uint16_t dy = 0; dy < h; dy++) {
     for (uint16_t dx = 0; dx < w; dx++) {
@@ -775,6 +846,132 @@ HUB75_IRAM void GdmaDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
     }
   }
 }
+
+#ifdef HUB75_GDMA_BENCHMARK
+bool GdmaDma::run_buffer_benchmark() {
+  if (virtual_width_ < 32 || virtual_height_ < 16 || (bit_depth_ != 8 && bit_depth_ != 10) || needs_layout_remap_ ||
+      needs_scan_remap_ || rotation_ != Hub75Rotation::ROTATE_0) {
+    ESP_LOGE(TAG, "SIMD startup benchmark requires standard wiring, at least 32x16 and 8/10-bit depth");
+    return false;
+  }
+  ESP_LOGI(TAG, "SIMD benchmark: %ux%u, %u-bit", virtual_width_, virtual_height_, bit_depth_);
+  const size_t bytes = num_rows_ * row_buffers_[active_idx_][0].buffer_size;
+  auto *saved = static_cast<uint8_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  auto *expected = static_cast<uint8_t *>(heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  auto *pixels = static_cast<uint8_t *>(heap_caps_malloc(size_t(virtual_width_) * virtual_height_ * 3 + 1,
+                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!saved || !expected || !pixels) {
+    free(saved);
+    free(expected);
+    free(pixels);
+    ESP_LOGE(TAG, "SIMD benchmark allocation failed");
+    return false;
+  }
+  auto *actual = dma_buffers_[active_idx_];
+  memcpy(saved, actual, bytes);
+  uint32_t random = 0x75d00d;
+  for (size_t i = 0; i < size_t(virtual_width_) * virtual_height_ * 3 + 1; ++i) {
+    random ^= random << 13;
+    random ^= random >> 17;
+    random ^= random << 5;
+    pixels[i] = random;
+  }
+  unsigned checks = 0;
+  bool ok = true;
+  auto check = [&](auto operation) {
+    // Random RGB and control bits expose accidental changes to the other half,
+    // LAT/OE/address fields, pixels outside the rectangle and alignment tails.
+    for (size_t i = 0; i < bytes; ++i) {
+      actual[i] = pixels[i % (size_t(virtual_width_) * virtual_height_ * 3)];
+    }
+    memcpy(expected, actual, bytes);
+    benchmark_scalar_ = true;
+    operation();
+    for (size_t i = 0; i < bytes; ++i) {
+      const uint8_t old = expected[i];
+      expected[i] = actual[i];
+      actual[i] = old;
+    }
+    benchmark_scalar_ = false;
+    operation();
+    ++checks;
+    if (memcmp(expected, actual, bytes)) {
+      ESP_LOGE(TAG, "SIMD correctness FAILED at case %u", checks);
+      if (ok) {
+        for (size_t i = 0, shown = 0; i < bytes && shown < 8; ++i) {
+          if (expected[i] != actual[i]) {
+            ESP_LOGE(TAG, "SIMD mismatch byte %u: expected %02x got %02x", unsigned(i), expected[i], actual[i]);
+            ++shown;
+          }
+        }
+      }
+      ok = false;
+    }
+    // The startup test runs in display_task; let the idle task service its
+    // watchdog between comparisons. This is outside all measured sections.
+    if ((checks & 7) == 0) vTaskDelay(1);
+  };
+  // Exercise every destination alignment and widths on both sides of a vector
+  // boundary, plus top/lower half crossings, clipping and unaligned sources.
+  for (uint16_t x = 0; x < 8; ++x) {
+    for (uint16_t w : {uint16_t(1), uint16_t(7), uint16_t(8), uint16_t(9), uint16_t(17), virtual_width_}) {
+      for (uint16_t y : {uint16_t(0), uint16_t(num_rows_ - 1), uint16_t(virtual_height_ - 1)}) {
+        check([&] { draw_pixels(x, y, w, 3, pixels + 1, Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+        check([&] { fill(x, y, w, 3, 173, 81, 239); });
+      }
+    }
+  }
+  check([&] { clear(); });
+  check([&] { draw_pixels(0, 0, virtual_width_, virtual_height_, pixels + 1,
+                         Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+  // Fallback formats and remapped coordinates must retain scalar behavior.
+  check([&] { draw_pixels(1, 1, 17, 3, pixels, Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, true); });
+  check([&] { draw_pixels(1, 1, 17, 3, pixels, Hub75PixelFormat::RGB888, Hub75ColorOrder::BGR, false); });
+  const auto saved_rotation = rotation_;
+  rotation_ = Hub75Rotation::ROTATE_180;
+  check([&] { draw_pixels(1, 1, 17, 3, pixels, Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+  check([&] { fill(1, 1, 17, 3, 173, 81, 239); });
+  rotation_ = saved_rotation;
+  ESP_LOGI(TAG, "SIMD correctness: %s (%u whole-buffer comparisons)", ok ? "PASS" : "FAIL", checks);
+  if (ok) {
+    auto time = [&](const char *name, auto operation) {
+      int64_t elapsed[2];
+      for (unsigned mode = 0; mode < 2; ++mode) {
+        benchmark_scalar_ = mode == 0;
+        operation();  // Warm code/data caches before measuring.
+        int64_t best = INT64_MAX;
+        for (unsigned round = 0; round < 3; ++round) {
+          vTaskDelay(1);
+          const int64_t start = esp_timer_get_time();
+          for (unsigned repeat = 0; repeat < 16; ++repeat) operation();
+          best = std::min(best, esp_timer_get_time() - start);
+        }
+        elapsed[mode] = best;
+      }
+      ESP_LOGI(TAG, "SIMD %-12s scalar=%.1f us SIMD=%.1f us speedup=%.2fx", name,
+               elapsed[0] / 16.0, elapsed[1] / 16.0, double(elapsed[0]) / elapsed[1]);
+    };
+    time("full RGB565", [&] { draw_pixels(0, 0, virtual_width_, virtual_height_, pixels,
+                                        Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+    const uint16_t region_width = virtual_width_ * 3 / 4;
+    const uint16_t region_height = std::min<uint16_t>(20, virtual_height_);
+    time("wide region", [&] { draw_pixels(0, 0, region_width, region_height, pixels,
+                                        Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+    time("right region", [&] { draw_pixels(region_width, 0, virtual_width_ - region_width, virtual_height_, pixels,
+                                         Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+    time("column", [&] { draw_pixels(0, 0, 1, virtual_height_, pixels,
+                                        Hub75PixelFormat::RGB565, Hub75ColorOrder::RGB, false); });
+    time("full fill", [&] { fill(0, 0, virtual_width_, virtual_height_, 173, 81, 239); });
+    time("clear", [&] { clear(); });
+  }
+  benchmark_scalar_ = false;
+  memcpy(actual, saved, bytes);
+  free(saved);
+  free(expected);
+  free(pixels);
+  return ok;
+}
+#endif
 
 void GdmaDma::flip_buffer() {
   // Single buffer mode: no-op (both indices point to buffer 0)
