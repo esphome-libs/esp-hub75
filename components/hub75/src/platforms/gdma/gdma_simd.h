@@ -43,27 +43,56 @@ inline void draw_rgb565_row(uint16_t *dst, size_t plane_stride, size_t count,
                             static_cast<uint16_t>(2 << shift),
                             static_cast<uint16_t>(4 << shift),
                             static_cast<uint16_t>(~(7 << shift))};
+
+  // Pre-shift and replicate bit patterns once per row into small L1-cached channel LUTs.
+  // 5-bit R and B have 32 values; 6-bit G has 64 values. Total table size is 128 halfwords (256 bytes).
+  uint16_t lut_r[32];
+  uint16_t lut_g[64];
+  uint16_t lut_b[32];
+  for (unsigned r = 0; r < 32; ++r) {
+    lut_r[r] = lut[(r << 3) | (r >> 2)] << shift;
+  }
+  for (unsigned g = 0; g < 64; ++g) {
+    lut_g[g] = lut[(g << 2) | (g >> 4)] << (shift + 1);
+  }
+  for (unsigned b = 0; b < 32; ++b) {
+    lut_b[b] = lut[(b << 3) | (b >> 2)] << (shift + 2);
+  }
+
   while (count) {
     const bool batch = count >= 8 && !(reinterpret_cast<uintptr_t>(dst) & 15);
     const size_t n = batch ? 8 : 1;
     alignas(16) uint16_t rgb[24];
-    for (size_t i = 0; i < n; ++i) {
-      const uint16_t pixel = src[0] | (uint16_t(src[1]) << 8);
-      src += 2;
-      const unsigned r = pixel >> 11;
-      const unsigned g = (pixel >> 5) & 63;
-      const unsigned b = pixel & 31;
-      rgb[i] = lut[(r << 3) | (r >> 2)] << shift;
-      rgb[8 + i] = lut[(g << 2) | (g >> 4)] << (shift + 1);
-      rgb[16 + i] = lut[(b << 3) | (b >> 2)] << (shift + 2);
-    }
     if (batch) {
+      if ((reinterpret_cast<uintptr_t>(src) & 1) == 0) {
+        const auto *p = reinterpret_cast<const uint16_t *>(src);
+        for (size_t i = 0; i < 8; ++i) {
+          const uint16_t pixel = p[i];
+          rgb[i] = lut_r[pixel >> 11];
+          rgb[8 + i] = lut_g[(pixel >> 5) & 63];
+          rgb[16 + i] = lut_b[pixel & 31];
+        }
+        src += 16;
+      } else {
+        for (size_t i = 0; i < 8; ++i) {
+          const uint16_t pixel = src[0] | (uint16_t(src[1]) << 8);
+          src += 2;
+          rgb[i] = lut_r[pixel >> 11];
+          rgb[8 + i] = lut_g[(pixel >> 5) & 63];
+          rgb[16 + i] = lut_b[pixel & 31];
+        }
+      }
       hub75_s3_update8(dst, plane_stride, Planes, rgb, masks);
     } else {
+      const uint16_t pixel = src[0] | (uint16_t(src[1]) << 8);
+      src += 2;
+      const uint16_t r_val = lut_r[pixel >> 11];
+      const uint16_t g_val = lut_g[(pixel >> 5) & 63];
+      const uint16_t b_val = lut_b[pixel & 31];
       for (unsigned bit = 0; bit < Planes; ++bit) {
         auto *word = reinterpret_cast<uint16_t *>(reinterpret_cast<uint8_t *>(dst) + bit * plane_stride);
-        *word = (*word & masks[3]) | ((rgb[0] >> bit) & masks[0]) |
-                ((rgb[8] >> bit) & masks[1]) | ((rgb[16] >> bit) & masks[2]);
+        *word = (*word & masks[3]) | ((r_val >> bit) & masks[0]) |
+                ((g_val >> bit) & masks[1]) | ((b_val >> bit) & masks[2]);
       }
     }
     dst += n;

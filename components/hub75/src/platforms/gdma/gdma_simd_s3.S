@@ -21,16 +21,14 @@ hub75_s3_update8:
     movi a10, 1
     wsr.sar a10
 1:
-    mov a9, a8
-    ee.vldbc.16 q3, a9
-    ee.andq q7, q0, q3
-    ee.andq q6, q1, q4
-    ee.orq q7, q7, q6
-    ee.andq q6, q2, q5
-    ee.orq q7, q7, q6
-    mov a9, a7
-    ee.vldbc.16 q3, a9
     ee.vld.128.ip q6, a2, 0
+    ee.vldbc.16 q3, a8
+    ee.andq q7, q0, q3
+    ee.andq q3, q1, q4
+    ee.orq q7, q7, q3
+    ee.andq q3, q2, q5
+    ee.orq q7, q7, q3
+    ee.vldbc.16 q3, a7
     ee.andq q6, q6, q3
     ee.orq q7, q7, q6
     ee.vst.128.xp q7, a2, a3
