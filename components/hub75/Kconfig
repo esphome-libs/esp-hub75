@@ -767,15 +767,24 @@ menu "HUB75 RGB LED Matrix Driver"
                 Recommended for best performance. Uses ~2-4 KB of IRAM.
                 Disable only if IRAM space is critically constrained.
 
+        config HUB75_PARLIO_CLK_GATING
+            bool "PARLIO: gate pixel clock via MSB data line"
+            depends on SOC_PARLIO_TX_CLK_SUPPORT_GATING
+            default y
+            help
+                Uses PARLIO TX clock gating (TXD[15] controls PCLK) so the
+                pixel clock only runs while shifting pixel data. Disable to
+                run PCLK continuously (same mode as ESP32-C6).
+
         config HUB75_EXTERNAL_FRAMEBUFFERS
             bool "Use External Framebuffers"
-            depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4
+            depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32S31
             depends on SPIRAM
-            default y if IDF_TARGET_ESP32P4
+            default y if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32S31
             default n
             help
                 Allocates DMA framebuffers in PSRAM instead of internal RAM.
-                Supported on ESP32-S3 and ESP32-P4. DMA descriptors remain
+                Supported on ESP32-S3, ESP32-P4 and ESP32-S31. DMA descriptors remain
                 in internal RAM. ESP32 and ESP32-S2 use internal buffers only.
 
                 Enable PSRAM initialization and heap allocation in the ESP-IDF
