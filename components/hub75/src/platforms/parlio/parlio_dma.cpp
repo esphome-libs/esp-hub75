@@ -36,6 +36,7 @@
 #include <esp_system.h>
 #include <esp_rom_sys.h>
 #include <hal/axi_dma_ll.h>
+#include <hal/gdma_ll.h>  // GDMA_LL_AXI_PAIRS_PER_GROUP (no longer pulled in by axi_dma_ll.h on IDF master)
 #include <hal/gdma_channel.h>
 #include <soc/hp_sys_clkrst_struct.h>
 #define HUB75_S31_AXI_DMA_WORKAROUND 1
