@@ -105,7 +105,7 @@ Choose which example to build in main/:
 - **Default**: 64
 - **Description**: Height of **single panel** in pixels
 - **Common values**: 16, 32, 64
-- **Note**: The scan rate is derived from the height and `HUB75_SCAN_WIRING` (height / 2 for standard panels, height / 4 for four-scan wirings)
+- **Note**: The scan rate is derived from the height and `HUB75_SCAN_WIRING` (height / 2 for standard panels, height / 4 for four-scan wirings), unless `HUB75_SCAN_RATE` is set
 
 ### HUB75_SCAN_WIRING
 - **Type**: choice
@@ -119,6 +119,19 @@ Choose which example to build in main/:
   - `WIRING_SCAN_1_16_64PX_BITSWAP` - 1/16 scan, 64px high panels
 - **Use when**: Display shows scrambled output with correct pins
 - **Note**: Four-scan wirings automatically adjust DMA buffer dimensions (doubled width, halved row count)
+
+### Custom Scan Mapping
+For four-scan and eight-scan panels that no `HUB75_SCAN_WIRING` preset covers. See
+[Scrambled / Garbled Display](TROUBLESHOOTING.md#scrambled--garbled-display) for a tuning procedure.
+
+- `HUB75_SCAN_RATE` (int, 0-32, default 0): row addresses from the PCB marking (`8S` = 8).
+  0 = from `HUB75_SCAN_WIRING`. With the Standard wiring, set panel height / 4 (four-scan)
+  or panel height / 8 (eight-scan).
+- `HUB75_SCAN_SEGMENT_WIDTH` (int, 0-128, default 0): segment width in pixels; must divide the panel width.
+- `HUB75_SCAN_REVERSE_SLOTS`, `HUB75_SCAN_ALTERNATE_SEGMENTS`, `HUB75_SCAN_REVERSE_EVEN_SLOTS`,
+  `HUB75_SCAN_REVERSE_ODD_SLOTS`, `HUB75_SCAN_REVERSE_BLOCK_ROWS` (bool): map to `Hub75ScanFlags`.
+
+The segment width and flags are only shown when a scan rate or a non-standard wiring is set.
 
 ### HUB75_SHIFT_DRIVER
 - **Type**: choice

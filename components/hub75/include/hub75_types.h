@@ -61,7 +61,7 @@ enum class Hub75ClockSpeed : uint32_t {
  * the number of row addresses, usually printed on the PCB (e.g. "8S" = 1/8). The segment
  * layout describes how pixels are split across the doubled-width shift chain:
  *   FULL         full panel-width segments
- *   INTERLEAVED  panel_width / 4 segments (16 px on a 64-wide panel)
+ *   INTERLEAVED  panel_width / (panel_height / 8) segments (16 px on a 64x32 panel)
  *   BITSWAP      full-width segments, y bits 3 and 4 (the 8-row block index) swapped
  */
 enum class Hub75ScanWiring {
@@ -80,6 +80,25 @@ enum class Hub75ScanWiring {
   FOUR_SCAN_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_FULL")]] = SCAN_1_4_16PX_FULL,
   FOUR_SCAN_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_INTERLEAVED")]] = SCAN_1_8_32PX_INTERLEAVED,
   FOUR_SCAN_64PX_HIGH [[deprecated("Use SCAN_1_16_64PX_BITSWAP")]] = SCAN_1_16_64PX_BITSWAP,
+};
+
+/**
+ * @brief Fine-tuning flags for four-scan and eight-scan coordinate remapping
+ *
+ * Four-scan and eight-scan panels shift two or four row blocks through one
+ * chain. Each segment of the panel width appears once per block, in a "slot":
+ * the chain carries [segment 0: slot 0, slot 1, ...][segment 1: slot 0, ...]...
+ * By default the first row block lands in the last slot for four-scan panels and
+ * in the first slot for eight-scan panels. These flags adjust that layout.
+ * Combine with |.
+ */
+enum class Hub75ScanFlags : uint8_t {
+  NONE = 0,
+  REVERSE_SLOTS = 1 << 0,       // Reverse the slot order (four-scan: swap the two slots)
+  ALTERNATE_SEGMENTS = 1 << 1,  // Also reverse the slot order on every odd segment
+  REVERSE_EVEN_SLOTS = 1 << 2,  // Reverse pixel order within slots 0 and 2 (four-scan: first slot of each segment)
+  REVERSE_ODD_SLOTS = 1 << 3,   // Reverse pixel order within slots 1 and 3 (four-scan: second slot of each segment)
+  REVERSE_BLOCK_ROWS = 1 << 4,  // Reverse row order within each row block
 };
 
 /**
@@ -187,9 +206,9 @@ struct Hub75Config {
   uint16_t panel_height = 64;
 
   // Scan wiring pattern (coordinate remapping for non-standard panels)
-  // Note: The scan rate (1/8, 1/16, 1/32) is determined automatically from
-  // panel_height and scan_wiring. For standard panels, num_rows = panel_height / 2.
-  // For four-scan panels, num_rows = panel_height / 4.
+  // Note: The scan rate (number of row addresses) is derived from panel_height and
+  // scan_wiring: panel_height / 2 for standard panels, panel_height / 4 for the
+  // four-scan presets. Set scan_rate (below) to describe other four- and eight-scan panels.
   Hub75ScanWiring scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 
   // Shift driver chip type (determines initialization sequence)
@@ -249,6 +268,22 @@ struct Hub75Config {
 
   // Row decoder / row addressing mode (appended to preserve positional aggregate initialization)
   Hub75RowDecoder row_decoder = Hub75RowDecoder::BINARY;
+
+  // ========================================
+  // Custom Scan Mapping (appended to preserve positional aggregate initialization)
+  // ========================================
+
+  // Scan rate: number of row addresses, as printed on the PCB (e.g. "8S" = 8).
+  // 0 = derived from scan_wiring. With STANDARD_TWO_SCAN, set this to panel_height / 4
+  // (four-scan) or panel_height / 8 (eight-scan) to describe a panel no preset covers.
+  uint8_t scan_rate = 0;
+
+  // Width in pixels of each segment in the shift chain (0 = scan_wiring's default,
+  // or panel_width). Must divide panel_width. Common values: 1, 4, 8, 16, 32.
+  uint16_t scan_segment_width = 0;
+
+  // Fine-tuning for four- and eight-scan panels (see Hub75ScanFlags)
+  Hub75ScanFlags scan_flags = Hub75ScanFlags::NONE;
 };
 
 // ============================================================================
@@ -262,4 +297,12 @@ using PanelLayout [[deprecated("Use Hub75PanelLayout instead")]] = Hub75PanelLay
 
 #ifdef __cplusplus
 }
+
+constexpr Hub75ScanFlags operator|(Hub75ScanFlags a, Hub75ScanFlags b) {
+  return static_cast<Hub75ScanFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+constexpr Hub75ScanFlags operator&(Hub75ScanFlags a, Hub75ScanFlags b) {
+  return static_cast<Hub75ScanFlags>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+constexpr Hub75ScanFlags &operator|=(Hub75ScanFlags &a, Hub75ScanFlags b) { return a = a | b; }
 #endif

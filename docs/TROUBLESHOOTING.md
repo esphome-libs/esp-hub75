@@ -98,8 +98,8 @@ Display shows scrambled patterns, wrong pixel positions, or fragmented image.
 
 **1. Wrong scan wiring**
 
-The scan rate (the number of row addresses) is not set directly. The driver derives
-it from `panel_height` and `scan_wiring`. Compare it with the scan rate printed on
+The scan rate (the number of row addresses) is normally derived from `panel_height`
+and `scan_wiring`. Compare it with the scan rate printed on
 the panel's PCB, usually in the model name as `4S`, `8S`, `10S`, `16S`, `20S` or `32S`
 (`8S` = 1/8 scan):
 
@@ -117,6 +117,34 @@ the panel's PCB, usually in the model name as `4S`, `8S`, `10S`, `16S`, `20S` or
 
 There are two 32 px options. If one of them shows the image broken into strips,
 try the other.
+
+- **Scan rate = height / 8** (e.g. 32×16 at 1/2, 32×32 at 1/4), or a height / 4
+  panel that no preset above fixes: describe the panel directly. Keep `scan_wiring`
+  at `STANDARD_TWO_SCAN` and set `scan_rate` to the number from the PCB, then tune
+  the segment layout:
+
+```cpp
+// 32x16 panel marked 4S (height / 4) whose image is broken into 8-pixel strips
+config.panel_width = 32;   // the panel's real size, as always
+config.panel_height = 16;
+config.scan_rate = 4;
+config.scan_segment_width = 8;
+config.scan_flags = Hub75ScanFlags::REVERSE_SLOTS;
+
+// 32x16 panel marked 2S (height / 8): same fields, scan_rate = 2
+```
+
+1. Draw a test pattern with distinct rows and columns (e.g. single lit pixels).
+2. If columns appear as shuffled vertical strips, try `scan_segment_width` 4, 8, 16
+   or 32 (0 = the full panel width). The width of the strips is usually the right value.
+3. If row blocks land in the wrong place, try `Hub75ScanFlags::REVERSE_SLOTS`, then
+   `ALTERNATE_SEGMENTS`.
+4. If some strips are mirrored, try `REVERSE_EVEN_SLOTS` or `REVERSE_ODD_SLOTS`. If rows
+   inside each band are upside down, try `REVERSE_BLOCK_ROWS`.
+
+The same settings are in menuconfig under Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Custom Scan Mapping.
+`scan_segment_width` and `scan_flags` can also adjust one of the presets above.
+If `begin()` fails, the log line `Invalid scan configuration: ...` says which value is wrong.
 
 **2. Wrong row decoder**
 

@@ -72,16 +72,15 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       layout_cols_(config.layout_cols),
       virtual_width_(config.panel_width * config.layout_cols),
       virtual_height_(config.panel_height * config.layout_rows),
-      // Use helper function to compute DMA width (doubles for four-scan panels)
-      dma_width_(
-          get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
-      scan_wiring_(config.scan_wiring),
+      // DMA width: panel_width * fold * layout_rows * layout_cols
+      dma_width_(get_effective_dma_width(config)),
+      scan_geometry_(resolve_scan_geometry(config)),
       layout_(config.layout),
-      needs_scan_remap_(config.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN),
+      needs_scan_remap_(scan_geometry_.fold != 1),
       needs_layout_remap_(config.layout != Hub75PanelLayout::HORIZONTAL),
       rotation_(config.rotation),
-      // Use helper function to compute num_rows (halves for four-scan panels)
-      num_rows_(get_effective_num_rows(config.scan_wiring, config.panel_height)),
+      // Row addresses: panel_height / (2 * fold)
+      num_rows_(get_effective_num_rows(config)),
       dma_buffers_{nullptr, nullptr},
       row_buffers_{nullptr, nullptr},
       front_idx_(0),
@@ -91,7 +90,7 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       intensity_(1.0f),
       transfer_started_(false) {
   // Initialize transmit config
-  // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
+  // Note: For four- and eight-scan panels, dma_width_ is multiplied and num_rows_ divided by scan_geometry_.fold
   // to match the physical shift register layout
   transmit_config_.idle_value = 1 << OE_BIT;  // make sure nothing lights up when in idle
   transmit_config_.bitscrambler_program = nullptr;
@@ -111,8 +110,7 @@ bool ParlioDma::init() {
   );
   ESP_LOGI(TAG, "Panel: %dx%d, Layout: %dx%d, Virtual: %dx%d", panel_width_, panel_height_, layout_cols_, layout_rows_,
            virtual_width_, virtual_height_);
-  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), four-scan: %s", dma_width_, num_rows_,
-           is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
   ESP_LOGI(TAG, "Bit depth: %d", bit_depth_);
 
   if (config_.row_decoder != Hub75RowDecoder::BINARY) {
@@ -896,7 +894,7 @@ HUB75_IRAM void ParlioDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint1
       } else {
         // Full coordinate transformation pipeline
         auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                scan_geometry_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = transformed.x;
         row = transformed.row;
@@ -1038,7 +1036,7 @@ HUB75_IRAM void ParlioDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
       } else {
         // Full coordinate transformation pipeline
         auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                scan_geometry_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = transformed.x;
         row = transformed.row;

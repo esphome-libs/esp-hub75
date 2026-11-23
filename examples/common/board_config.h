@@ -21,7 +21,7 @@ static inline Hub75Config getMenuConfigSettings() {
   config.panel_width = CONFIG_HUB75_PANEL_WIDTH;
   config.panel_height = CONFIG_HUB75_PANEL_HEIGHT;
 
-  // Scan wiring (scan rate is determined automatically from panel_height)
+  // Scan wiring (scan rate is derived from panel_height unless CONFIG_HUB75_SCAN_RATE is set)
 #if defined(CONFIG_HUB75_WIRING_STANDARD)
   config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 #elif defined(CONFIG_HUB75_WIRING_SCAN_1_4_16PX_FULL)
@@ -34,6 +34,27 @@ static inline Hub75Config getMenuConfigSettings() {
   config.scan_wiring = Hub75ScanWiring::SCAN_1_10_40PX_FULL;
 #elif defined(CONFIG_HUB75_WIRING_SCAN_1_16_64PX_BITSWAP)
   config.scan_wiring = Hub75ScanWiring::SCAN_1_16_64PX_BITSWAP;
+#endif
+
+  // Custom scan mapping
+  config.scan_rate = CONFIG_HUB75_SCAN_RATE;
+#if defined(CONFIG_HUB75_SCAN_SEGMENT_WIDTH)
+  config.scan_segment_width = CONFIG_HUB75_SCAN_SEGMENT_WIDTH;
+#endif
+#if defined(CONFIG_HUB75_SCAN_REVERSE_SLOTS)
+  config.scan_flags |= Hub75ScanFlags::REVERSE_SLOTS;
+#endif
+#if defined(CONFIG_HUB75_SCAN_ALTERNATE_SEGMENTS)
+  config.scan_flags |= Hub75ScanFlags::ALTERNATE_SEGMENTS;
+#endif
+#if defined(CONFIG_HUB75_SCAN_REVERSE_EVEN_SLOTS)
+  config.scan_flags |= Hub75ScanFlags::REVERSE_EVEN_SLOTS;
+#endif
+#if defined(CONFIG_HUB75_SCAN_REVERSE_ODD_SLOTS)
+  config.scan_flags |= Hub75ScanFlags::REVERSE_ODD_SLOTS;
+#endif
+#if defined(CONFIG_HUB75_SCAN_REVERSE_BLOCK_ROWS)
+  config.scan_flags |= Hub75ScanFlags::REVERSE_BLOCK_ROWS;
 #endif
 
   // Shift driver

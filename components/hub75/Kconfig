@@ -186,6 +186,74 @@ menu "HUB75 RGB LED Matrix Driver"
                     (the 8-row block index) swapped.
         endchoice
 
+        menu "Custom Scan Mapping"
+
+            config HUB75_SCAN_RATE
+                int "Scan rate (row addresses, 0 = from Scan Wiring Pattern)"
+                default 0
+                range 0 32
+                help
+                    Number of row addresses, as printed on the PCB (e.g. "8S" = 8).
+                    Leave at 0 to use the Scan Wiring Pattern.
+
+                    For a panel no wiring pattern covers, keep Scan Wiring Pattern
+                    at Standard and set this to panel height / 4 (four-scan) or
+                    panel height / 8 (eight-scan).
+
+            config HUB75_SCAN_SEGMENT_WIDTH
+                int "Segment width (pixels, 0 = default)"
+                default 0
+                range 0 128
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Width of each segment of the panel's shift chain. Must divide
+                    the panel width. 0 uses the wiring pattern's default, or the
+                    full panel width for a custom scan rate.
+
+                    If the image appears as shuffled vertical strips, try 4, 8,
+                    16 or 32.
+
+            config HUB75_SCAN_REVERSE_SLOTS
+                bool "Reverse slot order (four-scan: swap the two slots)"
+                default n
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Reverse which row block goes to which slot of each segment.
+                    Try this if row blocks appear in the wrong order.
+
+            config HUB75_SCAN_ALTERNATE_SEGMENTS
+                bool "Alternate slot order on odd segments"
+                default n
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Also reverse the slot order on every odd segment. Try this if
+                    every other segment has its row blocks swapped.
+
+            config HUB75_SCAN_REVERSE_EVEN_SLOTS
+                bool "Reverse pixels in even slots (four-scan: first slot)"
+                default n
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Reverse the pixel order within slots 0 and 2. Try this if
+                    some segments appear mirrored.
+
+            config HUB75_SCAN_REVERSE_ODD_SLOTS
+                bool "Reverse pixels in odd slots (four-scan: second slot)"
+                default n
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Reverse the pixel order within slots 1 and 3. Try this if
+                    some segments appear mirrored.
+
+            config HUB75_SCAN_REVERSE_BLOCK_ROWS
+                bool "Reverse rows within each row block"
+                default n
+                depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
+                help
+                    Reverse the row order within each row block. Try this if rows
+                    appear upside down within each band.
+        endmenu
+
         choice HUB75_SHIFT_DRIVER
             prompt "Shift Driver IC"
             default HUB75_DRIVER_GENERIC
