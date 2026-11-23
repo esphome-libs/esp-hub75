@@ -554,7 +554,7 @@ void I2sDma::shutdown() {
 
   descriptor_count_ = 0;
 
-  // Disable I2S peripheral (IDF < 6.0 only - auto-managed in 6.0+)
+  // Disable I2S peripheral
   if (i2s_dev_) {
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
     if (ESP32_I2S_DEVICE == 0) {
@@ -564,6 +564,8 @@ void I2sDma::shutdown() {
       periph_module_disable(PERIPH_I2S1_MODULE);
 #endif
     }
+#else
+    PERIPH_RCC_ATOMIC() { i2s_ll_enable_bus_clock(ESP32_I2S_DEVICE, false); }
 #endif
     i2s_dev_ = nullptr;
   }
