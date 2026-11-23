@@ -143,6 +143,16 @@ I2sDma::~I2sDma() { I2sDma::shutdown(); }
 // ============================================================================
 
 bool I2sDma::init() {
+  // Each bitplane uses one descriptor, whose length and size fields are 12 bits
+  // (4092 keeps the length word-aligned, matching ESP-IDF's LLDESC_MAX_NUM_PER_DESC).
+  // Check before touching the peripheral so a rejected config leaves nothing enabled.
+  static constexpr size_t MAX_DESCRIPTOR_BYTES = 4096 - 4;
+  if (static_cast<size_t>(dma_width_) * sizeof(uint16_t) > MAX_DESCRIPTOR_BYTES) {
+    ESP_LOGE(TAG, "DMA width %u exceeds the single-descriptor bitplane limit (%u pixels)", (unsigned int) dma_width_,
+             (unsigned int) (MAX_DESCRIPTOR_BYTES / sizeof(uint16_t)));
+    return false;
+  }
+
   ESP_LOGI(TAG, "Initializing I2S peripheral in LCD mode...");
   ESP_LOGI(TAG, "Pin config: R1=%d G1=%d B1=%d R2=%d G2=%d B2=%d", config_.pins.r1, config_.pins.g1, config_.pins.b1,
            config_.pins.r2, config_.pins.g2, config_.pins.b2);
