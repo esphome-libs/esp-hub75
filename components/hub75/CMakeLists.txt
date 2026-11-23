@@ -12,7 +12,7 @@ set(HUB75_REQUIRES
 if(IDF_VERSION_MAJOR GREATER 5 OR (IDF_VERSION_MAJOR EQUAL 5 AND IDF_VERSION_MINOR GREATER_EQUAL 1))
     list(APPEND HUB75_REQUIRES esp_mm)
 endif()
-if(IDF_VERSION_MAJOR GREATER_EQUAL 5 AND (IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4"))
+if(IDF_VERSION_MAJOR GREATER_EQUAL 5 AND (IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32s31"))
     # Make the PSRAM Kconfig options available when using this component.
     list(APPEND HUB75_REQUIRES esp_psram)
 endif()
@@ -26,8 +26,11 @@ if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
     if(IDF_TARGET STREQUAL "esp32s3")
         list(APPEND HUB75_REQUIRES esp_driver_dma)
     endif()
-    if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6")
+    if(IDF_TARGET STREQUAL "esp32p4" OR IDF_TARGET STREQUAL "esp32c6" OR IDF_TARGET STREQUAL "esp32s31")
         list(APPEND HUB75_REQUIRES esp_driver_parlio)
+    endif()
+    if(IDF_TARGET STREQUAL "esp32s31")
+        list(APPEND HUB75_REQUIRES esp_hal_dma esp_system)
     endif()
 endif()
 
@@ -57,8 +60,8 @@ elseif(CONFIG_IDF_TARGET_ESP32S3)
     target_sources(${COMPONENT_LIB} PRIVATE
         "src/platforms/gdma/gdma_dma.cpp"
     )
-elseif(CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32C6)
-    # PARLIO peripheral (ESP32-P4 has clock gating, ESP32-C6 does not)
+elseif(CONFIG_IDF_TARGET_ESP32P4 OR CONFIG_IDF_TARGET_ESP32C6 OR CONFIG_IDF_TARGET_ESP32S31)
+    # PARLIO peripheral (ESP32-P4/S31 have clock gating, ESP32-C6 does not)
     target_sources(${COMPONENT_LIB} PRIVATE
         "src/platforms/parlio/parlio_dma.cpp"
     )
