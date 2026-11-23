@@ -16,7 +16,7 @@ Comprehensive guide to the HUB75 driver's core architecture: Binary Code Modulat
 
 ## Core Concept
 
-The HUB75 driver achieves **hardware-driven continuous refresh** with **no CPU intervention** using these key principles:
+The ESP32/S2/S3/P4 backends achieve **hardware-driven continuous refresh** with **no CPU intervention** using these key principles:
 
 1. **Static DMA descriptor chain** - Allocated once at startup, never modified
 2. **Circular linking** - Last descriptor points back to first (infinite loop)
@@ -176,6 +176,10 @@ Bit 7 buffer has 32× more padding than Bit 0.
 **Cons**: ~5× more memory usage, cache sync overhead
 
 **Status**: ✅ Tested and working on ESP32-P4
+
+### ESP32-C6: PARLIO Streaming
+
+C6 uses compact RGB storage, a producer task, and three 8 KiB DMA staging buffers. The SDK ISR starts the next prepared transaction. It consumes CPU continuously and blanks the panel between finite transfers. See [C6 streaming](C6_STREAMING.md); the circular-refresh discussion below applies to the other backends.
 
 ---
 

@@ -4,16 +4,16 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 
 ## Platform Comparison Table
 
-| Feature | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4 |
-|---------|-------|----------|----------|----------|
-| **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO |
-| **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA |
-| **Memory** | Internal SRAM | Internal SRAM | SRAM or PSRAM | PSRAM or SRAM |
-| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB |
-| **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding |
-| **Clock Gating** | No | No | No | **Yes** (MSB) |
-| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ |
-| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested |
+| Feature | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4 | ESP32-C6 |
+|---------|-------|----------|----------|----------|----------|
+| **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO | PARLIO |
+| **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA | EDMA |
+| **Memory** | Internal SRAM | Internal SRAM | SRAM or PSRAM | PSRAM or SRAM | Internal SRAM |
+| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | 12 KiB RGB + 24 KiB staging (8-bit, single) |
+| **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Streamed timing words |
+| **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
+| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ | 30 MHz (32 MHz setting) |
+| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested |
 
 ---
 
@@ -25,6 +25,7 @@ peripherals on newer chips.
 
 Clock speeds are automatically resolved to the nearest achievable frequency:
 - **ESP32-S3/P4**: Rounds to 160 MHz / N (integer divider, no jitter)
+- **ESP32-C6**: Uses the C6 PARLIO source clock (240 MHz by default); actual frequencies differ. See [C6 streaming](C6_STREAMING.md).
 - **ESP32/ESP32-S2**: Falls back to platform-supported speeds
 
 ### Clock Speed by Platform
@@ -309,6 +310,8 @@ padding = base_padding + (2^(bit - lsbMsbTransitionBit - 1) × width)
 **Pixel Section**: MSB=1 (clock on, data shifts)
 **Padding Section**: MSB=0 (clock off, display time = BCM timing)
 
+**ESP32-C6** uses a separate [streaming backend](C6_STREAMING.md).
+
 ### Memory Layout
 
 **Single Contiguous Buffer**:
@@ -378,6 +381,17 @@ for supported targets, defaults, and bandwidth considerations.
 
 ---
 
+## ESP32-C6: PARLIO Streaming
+
+C6 uses compact RGB framebuffers and three 8 KiB DMA staging buffers. A producer
+expands pixels and timing into queued transactions; the SDK ISR starts the next
+prepared transaction. This saves RAM but consumes CPU continuously and includes
+blanked ISR restart gaps. It requires ESP-IDF 5.5+.
+
+See [C6 streaming architecture and memory](C6_STREAMING.md).
+
+---
+
 ## Platform Selection Guide
 
 ### Choose ESP32/S2 when:
@@ -396,6 +410,10 @@ for supported targets, defaults, and bandwidth considerations.
 - Large displays (128×128+)
 - Have abundant PSRAM (8-16 MB)
 - Clock gating feature beneficial
+
+### ESP32-C6
+- Smaller displays where RAM is tight
+- The producer task converts and queues data on the CPU continuously, so less CPU is left for the application
 
 ---
 
@@ -432,7 +450,7 @@ for supported targets, defaults, and bandwidth considerations.
 | ESP32-S3 | 90-120 Hz | ~0% | Faster clock |
 | ESP32-P4 | 60-90 Hz | ~0% + cache sync | PSRAM latency |
 
-**CPU Usage**: Near-zero during refresh (hardware-driven). Only spikes during pixel updates.
+**CPU Usage**: The looping backends have near-zero refresh CPU usage. C6 continuously converts and queues data on the CPU.
 
 ### Memory Comparison (64×64 panel)
 

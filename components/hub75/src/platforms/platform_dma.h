@@ -229,6 +229,14 @@ class PlatformDma {
   virtual void set_intensity(float intensity) = 0;
 
   /**
+   * @brief Whether output is still being refreshed
+   *
+   * Looping backends keep refreshing once started. A streaming backend can
+   * stop on its own (e.g. a failed submission) and overrides this.
+   */
+  virtual bool is_running() const { return true; }
+
+  /**
    * @brief Set display rotation (runtime update)
    *
    * Updates the rotation used for coordinate transformation. Platforms that

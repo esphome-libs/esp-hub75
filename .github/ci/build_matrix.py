@@ -8,8 +8,8 @@ versions = ["v4.4.8", "v5.5.5", "v6.1.1"] if full else ["v6.1.1"]
 builds = []
 
 for version in versions:
-    for target in ("esp32", "esp32s2", "esp32s3", "esp32p4"):
-        if version == "v4.4.8" and target == "esp32p4":
+    for target in ("esp32", "esp32s2", "esp32s3", "esp32c6", "esp32p4"):
+        if version == "v4.4.8" and target in ("esp32c6", "esp32p4"):
             continue
 
         framebuffers = ["default"]

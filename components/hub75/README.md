@@ -2,14 +2,14 @@
 
 Complete API documentation and configuration reference for the HUB75 DMA driver component.
 
-ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4.
+ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-P4 requires 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
 
 ## Key Features
 
-- Static circular DMA refresh (no CPU intervention after initialization)
-- Multi-platform support: GDMA (S3), I2S (ESP32/S2), PARLIO (P4)
+- Static circular DMA refresh on ESP32/S2/S3/P4; compact-framebuffer streaming on C6
+- Multi-platform support: GDMA (S3), I2S (ESP32/S2), PARLIO (P4/C6)
 - CIE 1931 gamma correction with native bit-depth LUTs (4-12 bit)
 - Multi-panel layouts with serpentine and zigzag chaining
 - Display rotation (0°, 90°, 180°, 270°) - runtime configurable
@@ -269,6 +269,7 @@ Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4 with platform-specific optimiza
 - **ESP32/ESP32-S2** (I2S): ~57 KB SRAM, proven stability
 - **ESP32-S3** (GDMA): ~57 KB SRAM, faster clock (40 MHz), ghosting fix
 - **ESP32-P4** (PARLIO): ~284 KB PSRAM + ~16 KB SRAM, frees internal memory for apps
+- **ESP32-C6** (PARLIO streaming): Compact RGB storage plus 24 KiB DMA staging; continuous CPU conversion. See [C6 streaming](../../docs/C6_STREAMING.md).
 
 **For detailed platform comparison, memory calculations, and implementation specifics**, see **[Platform Details](../../docs/PLATFORMS.md)**.
 

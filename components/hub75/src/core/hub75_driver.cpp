@@ -18,8 +18,10 @@
 #include "../platforms/gdma/gdma_dma.h"
 #elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 #include "../platforms/i2s/i2s_dma.h"
-#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
 #include "../platforms/parlio/parlio_dma.h"
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+#include "../platforms/parlio_stream/parlio_stream_dma.h"
 #endif
 
 #include <esp_log.h>
@@ -36,8 +38,10 @@ using namespace hub75;
 using PlatformDMAImpl = GdmaDma;
 #elif defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2)
 using PlatformDMAImpl = I2sDma;
-#elif defined(CONFIG_IDF_TARGET_ESP32P4) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
 using PlatformDMAImpl = ParlioDma;
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+using PlatformDMAImpl = ParlioStreamDma;
 #endif
 
 // ============================================================================
@@ -268,4 +272,4 @@ uint16_t Hub75Driver::get_height() const {
   return RotationTransform::get_rotated_height(phys_w, phys_h, config_.rotation);
 }
 
-bool Hub75Driver::is_running() const { return running_; }
+bool Hub75Driver::is_running() const { return running_ && dma_ != nullptr && dma_->is_running(); }

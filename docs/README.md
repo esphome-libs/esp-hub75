@@ -60,7 +60,7 @@ Comprehensive technical documentation for the HUB75 RGB LED Matrix Driver for ES
 ### Platform Abbreviations
 - **GDMA**: Generic DMA (ESP32-S3)
 - **I2S**: Inter-IC Sound peripheral in LCD mode (ESP32, ESP32-S2)
-- **PARLIO**: Parallel I/O peripheral (ESP32-P4)
+- **PARLIO**: Parallel I/O peripheral (ESP32-P4, ESP32-C6)
 
 ## Contributing to Documentation
 
