@@ -4,7 +4,7 @@ import json
 import os
 
 full = os.environ["GITHUB_EVENT_NAME"] in ("schedule", "workflow_dispatch")
-versions = ["v4.4.8", "v5.5.5", "v6.1"] if full else ["v6.1"]
+versions = ["v4.4.8", "v5.5.5", "v6.1.1"] if full else ["v6.1.1"]
 builds = []
 
 for version in versions:
