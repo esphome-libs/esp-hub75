@@ -28,6 +28,16 @@
 
 static const char *const TAG = "ParlioDma";
 
+// ESP-IDF 5.5.5 and 6.0.1 replaced parlio_tx_unit_config_t::sample_edge with shift_edge.
+// The two share a union and their enums are numbered in opposite orders, so a sample
+// edge and its opposite shift edge store the same value.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 1) || \
+    (ESP_IDF_VERSION_MAJOR == 5 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 5))
+#define HUB75_PARLIO_HAS_SHIFT_EDGE 1
+#else
+#define HUB75_PARLIO_HAS_SHIFT_EDGE 0
+#endif
+
 namespace hub75 {
 
 // HUB75 16-bit word layout for PARLIO peripheral
@@ -262,7 +272,12 @@ void ParlioDma::configure_parlio() {
       .trans_queue_depth = 4,  // Match ESP-IDF example (was: num_rows_ * bit_depth_)
       .max_transfer_size = max_buffer_size * sizeof(uint16_t),
       .dma_burst_size = 0,  // Default
+#if HUB75_PARLIO_HAS_SHIFT_EDGE
+      // Shift data on the falling edge so the panel samples it on the rising edge
+      .shift_edge = config_.clk_phase_inverted ? PARLIO_SHIFT_EDGE_POS : PARLIO_SHIFT_EDGE_NEG,
+#else
       .sample_edge = config_.clk_phase_inverted ? PARLIO_SAMPLE_EDGE_NEG : PARLIO_SAMPLE_EDGE_POS,
+#endif
       .bit_pack_order = PARLIO_BIT_PACK_ORDER_LSB,  // Explicit LSB to match ESP-IDF example
       .flags = {
 #ifdef SOC_PARLIO_TX_CLK_SUPPORT_GATING
