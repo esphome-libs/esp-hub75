@@ -145,7 +145,7 @@ class ScanPatternRemap {
 
       case Hub75ScanWiring::SCAN_1_8_32PX_FULL: {
         // 32px high 1/8 scan, full-width (panel_width) segments
-        // X-transform: same as SCAN_1_8_40PX_HIGH (full-width split)
+        // X-transform: full-width split, half selected by 8-row block (y & 8)
         // Y-transform: same as SCAN_1_8_32PX_HIGH (correct for 32px)
         if ((c.y & 8) == 0) {
           c.x += (((c.x / panel_width) + 1) * panel_width);
@@ -157,8 +157,9 @@ class ScanPatternRemap {
       }
 
       case Hub75ScanWiring::SCAN_1_8_40PX_HIGH: {
-        // 40px high 1/8 scan panels use 10-pixel row blocks
-        if ((c.y & 8) == 0) {
+        // 40px high panels: 10 row addresses, so rows fold in 10-row blocks.
+        // Even blocks (rows 0-9, 20-29) shift into the right half, odd blocks into the left.
+        if (((c.y / 10) & 1) == 0) {
           c.x += (((c.x / panel_width) + 1) * panel_width);
         } else {
           c.x += ((c.x / panel_width) * panel_width);
