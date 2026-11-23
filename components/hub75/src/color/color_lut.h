@@ -211,8 +211,9 @@ template<uint8_t BitDepth> constexpr std::array<uint16_t, 256> generate_linear_l
   std::array<uint16_t, 256> lut{};
 
   for (int i = 0; i < 256; i++) {
-    // Scale to target bit depth and clamp (for consistency, though division should be safe)
-    const int value = (i * max_val) / 255;
+    // Scale to target bit depth with round-to-nearest (+127 before dividing by 255),
+    // matching the rounding used by the gamma curves. Clamp for consistency.
+    const int value = ((i * max_val) + 127) / 255;
     lut[i] = static_cast<uint16_t>(constexpr_clamp(value, 0, max_val));
   }
 
