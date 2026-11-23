@@ -83,8 +83,27 @@ bool Hub75Driver::begin() {
     return false;
   }
   switch (config_.row_decoder) {
-    case Hub75RowDecoder::BINARY:
+    case Hub75RowDecoder::BINARY: {
+      // A row number needs ceil(log2(num_rows)) address lines, starting at A
+      const uint16_t num_rows = get_effective_num_rows(config_.scan_wiring, config_.panel_height);
+      const int8_t address_pins[] = {config_.pins.a, config_.pins.b, config_.pins.c, config_.pins.d, config_.pins.e};
+      int lines = 0;
+      while ((1u << lines) < num_rows) {
+        lines++;
+      }
+      if (lines > 5) {
+        ESP_LOGE(TAG, "Panel needs %u row addresses; at most 32 are supported", (unsigned int) num_rows);
+        return false;
+      }
+      for (int i = 0; i < lines; i++) {
+        if (address_pins[i] < 0) {
+          ESP_LOGE(TAG, "%u row addresses need address pins A-%c, but pin %c is unset", (unsigned int) num_rows,
+                   'A' + lines - 1, 'A' + i);
+          return false;
+        }
+      }
       break;
+    }
     case Hub75RowDecoder::SM5368:
       if (config_.pins.a < 0 || config_.pins.b < 0 || config_.pins.c < 0) {
         ESP_LOGE(TAG, "SM5368 row decoder needs pins A, B and C");

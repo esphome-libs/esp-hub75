@@ -44,6 +44,7 @@ Many modern panels (2018+) use FM6126A or ICN2038S chips requiring initializatio
 **4. E pin not configured**
 - Panels with more than 16 row addresses (e.g. 1/20 or 1/32 scan) REQUIRE the E address line
 - Set `HUB75_PIN_E` to valid GPIO (not -1)
+- `begin()` fails and logs `... need address pins A-E, but pin E is unset` when it's missing
 
 **5. Driver initialization failed**
 
@@ -597,6 +598,8 @@ Printed by the examples when `begin()` fails. The driver logs the specific reaso
 - `Shift driver initialization failed`: unknown `shift_driver` value
 - `DIRECT row decoder needs 2 or 4 row addresses`: `row_decoder = DIRECT` on a panel whose row-address count is not 2 or 4
 - `DIRECT row decoder needs one address pin per row` / `SM5368 row decoder needs pins A, B and C`: an address pin the decoder drives is unset (-1)
+- `N row addresses need address pins A-X, but pin X is unset`: binary addressing needs enough address lines for the row count (A-D for 16 rows, A-E for 32, e.g. 64-row panels need pin E)
+- `Panel needs N row addresses; at most 32 are supported`: the panel height and scan wiring give more row addresses than the five address lines can select
 - `Unknown row decoder`: `row_decoder` holds a value that isn't a `Hub75RowDecoder` option
 - `Failed to initialize DMA engine`: see the platform log lines above it (allocation failures are covered below)
 
