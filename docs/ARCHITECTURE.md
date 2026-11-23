@@ -177,10 +177,6 @@ Bit 7 buffer has 32× more padding than Bit 0.
 
 **Status**: ✅ Tested and working on ESP32-P4
 
-### ESP32-C6: PARLIO (Planned)
-
-Same as ESP32-P4 **but NO clock gating** (MSB bit unused, BCM via padding only).
-
 ---
 
 ## Memory Layout
@@ -190,14 +186,14 @@ The driver uses several memory categories, each serving a specific purpose:
 1. **Framebuffer** - Stores current display image in platform-native format (internal SRAM)
 2. **Row Buffers** - Bit plane data transmitted by DMA (location varies by platform)
 3. **DMA Descriptors** - Hardware instructions for the DMA engine (GDMA/I2S only)
-4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4/C6; P4 defaults to PSRAM)
+4. **PARLIO Buffers** - Bit plane data with BCM padding (ESP32-P4; defaults to PSRAM)
 
 **Platform Memory Strategies:**
 
 - **GDMA/I2S (ESP32/S2/S3)**: Internal SRAM by default, BCM timing via descriptor duplication. S3 can place DMA framebuffers in PSRAM; descriptors remain internal. ESP32/S2 require internal DMA buffers.
   - Example (64×64, 8-bit): ~57 KB total (framebuffer + row buffers + descriptors)
 
-- **PARLIO (ESP32-P4/C6)**: BCM timing via buffer padding. P4 defaults to PSRAM and can select internal RAM; C6 uses internal RAM.
+- **PARLIO (ESP32-P4)**: BCM timing via buffer padding. Defaults to PSRAM and can select internal RAM.
   - Example (64×64, 8-bit): ~16 KB internal SRAM + ~284 KB PSRAM
   - Advantage: Frees internal SRAM for application code
 

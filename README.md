@@ -3,9 +3,9 @@
 [![ESP Component Registry](https://components.espressif.com/components/esphome/esp-hub75/badge.svg)](https://components.espressif.com/components/esphome/esp-hub75)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/esphome/library/esp-hub75.svg)](https://registry.platformio.org/libraries/esphome/esp-hub75)
 
-High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
+High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, and ESP32-P4.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-P4 requires 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
 
 ## Features
 
@@ -112,7 +112,7 @@ This repository includes a standalone test application and examples that can be 
 
 ```bash
 cd esp-hub75
-idf.py set-target esp32s3  # or esp32, esp32s2, esp32c6, esp32p4
+idf.py set-target esp32s3  # or esp32, esp32s2, esp32p4
 idf.py build
 idf.py flash monitor
 ```
@@ -157,7 +157,7 @@ esp-hub75/                    # Repository root
 │           └── platforms/    # Platform-specific DMA implementations
 │               ├── i2s/      # ESP32/ESP32-S2
 │               ├── gdma/     # ESP32-S3
-│               └── parlio/   # ESP32-P4/C6
+│               └── parlio/   # ESP32-P4
 └── examples/
     ├── common/               # Pin configuration examples
     ├── 01_basic/             # Simple color tests
@@ -200,7 +200,7 @@ This driver combines best practices from:
 - [mrcodetastic/ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) - Native CIE LUTs, GDMA, multi-platform
 - [JuPfu/hub75](https://github.com/JuPfu/hub75) - Dual-mode brightness inspiration
 - [liebman/esp-hub75](https://github.com/liebman/esp-hub75) - Rust patterns, IRAM optimization
-- [Espressif PARLIO Example](https://github.com/espressif/esp-idf/tree/v5.4.1/examples/peripherals/parlio) - ESP32-C6/P4 PARLIO
+- [Espressif PARLIO Example](https://github.com/espressif/esp-idf/tree/v5.4.1/examples/peripherals/parlio) - ESP32-P4 PARLIO
 
 ## License
 

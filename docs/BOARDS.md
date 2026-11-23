@@ -224,10 +224,6 @@ config HUB75_BOARD_YOUR_BOARD
 
 Check datasheet for module-specific restrictions. Most GPIOs available.
 
-### ESP32-C6
-
-Check datasheet for PARLIO GPIO group requirements (may need contiguous GPIOs).
-
 ---
 
 ## Verifying Pin Configuration
