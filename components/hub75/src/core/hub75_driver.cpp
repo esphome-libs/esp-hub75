@@ -82,18 +82,17 @@ bool Hub75Driver::begin() {
     ESP_LOGE(TAG, "Invalid scan configuration: %s", scan_config_error_message(scan_error));
     return false;
   }
+
+  // Row decoder checks. A valid scan geometry has at least one row address, and at
+  // most 32 with binary addressing.
+  const uint16_t num_rows = get_effective_num_rows(config_);
   switch (config_.row_decoder) {
     case Hub75RowDecoder::BINARY: {
       // A row number needs ceil(log2(num_rows)) address lines, starting at A
-      const uint16_t num_rows = get_effective_num_rows(config_.scan_wiring, config_.panel_height);
       const int8_t address_pins[] = {config_.pins.a, config_.pins.b, config_.pins.c, config_.pins.d, config_.pins.e};
       int lines = 0;
       while ((1u << lines) < num_rows) {
         lines++;
-      }
-      if (lines > 5) {
-        ESP_LOGE(TAG, "Panel needs %u row addresses; at most 32 are supported", (unsigned int) num_rows);
-        return false;
       }
       for (int i = 0; i < lines; i++) {
         if (address_pins[i] < 0) {
@@ -111,7 +110,6 @@ bool Hub75Driver::begin() {
       }
       break;
     case Hub75RowDecoder::DIRECT: {
-      const uint16_t num_rows = get_effective_num_rows(config_);
       if (num_rows != 2 && num_rows != 4) {
         ESP_LOGE(TAG, "DIRECT row decoder needs 2 or 4 row addresses (panel has %u)", (unsigned int) num_rows);
         return false;
