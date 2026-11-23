@@ -16,10 +16,6 @@ namespace hub75 {
 
 static const char *const TAG = "FM6126A";
 
-#define CLK_PULSE \
-  gpio_set_level((gpio_num_t) pins.clk, 1); \
-  gpio_set_level((gpio_num_t) pins.clk, 0);
-
 void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
   ESP_LOGI(TAG, "Initializing FM6126A shift driver (pixels_per_row=%d)", pixels_per_row);
 
@@ -47,7 +43,7 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
     if (i > pixels_per_row - 12) {
       gpio_set_level((gpio_num_t) pins.lat, 1);
     }
-    CLK_PULSE;
+    pulse_clock(pins.clk);
   }
   gpio_set_level((gpio_num_t) pins.lat, 0);
 
@@ -59,7 +55,7 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
     if (i > pixels_per_row - 13) {
       gpio_set_level((gpio_num_t) pins.lat, 1);
     }
-    CLK_PULSE;
+    pulse_clock(pins.clk);
   }
   gpio_set_level((gpio_num_t) pins.lat, 0);
 
@@ -68,15 +64,15 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
     gpio_set_level((gpio_num_t) pin, 0);
   }
   for (int i = 0; i < pixels_per_row; i++) {
-    CLK_PULSE;
+    pulse_clock(pins.clk);
   }
 
   // 6. Latch and enable display
   gpio_set_level((gpio_num_t) pins.lat, 1);
-  CLK_PULSE;
+  pulse_clock(pins.clk);
   gpio_set_level((gpio_num_t) pins.lat, 0);
   gpio_set_level((gpio_num_t) pins.oe, 0);
-  CLK_PULSE;
+  pulse_clock(pins.clk);
 
   ESP_LOGI(TAG, "FM6126A initialized successfully");
 }
