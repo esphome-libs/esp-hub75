@@ -41,6 +41,8 @@ class ParlioStreamDma : public PlatformDma {
   static constexpr size_t SLOT_COUNT = 3;
   static constexpr size_t CHUNK_WORDS = 4096;
   static constexpr unsigned OE_DATA_LINE = 8;  // StreamEncoder::OE
+  // Longest the producer may run without blocking before it yields a tick.
+  static constexpr TickType_t MAX_BUSY_TICKS = pdMS_TO_TICKS(20) > 0 ? pdMS_TO_TICKS(20) : 1;
 
   static void worker_entry(void *context);
   static bool IRAM_ATTR on_trans_done(parlio_tx_unit_handle_t, const parlio_tx_done_event_data_t *, void *context);

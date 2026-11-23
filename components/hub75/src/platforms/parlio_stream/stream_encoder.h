@@ -121,7 +121,7 @@ class StreamEncoder {
       // OE blanks LEDs, but never stops their shift registers. A complete row
       // must reach LAT without a transaction trailer injecting extra clocks.
       if (phase_ == Phase::SHIFT && width_ > payload_capacity - produced) {
-        std::fill_n(output + produced, payload_capacity - produced, static_cast<uint16_t>(last_address | OE));
+        fill_words(output + produced, payload_capacity - produced, static_cast<uint16_t>(last_address | OE));
         produced = payload_capacity;
         break;
       }
@@ -130,14 +130,10 @@ class StreamEncoder {
       const size_t count = std::min(remaining, payload_capacity - produced);
       last_address = row_address();
       if (phase_ == Phase::SHIFT) {
-        for (size_t i = 0; i < count; ++i) {
-          const size_t x = phase_offset_ + i;
-          output[produced + i] =
-              static_cast<uint16_t>(last_address | OE | rgb_word(x) | (x + 1 == width_ ? LAT : 0) | row_select(x));
-        }
+        encode_shift(output + produced, count, last_address);
       } else {
         const uint16_t word = static_cast<uint16_t>(last_address | (phase_ == Phase::DISPLAY ? 0 : OE));
-        std::fill_n(output + produced, count, word);
+        fill_words(output + produced, count, word);
       }
 
       produced += count;
@@ -237,19 +233,54 @@ class StreamEncoder {
     return static_cast<uint16_t>((row_ == 0 ? SM5368_DATA : 0) | SM5368_BK | (x + 1 == width_ ? SM5368_CLK : 0));
   }
 
-  uint16_t channel(size_t index) const {
-    return depth_ <= 8 ? static_cast<const uint8_t *>(pixels_)[index] : static_cast<const uint16_t *>(pixels_)[index];
+  // Blank and display words are most of the stream, so store them in pairs.
+  static void fill_words(uint16_t *output, size_t count, uint16_t word) {
+    using word_pair = uint32_t __attribute__((may_alias));
+    if (count != 0 && (reinterpret_cast<uintptr_t>(output) & 2U) != 0) {
+      *output++ = word;
+      --count;
+    }
+    const uint32_t pair = word | (uint32_t(word) << 16);
+    auto *pairs = reinterpret_cast<word_pair *>(output);
+    for (size_t i = 0; i < count / 2; ++i) {
+      pairs[i] = pair;
+    }
+    if ((count & 1U) != 0) {
+      output[count - 1] = word;
+    }
   }
 
-  uint16_t rgb_word(size_t x) const {
-    const size_t upper = (row_ * width_ + x) * 3;
-    const size_t lower = ((row_ + rows_) * width_ + x) * 3;
+  // The producer runs this for every shifted pixel, continuously, so keep the
+  // per-word work to a few loads and shifts: one pass per channel width with
+  // running pointers, and LAT / SM5368 bits patched onto the tail afterwards.
+  void encode_shift(uint16_t *output, size_t count, uint16_t address) const {
+    if (depth_ <= 8) {
+      encode_shift_rgb(static_cast<const uint8_t *>(pixels_), output, count, address);
+    } else {
+      encode_shift_rgb(static_cast<const uint16_t *>(pixels_), output, count, address);
+    }
+
+    // Only the last two shift words carry LAT or SM5368 row-select bits.
+    const size_t end = phase_offset_ + count;
+    for (size_t x = std::max(phase_offset_, width_ < 2 ? size_t{0} : width_ - 2); x < end; ++x) {
+      output[x - phase_offset_] =
+          static_cast<uint16_t>(output[x - phase_offset_] | (x + 1 == width_ ? LAT : 0) | row_select(x));
+    }
+  }
+
+  template<typename Channel>
+  void encode_shift_rgb(const Channel *pixels, uint16_t *output, size_t count, uint16_t address) const {
+    const Channel *upper = pixels + (row_ * width_ + phase_offset_) * 3;
+    const Channel *lower = upper + rows_ * width_ * 3;
+    const unsigned bit = bit_;
+    const auto base = static_cast<uint16_t>(address | OE);
 
     // Match the hardware-looping PARLIO backend's data-pin order.
-    return static_cast<uint16_t>((((channel(upper) >> bit_) & 1U) << 5) | (((channel(lower) >> bit_) & 1U) << 4) |
-                                 (((channel(upper + 1) >> bit_) & 1U) << 3) |
-                                 (((channel(lower + 1) >> bit_) & 1U) << 2) |
-                                 (((channel(upper + 2) >> bit_) & 1U) << 1) | ((channel(lower + 2) >> bit_) & 1U));
+    for (size_t i = 0; i < count; ++i, upper += 3, lower += 3) {
+      output[i] = static_cast<uint16_t>(base | (((upper[0] >> bit) & 1U) << 5) | (((lower[0] >> bit) & 1U) << 4) |
+                                        (((upper[1] >> bit) & 1U) << 3) | (((lower[1] >> bit) & 1U) << 2) |
+                                        (((upper[2] >> bit) & 1U) << 1) | ((lower[2] >> bit) & 1U));
+    }
   }
 
   uint16_t addresses_[MAX_ROWS]{};

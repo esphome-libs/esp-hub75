@@ -47,6 +47,11 @@ completed buffers in submission order. A wakeup is not assumed to mean exactly
 one completion. It never submits from the ISR or overwrites a buffer still owned
 by DMA.
 
+The producer runs at a high priority. If encoding cannot keep up with the wire
+clock, completions are always pending and it would never block; after about 20 ms
+without blocking it sleeps for a tick so lower-priority tasks still run, at the
+cost of a dark gap while the queue drains. It logs a warning when this happens.
+
 This is **not a continuous clock across transaction boundaries**. The C6 SDK
 stops and restarts PARLIO in its ISR, even with the next transaction queued. Every
 transaction ends with OE high and LAT low, and idle OE remains high, so a restart

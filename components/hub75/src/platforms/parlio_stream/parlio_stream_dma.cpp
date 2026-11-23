@@ -370,10 +370,27 @@ void ParlioStreamDma::run_worker() {
 
   size_t oldest = 0;
   uint32_t underruns = 0;
+  uint32_t starved = 0;
+  TickType_t last_blocked = xTaskGetTickCount();
   while (ok && !stop_.load()) {
     // pdTRUE returns the entire accumulated completion count. Each completed
     // slot must be reclaimed exactly once, in transaction submission order.
-    const uint32_t completed = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+    uint32_t completed = ulTaskNotifyTake(pdTRUE, 0);
+    if (completed == 0) {
+      completed = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+      last_blocked = xTaskGetTickCount();
+    } else if (xTaskGetTickCount() - last_blocked >= MAX_BUSY_TICKS) {
+      // Completions are always pending, so encoding can't keep up with the wire
+      // and this task would never block. Give lower-priority tasks (esp_timer,
+      // networking, the app, IDLE) a tick; the panel blanks while the queue drains.
+      ++starved;
+      if ((starved & (starved - 1)) == 0) {
+        ESP_LOGW(TAG, "Producer cannot keep up with the stream (%lu); yielding", static_cast<unsigned long>(starved));
+      }
+      vTaskDelay(1);
+      last_blocked = xTaskGetTickCount();
+      completed += ulTaskNotifyTake(pdTRUE, 0);
+    }
     if (stop_.load()) {
       break;
     }

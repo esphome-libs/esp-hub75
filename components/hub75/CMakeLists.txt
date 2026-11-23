@@ -70,6 +70,9 @@ elseif(CONFIG_IDF_TARGET_ESP32C6)
     target_sources(${COMPONENT_LIB} PRIVATE
         "src/platforms/parlio_stream/parlio_stream_dma.cpp"
     )
+    # The producer encodes every frame on the CPU, continuously; at the default
+    # -Og it cannot keep up with a 20 MHz stream.
+    set_source_files_properties("src/platforms/parlio_stream/parlio_stream_dma.cpp" PROPERTIES COMPILE_OPTIONS "-O2")
 endif()
 
 # Compiler flags (common to both GCC and Clang)
