@@ -74,7 +74,7 @@ extern "C" void app_main() {
   Hub75Config config = getMenuConfigSettings();
 
   ESP_LOGI(TAG, "Configuration:");
-  ESP_LOGI(TAG, "  Panel: %dx%d pixels (%d-bit)", config.panel_width, config.panel_height, config.bit_depth);
+  ESP_LOGI(TAG, "  Panel: %dx%d pixels (%d-bit)", config.panel_width, config.panel_height, HUB75_BIT_DEPTH);
   ESP_LOGI(TAG, "  Display: %dx%d pixels", config.panel_width * config.layout_cols,
            config.panel_height * config.layout_rows);
 

@@ -39,23 +39,17 @@ menu "HUB75 Example Selection"
                 Brightness control: fade in/out, pulse animation.
                 Shows runtime brightness adjustment.
 
-        config EXAMPLE_TWO_HORIZONTAL
-            bool "02_multi_panel/two_horizontal"
+        config EXAMPLE_COLOR_TEST
+            bool "01_basic/color_test"
             help
-                2×1 layout (128×64 from two 64×64 panels).
-                Demonstrates horizontal panel chaining.
+                Cycles color patterns to diagnose channel order,
+                gamma and per-channel problems.
 
-        config EXAMPLE_THREE_HORIZONTAL
-            bool "02_multi_panel/three_horizontal"
+        config EXAMPLE_LAYOUT_DEMO
+            bool "02_multi_panel/layout_demo"
             help
-                3×1 layout (192×64 from three 64×64 panels).
-                Shows longer horizontal chains.
-
-        config EXAMPLE_SERPENTINE
-            bool "02_multi_panel/serpentine"
-            help
-                2×1 serpentine wiring pattern demonstration.
-                Explains coordinate remapping for alternate rows.
+                Multi-panel layout demonstration (horizontal, serpentine, zigzag).
+                Set the layout under the HUB75 component's panel layout options.
 
         config EXAMPLE_LVGL_DEMO
             bool "03_lvgl/simple_demo"

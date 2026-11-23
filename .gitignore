@@ -11,6 +11,8 @@ sdkconfig
 sdkconfig.old
 managed_components/
 dependencies.lock
+# Copied from examples/common/ at configure time
+examples/*/*/sdkconfig.defaults.esp32p4
 
 # Arduino
 *.elf

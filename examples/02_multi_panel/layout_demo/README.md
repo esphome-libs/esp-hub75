@@ -197,7 +197,7 @@ See `components/hub75/include/hub75_types.h` for the complete list.
 
 ### Image is scrambled:
 - Verify `LAYOUT_ROWS` and `LAYOUT_COLS` match your physical setup
-- Check `SCAN_1_32` vs `SCAN_1_16` (depends on panel height)
+- Check `CONFIG_HUB75_PANEL_HEIGHT` and the scan wiring pattern match your panel
 
 ### Panels show different patterns:
 - Check data cable connections between panels
