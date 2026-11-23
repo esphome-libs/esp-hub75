@@ -61,7 +61,7 @@ enum class Hub75ClockSpeed : uint32_t {
  * the number of row addresses, usually printed on the PCB (e.g. "8S" = 1/8). The segment
  * layout describes how pixels are split across the doubled-width shift chain:
  *   FULL         full panel-width segments
- *   INTERLEAVED  panel_width / 4 segments (16 px on a 64-wide panel)
+ *   INTERLEAVED  panel_width / (panel_height / 8) segments (16 px on a 64x32 panel)
  *   BITSWAP      full-width segments, y bits 3 and 4 (the 8-row block index) swapped
  */
 enum class Hub75ScanWiring {

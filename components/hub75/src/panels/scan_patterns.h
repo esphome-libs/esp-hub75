@@ -24,20 +24,6 @@ struct Coords {
 // Scan Geometry
 // ============================================================================
 
-/**
- * @brief Resolved scan geometry for a panel configuration
- *
- * A standard panel drives row N and row N + height/2 from one row address, with
- * one shift-chain position per column. Folded panels drive fewer row addresses
- * and make up for it with a longer chain: four-scan panels (scan rate =
- * height / 4) shift two row blocks through a chain twice the panel width, and
- * eight-scan panels (height / 8) shift four blocks through a chain four times
- * the panel width.
- *
- * Within each half of the panel, rows are grouped into `fold` blocks of
- * `block_rows` rows. The chain is split into segments of `segment_width` pixels,
- * and each segment holds one slot per block.
- */
 // Why a scan configuration is invalid (see scan_config_error_message)
 enum class ScanConfigError : uint8_t {
   NONE,
@@ -51,6 +37,8 @@ enum class ScanConfigError : uint8_t {
   DMA_WIDTH_OVERFLOW,
   SEGMENT_OR_FLAGS_WITHOUT_FOLD,
   SEGMENT_DOES_NOT_DIVIDE_WIDTH,
+  PRESET_SEGMENT_DOES_NOT_FIT,
+  FOLDED_PANEL_TOO_TALL,
   ALTERNATE_NEEDS_SEGMENTS,
   ROWS_OUT_OF_RANGE,
   ROWS_OVERLAP,
@@ -73,13 +61,18 @@ inline constexpr const char *scan_config_error_message(ScanConfigError error) {
     case ScanConfigError::HEIGHT_TOO_SMALL:
       return "panel_height is too small for scan_wiring";
     case ScanConfigError::TOO_MANY_ROW_ADDRESSES:
-      return "more than 32 row addresses (panel_height / (2 * fold) must be <= 32)";
+      return "binary row addressing supports at most 32 row addresses (address lines A-E)";
     case ScanConfigError::DMA_WIDTH_OVERFLOW:
       return "DMA row width (panel_width * fold * layout_rows * layout_cols) exceeds 65535";
     case ScanConfigError::SEGMENT_OR_FLAGS_WITHOUT_FOLD:
       return "scan_segment_width and scan_flags need a four- or eight-scan scan_rate";
     case ScanConfigError::SEGMENT_DOES_NOT_DIVIDE_WIDTH:
-      return "scan segment width must divide panel_width";
+      return "scan_segment_width must divide panel_width";
+    case ScanConfigError::PRESET_SEGMENT_DOES_NOT_FIT:
+      return "scan_wiring's default segment width doesn't divide panel_width (set scan_segment_width, or use a "
+             "different scan_wiring)";
+    case ScanConfigError::FOLDED_PANEL_TOO_TALL:
+      return "folded panels support at most 256 pixel rows";
     case ScanConfigError::ALTERNATE_NEEDS_SEGMENTS:
       return "ALTERNATE_SEGMENTS needs a scan_segment_width smaller than panel_width";
     case ScanConfigError::ROWS_OUT_OF_RANGE:
@@ -90,6 +83,20 @@ inline constexpr const char *scan_config_error_message(ScanConfigError error) {
   return "unknown error";
 }
 
+/**
+ * @brief Resolved scan geometry for a panel configuration
+ *
+ * A standard panel drives row N and row N + height/2 from one row address, with
+ * one shift-chain position per column. Folded panels drive fewer row addresses
+ * and make up for it with a longer chain: four-scan panels (scan rate =
+ * height / 4) shift two row blocks through a chain twice the panel width, and
+ * eight-scan panels (height / 8) shift four blocks through a chain four times
+ * the panel width.
+ *
+ * Within each half of the panel, rows are grouped into `fold` blocks of
+ * `block_rows` rows. The chain is split into segments of `segment_width` pixels,
+ * and each segment holds one slot per block.
+ */
 struct ScanGeometry {
   static constexpr uint8_t NO_SHIFT = 0xFF;  // Value is not a power of two; divide instead
 
@@ -184,8 +191,12 @@ class ScanPatternRemap {
 // Geometry Resolution and Validation
 // ============================================================================
 
-// Maximum row addresses: the DMA backends drive five address lines (A-E)
-constexpr uint16_t MAX_ROW_ADDRESSES = 32;
+// Binary row addressing drives five address lines (A-E). SM5368 shifts a row-select
+// pulse instead, so it isn't limited by the address lines.
+constexpr uint16_t MAX_BINARY_ROW_ADDRESSES = 32;
+
+// Folded-row positions the validation pass can track (fold * 2 * scan rate)
+constexpr uint16_t MAX_FOLDED_POSITIONS = 256;
 
 inline constexpr ScanGeometry scan_geometry_error(ScanConfigError error) {
   ScanGeometry g;
@@ -265,7 +276,7 @@ inline constexpr ScanGeometry resolve_scan_geometry(const Hub75Config &config) {
   if (rate == 0) {
     return scan_geometry_error(ScanConfigError::HEIGHT_TOO_SMALL);
   }
-  if (rate > MAX_ROW_ADDRESSES) {
+  if (config.row_decoder == Hub75RowDecoder::BINARY && rate > MAX_BINARY_ROW_ADDRESSES) {
     return scan_geometry_error(ScanConfigError::TOO_MANY_ROW_ADDRESSES);
   }
 
@@ -291,10 +302,16 @@ inline constexpr ScanGeometry resolve_scan_geometry(const Hub75Config &config) {
   g.block_rows = (preset_block_rows != 0) ? preset_block_rows : rate;
   g.block_shift = pow2_shift(g.block_rows);
 
-  g.segment_width =
-      (config.scan_segment_width != 0) ? config.scan_segment_width : (preset_segment != 0 ? preset_segment : width);
-  if (g.segment_width == 0 || width % g.segment_width != 0) {
-    return scan_geometry_error(ScanConfigError::SEGMENT_DOES_NOT_DIVIDE_WIDTH);
+  if (config.scan_segment_width != 0) {
+    g.segment_width = config.scan_segment_width;
+    if (width % g.segment_width != 0) {
+      return scan_geometry_error(ScanConfigError::SEGMENT_DOES_NOT_DIVIDE_WIDTH);
+    }
+  } else {
+    g.segment_width = (preset_segment != 0) ? preset_segment : width;
+    if (width % g.segment_width != 0) {
+      return scan_geometry_error(ScanConfigError::PRESET_SEGMENT_DOES_NOT_FIT);
+    }
   }
   g.segment_shift = pow2_shift(g.segment_width);
   g.panel_segments = width / g.segment_width;
@@ -305,10 +322,12 @@ inline constexpr ScanGeometry resolve_scan_geometry(const Hub75Config &config) {
 
   // Every panel row must land on its own (slot, row) position inside the folded
   // rows. Column mapping within a segment is a permutation, and ALTERNATE_SEGMENTS
-  // permutes slots, so checking column 0 covers the whole panel. There are
-  // fold * 2 * rate <= 256 positions.
-  bool seen[4 * 2 * MAX_ROW_ADDRESSES] = {};
+  // permutes slots, so checking column 0 covers the whole panel.
   const uint16_t folded_rows = 2 * rate;
+  if (static_cast<uint32_t>(fold) * folded_rows > MAX_FOLDED_POSITIONS) {
+    return scan_geometry_error(ScanConfigError::FOLDED_PANEL_TOO_TALL);
+  }
+  bool seen[MAX_FOLDED_POSITIONS] = {};
   for (uint16_t y = 0; y < height; y++) {
     const Coords c = ScanPatternRemap::remap({0, y}, g);
     const uint16_t slot = c.x / g.segment_width;
