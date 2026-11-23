@@ -4,16 +4,16 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 
 ## Platform Comparison Table
 
-| Feature | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4 | ESP32-C6 |
-|---------|-------|----------|----------|----------|----------|
-| **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO | PARLIO |
-| **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA | EDMA |
-| **Memory** | Internal SRAM | Internal SRAM | SRAM or PSRAM | PSRAM or SRAM | Internal SRAM |
-| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | ~284 KB |
-| **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Buffer padding |
-| **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
-| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ | 40 MHz+ |
-| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | ⏳ Planned |
+| Feature | ESP32 | ESP32-S2 | ESP32-S3 | ESP32-P4 |
+|---------|-------|----------|----------|----------|
+| **Peripheral** | I2S (LCD mode) | I2S (LCD mode) | LCD_CAM | PARLIO |
+| **DMA Engine** | I2S DMA | I2S DMA | GDMA (AHB) | EDMA |
+| **Memory** | Internal SRAM | Internal SRAM | SRAM or PSRAM | PSRAM or SRAM |
+| **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB |
+| **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding |
+| **Clock Gating** | No | No | No | **Yes** (MSB) |
+| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ |
+| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested |
 
 ---
 
@@ -24,12 +24,12 @@ on ESP32/ESP32-S2 has different clock divider limitations than the LCD_CAM and P
 peripherals on newer chips.
 
 Clock speeds are automatically resolved to the nearest achievable frequency:
-- **ESP32-S3/P4/C6**: Rounds to 160 MHz / N (integer divider, no jitter)
+- **ESP32-S3/P4**: Rounds to 160 MHz / N (integer divider, no jitter)
 - **ESP32/ESP32-S2**: Falls back to platform-supported speeds
 
 ### Clock Speed by Platform
 
-| Requested | ESP32 | ESP32-S2 | ESP32-S3/P4/C6 | Actual (S3/P4/C6) |
+| Requested | ESP32 | ESP32-S2 | ESP32-S3/P4 | Actual (S3/P4) |
 |-----------|-------|----------|----------------|-------------------|
 | **32 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 32 MHz | 32.00 MHz (160/5) |
 | **27 MHz** | ⚠️ 20 MHz | ⚠️ 20 MHz | ✅ 26.67 MHz | 26.67 MHz (160/6) |
@@ -71,7 +71,7 @@ For example, the old 10 MHz setting programmed dividers 2 and 2, which produce
 20 MHz. The corrected 10 MHz setting uses dividers 4 and 2; a 20 MHz request
 keeps dividers 2 and 2 and accounts for that frequency correctly.
 
-### ESP32-S3 / ESP32-P4 / ESP32-C6
+### ESP32-S3 / ESP32-P4
 
 These platforms use LCD_CAM or PARLIO peripherals with simpler clock dividers:
 
@@ -309,8 +309,6 @@ padding = base_padding + (2^(bit - lsbMsbTransitionBit - 1) × width)
 **Pixel Section**: MSB=1 (clock on, data shifts)
 **Padding Section**: MSB=0 (clock off, display time = BCM timing)
 
-**ESP32-C6**: No clock gating support, MSB unused, BCM via padding length only
-
 ### Memory Layout
 
 **Single Contiguous Buffer**:
@@ -380,21 +378,6 @@ for supported targets, defaults, and bandwidth considerations.
 
 ---
 
-## ESP32-C6: PARLIO (Planned)
-
-### Architecture
-
-Same as ESP32-P4 PARLIO **but NO clock gating support**.
-
-**Differences from P4**:
-- `SOC_PARLIO_TX_CLK_SUPPORT_GATING` undefined
-- MSB (bit 15) unused (always 0)
-- BCM timing via padding length only (no hardware clock control)
-
-**Implementation Status**: ⏳ Planned (same code as P4, conditionally compiled)
-
----
-
 ## Platform Selection Guide
 
 ### Choose ESP32/S2 when:
@@ -413,10 +396,6 @@ Same as ESP32-P4 PARLIO **but NO clock gating support**.
 - Large displays (128×128+)
 - Have abundant PSRAM (8-16 MB)
 - Clock gating feature beneficial
-
-### Choose ESP32-C6 when:
-- (When implemented) Similar to P4 but lower cost
-- PARLIO features without clock gating
 
 ---
 

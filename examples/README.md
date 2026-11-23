@@ -75,7 +75,7 @@ LVGL GUI library integration:
 ## Hardware Requirements
 
 ### Minimum Setup
-- ESP32, ESP32-S2, ESP32-S3, ESP32-P4, or ESP32-C6 development board
+- ESP32, ESP32-S2, ESP32-S3, or ESP32-P4 development board
 - Single HUB75 RGB LED matrix panel (32×32, 64×32, or 64×64 recommended)
 - 5V power supply (3-5A for single 64×64 panel)
 - Wiring connections (R1/G1/B1, R2/G2/B2, A/B/C/D/E, LAT/OE/CLK)

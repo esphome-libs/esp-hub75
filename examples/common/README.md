@@ -51,6 +51,5 @@ Example pin configurations for various development boards.
 - **ESP32**: Internal SRAM for DMA (I2S peripheral)
 - **ESP32-S3**: Internal SRAM for DMA (GDMA/LCD_CAM peripheral)
 - **ESP32-P4**: PSRAM for DMA (via EDMA/PARLIO peripheral)
-- **ESP32-C6**: (planned) Similar to P4
 
 Platform-specific optimizations are automatically applied based on `IDF_TARGET`.

@@ -566,7 +566,7 @@ Test one change at a time:
 When reporting issues, include:
 
 1. **Hardware**:
-   - ESP32 variant (ESP32, S2, S3, P4, C6)
+   - ESP32 variant (ESP32, S2, S3, P4)
    - Board model (if using preset)
    - Panel size and model (if known)
    - Number of panels in chain
