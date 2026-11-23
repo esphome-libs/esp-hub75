@@ -508,12 +508,7 @@ Before enabling external buffers, check the [PSRAM mode and speed requirements](
 
 ### Enable Debug Logging
 
-**Menuconfig**:
-```
-Component config → HUB75 RGB LED Matrix Driver → Debug:
-- Enable timing analysis logs → Yes
-- Dump DMA descriptor chain → Yes (very verbose)
-```
+The driver logs its timing setup at Info level during `begin()`. For more detail (per-bit-plane sizes, brightness updates), set `Component config → Log → Default log verbosity` to Debug.
 
 **Serial output** will show:
 - BCM timing calculations

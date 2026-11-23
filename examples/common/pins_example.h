@@ -106,7 +106,7 @@ static inline Hub75Config getDefaultConfig_32x32() {
 }
 
 // ============================================================================
-// Example 3: ESP32-S3 with double buffering and dithering
+// Example 3: ESP32-S3 with double buffering
 // ============================================================================
 
 static inline Hub75Config getDefaultConfig_ESP32S3() {

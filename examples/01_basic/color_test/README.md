@@ -85,7 +85,6 @@ Dim versions of primary and secondary colors (value=32).
 
 ### Banding in gradients
 - Increase bit depth in menuconfig
-- Enable temporal dithering if available
 
 ## Building
 

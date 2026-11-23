@@ -19,8 +19,6 @@ CONFIG_HUB75_BRIGHTNESS=255
 
 # Component features
 CONFIG_HUB75_DOUBLE_BUFFER=n
-CONFIG_HUB75_TEMPORAL_DITHER=y  # Helps with gradient smoothness
-CONFIG_HUB75_IRAM_OPTIMIZATION=y
 
 # Board preset (user should configure via menuconfig)
 CONFIG_HUB75_BOARD_CUSTOM=y
