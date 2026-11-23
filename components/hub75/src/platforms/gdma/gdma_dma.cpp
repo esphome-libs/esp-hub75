@@ -83,6 +83,12 @@ constexpr uint16_t RGB_MASK = RGB_UPPER_MASK | RGB_LOWER_MASK;  // 0x003F
 // Bit clear masks
 constexpr uint16_t OE_CLEAR_MASK = ~(1 << OE_BIT);
 
+// Largest PSRAM burst (bytes) that divides each bitplane: 64 for common panels. Keeps
+// descriptor starts and lengths aligned without forcing small bursts on every panel.
+static constexpr size_t psram_burst_size(uint16_t dma_width) {
+  return dma_width % 32 == 0 ? 64 : (dma_width % 16 == 0 ? 32 : 16);
+}
+
 GdmaDma::GdmaDma(const Hub75Config &config)
     : PlatformDma(config),
       dma_chan_(nullptr),
@@ -172,19 +178,16 @@ bool GdmaDma::init() {
 
   ESP_LOGI(TAG, "GDMA strategy configured: owner_check=false, auto_update_desc=false");
 
-  // Use the largest PSRAM burst that divides each bitplane (64 bytes for common panels).
-  // Keep descriptor starts and lengths aligned without forcing small bursts on every panel.
-  const size_t psram_alignment = dma_width_ % 32 == 0 ? 64 : (dma_width_ % 16 == 0 ? 32 : 16);
-
   // Configure external access explicitly, including encrypted PSRAM on S3.
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-  gdma_transfer_config_t transfer_config = {.max_data_burst_size = HUB75_EXTERNAL_FRAMEBUFFERS ? psram_alignment : 32u,
-                                            .access_ext_mem = HUB75_EXTERNAL_FRAMEBUFFERS != 0};
+  gdma_transfer_config_t transfer_config = {
+      .max_data_burst_size = HUB75_EXTERNAL_FRAMEBUFFERS ? psram_burst_size(dma_width_) : 32u,
+      .access_ext_mem = HUB75_EXTERNAL_FRAMEBUFFERS != 0};
   err = gdma_config_transfer(dma_chan_, &transfer_config);
 #else
   gdma_transfer_ability_t ability = {
       .sram_trans_align = 32,
-      .psram_trans_align = psram_alignment,
+      .psram_trans_align = psram_burst_size(dma_width_),
   };
   err = gdma_set_transfer_ability(dma_chan_, &ability);
 #endif

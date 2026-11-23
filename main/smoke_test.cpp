@@ -12,6 +12,7 @@
 
 #include "hub75.h"
 #include "board_config.h"
+#include <algorithm>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>  // NOLINT(misc-header-include-cycle)
 #include <freertos/task.h>
@@ -81,18 +82,20 @@ extern "C" void app_main() {
     }
   }
 
-  // Draw center cross in cyan
-  uint16_t cx = driver.get_width() / 2;
-  uint16_t cy = driver.get_height() / 2;
+  // Draw center cross in cyan, clipped to the display
+  const int width = driver.get_width();
+  const int height = driver.get_height();
+  const int cx = width / 2;
+  const int cy = height / 2;
 
   // Horizontal line
-  for (uint16_t x = cx - 10; x <= cx + 10; x++) {
-    driver.set_pixel(x, cy, 0, 255, 255);
+  for (int x = std::max(cx - 10, 0); x <= std::min(cx + 10, width - 1); x++) {
+    driver.set_pixel(static_cast<uint16_t>(x), static_cast<uint16_t>(cy), 0, 255, 255);
   }
 
   // Vertical line
-  for (uint16_t y = cy - 10; y <= cy + 10; y++) {
-    driver.set_pixel(cx, y, 0, 255, 255);
+  for (int y = std::max(cy - 10, 0); y <= std::min(cy + 10, height - 1); y++) {
+    driver.set_pixel(static_cast<uint16_t>(cx), static_cast<uint16_t>(y), 0, 255, 255);
   }
 
   ESP_LOGI(TAG, "Smoke test pattern displayed");
