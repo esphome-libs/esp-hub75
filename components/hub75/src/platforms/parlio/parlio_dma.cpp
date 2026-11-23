@@ -49,7 +49,9 @@ enum HUB75WordBits : uint16_t {
 
 // Address field (not individual bits)
 constexpr int ADDR_SHIFT = 10;
-constexpr uint16_t ADDR_MASK = 0x1F;  // 5-bit address (0-31)
+constexpr uint16_t SM5368_CLK_MASK = 1u << (ADDR_SHIFT + 0);
+constexpr uint16_t SM5368_BK_MASK = 1u << (ADDR_SHIFT + 1);
+constexpr uint16_t SM5368_DATA_MASK = 1u << (ADDR_SHIFT + 2);
 
 // Combined RGB masks (used for clearing RGB bits in buffers)
 constexpr uint16_t RGB_UPPER_MASK = (1 << R1_BIT) | (1 << G1_BIT) | (1 << B1_BIT);
@@ -112,11 +114,7 @@ bool ParlioDma::init() {
            virtual_width_, virtual_height_);
   ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
   ESP_LOGI(TAG, "Bit depth: %d", bit_depth_);
-
-  if (config_.row_decoder != Hub75RowDecoder::BINARY) {
-    ESP_LOGE(TAG, "Row decoder mode is not supported on PARLIO backend yet");
-    return false;
-  }
+  ESP_LOGI(TAG, "Row decoder: %s", row_decoder_name(config_.row_decoder));
 
   // Calculate BCM timings first
   calculate_bcm_timings();
@@ -533,7 +531,8 @@ void ParlioDma::stop_transfer() {
 
 void ParlioDma::initialize_buffer_internal(BitPlaneBuffer *buffers) {
   for (int row = 0; row < num_rows_; row++) {
-    uint16_t row_addr = row & ADDR_MASK;  // 5-bit address for PARLIO
+    const uint16_t row_addr = row_address_bits(config_.row_decoder, row, num_rows_);
+    const bool is_sm5368 = config_.row_decoder == Hub75RowDecoder::SM5368;
 
     for (int bit = 0; bit < bit_depth_; bit++) {
       int idx = (row * bit_depth_) + bit;
@@ -561,6 +560,15 @@ void ParlioDma::initialize_buffer_internal(BitPlaneBuffer *buffers) {
         // LAT pulse on last pixel
         if (x == bp.pixel_words - 1) {
           word |= (1 << LAT_BIT);
+        }
+
+        // SM5368 panels use shift-style row selection instead of binary ABCDE address lines.
+        // Encode the row pulse at the tail of bit-plane 0's pixel section, alongside LAT.
+        if (is_sm5368 && bit == 0 && bp.pixel_words >= 2 && x >= bp.pixel_words - 2) {
+          word |= ((row == 0) ? SM5368_DATA_MASK : 0) | SM5368_BK_MASK;
+          if (x == bp.pixel_words - 1) {
+            word |= SM5368_CLK_MASK;
+          }
         }
 
         // RGB data = 0 (will be set by draw_pixels)

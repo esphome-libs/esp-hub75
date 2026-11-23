@@ -82,6 +82,31 @@ bool Hub75Driver::begin() {
     ESP_LOGE(TAG, "Invalid scan configuration: %s", scan_config_error_message(scan_error));
     return false;
   }
+  switch (config_.row_decoder) {
+    case Hub75RowDecoder::BINARY:
+      break;
+    case Hub75RowDecoder::SM5368:
+      if (config_.pins.a < 0 || config_.pins.b < 0 || config_.pins.c < 0) {
+        ESP_LOGE(TAG, "SM5368 row decoder needs pins A, B and C");
+        return false;
+      }
+      break;
+    case Hub75RowDecoder::DIRECT: {
+      const uint16_t num_rows = get_effective_num_rows(config_);
+      if (num_rows != 2 && num_rows != 4) {
+        ESP_LOGE(TAG, "DIRECT row decoder needs 2 or 4 row addresses (panel has %u)", (unsigned int) num_rows);
+        return false;
+      }
+      if (config_.pins.a < 0 || config_.pins.b < 0 || (num_rows == 4 && (config_.pins.c < 0 || config_.pins.d < 0))) {
+        ESP_LOGE(TAG, "DIRECT row decoder needs one address pin per row (A-B for 2 rows, A-D for 4)");
+        return false;
+      }
+      break;
+    }
+    default:
+      ESP_LOGE(TAG, "Unknown row decoder: %d", (int) config_.row_decoder);
+      return false;
+  }
 
   // Initialize shift driver chips (panel-level, platform-agnostic)
   // Must happen before DMA starts transmitting data

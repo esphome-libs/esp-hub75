@@ -304,9 +304,8 @@ menu "HUB75 RGB LED Matrix Driver"
                 Most HUB75 panels use standard binary ABCDE row addressing.
                 Some panels use SM5368-style row logic where A/B/C are used as
                 row clock, BK, and row data instead of binary row address bits.
-
-                Note: SM5368 row decoding is currently implemented only on the
-                ESP32-S3 GDMA backend.
+                Panels with 2 or 4 row addresses and direct row drivers use one
+                address line per row.
 
             config HUB75_ROW_DECODER_BINARY
                 bool "Binary ABCDE (Most Panels)"
@@ -320,6 +319,14 @@ menu "HUB75 RGB LED Matrix Driver"
                     SM5368-style row selection where A=row clock, B=BK, and
                     C=row data. Use this for panels that require shift-style
                     row selection instead of binary row addressing.
+
+            config HUB75_ROW_DECODER_DIRECT
+                bool "Direct (one line per row)"
+                help
+                    One active-low address line per row: A/B on panels with 2 row
+                    addresses, A-D on panels with 4. Use this for panels whose row
+                    drivers (often MOSFETs such as 4953) are wired straight to the
+                    address lines with no decoder chip.
         endchoice
 
         choice HUB75_BIT_DEPTH_CHOICE

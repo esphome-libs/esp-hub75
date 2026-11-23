@@ -70,7 +70,9 @@ enum HUB75WordBits : uint16_t {
 
 // Address field (not individual bits)
 constexpr int ADDR_SHIFT = 6;
-constexpr uint16_t ADDR_MASK = 0x1F;  // 5-bit address (0-31)
+constexpr uint16_t SM5368_CLK_MASK = 1u << (ADDR_SHIFT + 0);
+constexpr uint16_t SM5368_BK_MASK = 1u << (ADDR_SHIFT + 1);
+constexpr uint16_t SM5368_DATA_MASK = 1u << (ADDR_SHIFT + 2);
 
 // Combined RGB masks
 constexpr uint16_t RGB_UPPER_MASK = (1 << R1_BIT) | (1 << G1_BIT) | (1 << B1_BIT);
@@ -146,11 +148,7 @@ bool I2sDma::init() {
            config_.pins.r2, config_.pins.g2, config_.pins.b2);
   ESP_LOGI(TAG, "Pin config: A=%d B=%d C=%d D=%d E=%d LAT=%d OE=%d CLK=%d", config_.pins.a, config_.pins.b,
            config_.pins.c, config_.pins.d, config_.pins.e, config_.pins.lat, config_.pins.oe, config_.pins.clk);
-
-  if (config_.row_decoder != Hub75RowDecoder::BINARY) {
-    ESP_LOGE(TAG, "Row decoder mode is not supported on I2S backend yet");
-    return false;
-  }
+  ESP_LOGI(TAG, "Row decoder: %s", row_decoder_name(config_.row_decoder));
 
   // Get I2S device
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
@@ -686,7 +684,8 @@ void I2sDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
 
   for (int row = 0; row < num_rows_; row++) {
     // Calculate row address (ABCDE bits)
-    uint16_t row_addr = row & ADDR_MASK;
+    const uint16_t row_addr = row_address_bits(config_.row_decoder, row, num_rows_);
+    const bool is_sm5368 = config_.row_decoder == Hub75RowDecoder::SM5368;
 
     for (int bit = 0; bit < bit_depth_; bit++) {
       // Get pointer to this bit plane's buffer
@@ -705,7 +704,7 @@ void I2sDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       uint16_t addr_for_buffer;
       if (bit == 0) {
         // LSB bit plane uses previous row (wraps row 0 to last row)
-        addr_for_buffer = ((row == 0 ? num_rows_ : row) - 1) & ADDR_MASK;
+        addr_for_buffer = row_address_bits(config_.row_decoder, (row == 0 ? num_rows_ : row) - 1, num_rows_);
       } else {
         // All other bit planes use current row
         addr_for_buffer = row_addr;
@@ -714,6 +713,15 @@ void I2sDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       // Fill all pixels with control bits (RGB=0, row address, OE=HIGH)
       for (uint16_t x = 0; x < dma_width_; x++) {
         buf[fifo_adjust_x(x)] = (addr_for_buffer << ADDR_SHIFT) | (1 << OE_BIT);
+      }
+
+      // SM5368 panels use shift-style row selection instead of binary ABCDE address lines.
+      // Encode the row pulse at the tail of bit-plane 0 so the panel advances row selection
+      // during the LAT settling window while leaving other bit planes unchanged.
+      if (is_sm5368 && bit == 0 && dma_width_ >= 2) {
+        const uint16_t row_data = (row == 0) ? SM5368_DATA_MASK : 0;
+        buf[fifo_adjust_x(dma_width_ - 2)] |= row_data | SM5368_BK_MASK;
+        buf[fifo_adjust_x(dma_width_ - 1)] |= row_data | SM5368_BK_MASK | SM5368_CLK_MASK;
       }
 
       // Set LAT bit on last pixel

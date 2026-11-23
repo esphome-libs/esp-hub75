@@ -23,6 +23,39 @@
 namespace hub75 {
 
 /**
+ * @brief Row address line values (A=bit 0 ... E=bit 4) that select a row
+ *
+ * BINARY: the row number. DIRECT: every line high except the selected row's
+ * (A/B for 2-row panels, A-D for 4-row panels). SM5368 does not hold a static
+ * address; backends emit its row-select pulses separately.
+ */
+HUB75_CONST inline constexpr uint16_t row_address_bits(Hub75RowDecoder decoder, uint16_t row, uint16_t num_rows) {
+  switch (decoder) {
+    case Hub75RowDecoder::DIRECT: {
+      const uint16_t lines = (num_rows == 2) ? 0x3 : 0xF;
+      return lines & ~(1u << row);
+    }
+    case Hub75RowDecoder::SM5368:
+      return 0;
+    case Hub75RowDecoder::BINARY:
+    default:
+      return row & 0x1F;
+  }
+}
+
+HUB75_CONST inline constexpr const char *row_decoder_name(Hub75RowDecoder decoder) {
+  switch (decoder) {
+    case Hub75RowDecoder::SM5368:
+      return "SM5368";
+    case Hub75RowDecoder::DIRECT:
+      return "direct";
+    case Hub75RowDecoder::BINARY:
+    default:
+      return "binary";
+  }
+}
+
+/**
  * @brief Platform-agnostic DMA interface
  *
  * Each platform (ESP32, ESP32-S3, etc.) implements this interface
