@@ -455,10 +455,7 @@ This means rotation happens **before** layout remapping, so layout configuration
 
 ## Examples
 
-See working examples:
-- `examples/02_multi_panel/two_horizontal/` - 2×1 HORIZONTAL
-- `examples/02_multi_panel/three_horizontal/` - 3×1 HORIZONTAL
-- `examples/02_multi_panel/serpentine/` - 2×1 TOP_LEFT_DOWN (serpentine)
+See `examples/02_multi_panel/layout_demo/`, which covers HORIZONTAL, serpentine and zigzag layouts (set via its `sdkconfig.defaults` or menuconfig).
 
 ---
 
