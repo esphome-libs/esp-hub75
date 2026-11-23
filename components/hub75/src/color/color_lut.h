@@ -23,6 +23,7 @@
 #include "hub75_config.h"
 #include <stdint.h>
 #include <array>
+#include <limits>
 
 namespace hub75 {
 
@@ -45,44 +46,90 @@ constexpr double constexpr_pow(double base, int exp) {
 }
 
 /**
- * @brief Compile-time power function (x^y for fractional y)
- * Uses Taylor series approximation for exp and log
- */
-constexpr double constexpr_pow_frac(double base, double exp) {
-  // For gamma correction, we only need positive base and exp
-  // Use approximation: base^exp = e^(exp * ln(base))
-
-  // Newton-Raphson for ln(base)
-  double ln_base = 0.0;
-  const double x = base;
-  if (x > 0.0) {
-    // ln(x) approximation using series expansion
-    // For x close to 1: ln(x) ≈ 2*((x-1)/(x+1) + ((x-1)/(x+1))³/3 + ...)
-    const double t = (x - 1.0) / (x + 1.0);
-    const double t2 = t * t;
-    ln_base = 2.0 * t * (1.0 + t2 / 3.0 + t2 * t2 / 5.0 + t2 * t2 * t2 / 7.0);
-  }
-
-  const double power = exp * ln_base;
-
-  // e^power using Taylor series: e^x = 1 + x + x²/2! + x³/3! + ...
-  double result = 1.0;
-  double term = 1.0;
-  for (int i = 1; i < 20; i++) {
-    term *= power / i;
-    result += term;
-  }
-
-  return result;
-}
-
-/**
  * @brief Compile-time rounding
  * std::lround not constexpr until C++23
  */
 constexpr int constexpr_round(double x) {
   // NOLINTNEXTLINE(bugprone-incorrect-roundings)
   return (x >= 0.0) ? static_cast<int>(x + 0.5) : static_cast<int>(x - 0.5);
+}
+
+constexpr double LN2 = 0.69314718055994530942;
+
+/**
+ * @brief Compile-time natural logarithm (x > 0)
+ *
+ * Scales x by powers of two into [1/sqrt(2), sqrt(2)], so ln(x) = k*ln(2) + ln(m).
+ * ln(m) uses the atanh series 2*(t + t³/3 + t⁵/5 + ...) with t = (m-1)/(m+1);
+ * |t| <= 0.172 after reduction, so the series converges to double precision.
+ */
+constexpr double constexpr_ln(double x) {
+  // Range reduction below would never terminate for 0, negatives, or infinity
+  if (!(x > 0.0)) {
+    return (x == 0.0) ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::quiet_NaN();
+  }
+  if (x == std::numeric_limits<double>::infinity()) {
+    return x;
+  }
+  int k = 0;
+  while (x > 1.4142135623730951) {
+    x *= 0.5;
+    k++;
+  }
+  while (x < 0.7071067811865476) {
+    x *= 2.0;
+    k--;
+  }
+  const double t = (x - 1.0) / (x + 1.0);
+  const double t2 = t * t;
+  double term = t;
+  double sum = 0.0;
+  for (int n = 1; n < 40; n += 2) {
+    sum += term / n;
+    term *= t2;
+  }
+  return (2.0 * sum) + (k * LN2);
+}
+
+/**
+ * @brief Compile-time exponential
+ *
+ * Splits x = k*ln(2) + r with |r| <= ln(2)/2, so e^x = 2^k * e^r.
+ * e^r uses its Taylor series, which converges quickly for small |r|.
+ */
+constexpr double constexpr_exp(double x) {
+  // Outside this range e^x overflows/underflows double; also keeps k within int
+  if (x > 710.0) {
+    return std::numeric_limits<double>::infinity();
+  }
+  if (x < -746.0) {
+    return 0.0;
+  }
+  const int k = constexpr_round(x / LN2);
+  const double r = x - (k * LN2);
+  double result = 1.0;
+  double term = 1.0;
+  for (int i = 1; i < 20; i++) {
+    term *= r / i;
+    result += term;
+  }
+  // Apply 2^k in two halves: 2^k alone overflows/underflows near the ends of the
+  // double range even when the final product is representable
+  const int k_half = k / 2;
+  return (result * constexpr_pow(2.0, k_half)) * constexpr_pow(2.0, k - k_half);
+}
+
+/**
+ * @brief Compile-time power function (x^y for fractional y)
+ *
+ * Computes base^exp = e^(exp * ln(base)). Intended for gamma curves:
+ * base in [0, 1] and exp > 0. ln(0) is undefined, so 0^exp returns 0.
+ */
+constexpr double constexpr_pow_frac(double base, double exp) {
+  if (base <= 0.0) {
+    return 0.0;
+  }
+  return constexpr_exp(exp * constexpr_ln(base));
 }
 
 /**
