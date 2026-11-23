@@ -96,7 +96,7 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
 
     case Hub75ShiftDriver::DP3246:
       if (!config.clk_phase_inverted) {
-        ESP_LOGW(TAG, "DP3246: clk_phase_inverted should be true (rising-edge clock)");
+        ESP_LOGW(TAG, "DP3246: clk_phase_inverted should be true");
       }
       dp3246_init(config.pins, pixels_per_row);
       return ESP_OK;

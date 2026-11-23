@@ -21,22 +21,22 @@ Human vision perceives brightness **logarithmically**, not linearly. Without cor
 - Brightness changes look uneven
 - Colors appear "wrong" compared to monitors
 
-**Solution**: CIE 1931 luminance curve matches human perception.
+**Solution**: CIE 1931 lightness curve matches human perception.
 
 ### Implementation
 
 **Lookup Tables (LUTs)** convert linear RGB → perceptually-corrected values.
 
-**Location**: `src/color/color_lut.cpp`
+**Location**: `src/color/color_lut.h` (generated with `constexpr`; `color_lut.cpp` holds compile-time checks)
 
 **LUT Generation** (compile-time):
 ```cpp
-// CIE 1931 formula: L = (L_linear / 255)^2.5
-uint16_t lut[256];
+// CIE 1931 lightness: L = input scaled to 0-100
+//   Y = L / 902.3               for L <= 8
+//   Y = ((L + 16) / 116)^3      for L > 8
 for (int i = 0; i < 256; i++) {
-    float linear = i / 255.0f;
-    float gamma = powf(linear, 2.5f);
-    lut[i] = (uint16_t)(gamma * max_value);
+    const double luminance = cie1931((i / 255.0) * 100.0);
+    lut[i] = round(luminance * max_val);  // rounded to nearest, clamped to max_val
 }
 ```
 
@@ -54,23 +54,24 @@ uint8_t g_linear = 100;
 uint8_t b_linear = 50;
 
 // Driver applies LUT
-uint16_t r_gamma = gamma_lut_[r_linear];  // e.g., 200 → 723 (10-bit)
-uint16_t g_gamma = gamma_lut_[g_linear];  // e.g., 100 → 161 (10-bit)
-uint16_t b_gamma = gamma_lut_[b_linear];  // e.g., 50 → 25 (10-bit)
+uint16_t r_gamma = gamma_lut_[r_linear];  // e.g., 200 → 552 (10-bit, CIE 1931)
+uint16_t g_gamma = gamma_lut_[g_linear];  // e.g., 100 → 110 (10-bit, CIE 1931)
+uint16_t b_gamma = gamma_lut_[b_linear];  // e.g., 50 → 30 (10-bit, CIE 1931)
 
 // Pack into native format and write to framebuffer
 ```
 
 **Result**: Smooth gradients, perceptually-correct brightness.
 
-### CIE 1931 vs sRGB
+### Gamma Modes
 
-| Curve | Formula | Use Case |
-|-------|---------|----------|
-| **CIE 1931** | L = I^2.5 | LED displays, scientific accuracy |
-| **sRGB** | L = I^2.2 | Computer monitors, standard for web/images |
+| Mode | `HUB75_GAMMA_MODE` | Curve | 200 / 100 / 50 → (10-bit) |
+|------|--------------------|-------|---------------------------|
+| **Linear** | 0 | No correction | 802 / 401 / 201 |
+| **CIE 1931** (default) | 1 | CIE 1931 lightness (piecewise cubic) | 552 / 110 / 30 |
+| **Gamma 2.2** | 2 | I^2.2 | 599 / 130 / 28 |
 
-Driver uses **CIE 1931** by default (better for LEDs). Future: configurable gamma mode.
+Select via menuconfig: `HUB75 → Color → Gamma Correction Mode`. Without menuconfig (e.g. PlatformIO), use a global build flag such as `-DHUB75_GAMMA_MODE=2`.
 
 ---
 
@@ -129,11 +130,7 @@ Driver uses **CIE 1931** by default (better for LEDs). Future: configurable gamm
 
 **Menuconfig**: `HUB75 Display Configuration → Panel Settings → Bit Depth`
 
-**Code**:
-```cpp
-Hub75Config config = {};
-config.bit_depth = 10;  // 10-bit mode
-```
+**Without menuconfig** (e.g. PlatformIO), use a global build flag: `-DHUB75_BIT_DEPTH=10`. Bit depth is compile-time only; there is no `Hub75Config` field for it.
 
 ---
 
@@ -323,6 +320,6 @@ Bit 31      30                 20   19              10   9             0
 ---
 
 **For implementation details**, see:
-- `src/color/color_lut.cpp` - Gamma LUT generation
+- `src/color/color_lut.h` - Gamma LUT generation
 - `src/color/color_convert.cpp` - RGB format conversions
 - Platform files - `setBrightnessOE()` implementations

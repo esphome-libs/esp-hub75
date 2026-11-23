@@ -308,7 +308,7 @@ All panels mounted upright, cables snake back:
 - **HUB75_PIN_D** - Address line D
 - **HUB75_PIN_E** - Address line E (MSB, -1 if unused)
 
-**E Pin**: Required for 64-row panels (1/32 scan). Set to -1 for 16/32-row panels.
+**E Pin**: Required when the panel has more than 16 row addresses, e.g. 64-row (1/32 scan) or 40-row (1/20 scan) standard panels. Set to -1 for 16/32-row standard panels.
 
 ### Control Signals
 - **HUB75_PIN_LAT** - Latch (transfers shift register → output)
