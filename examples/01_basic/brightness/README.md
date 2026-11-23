@@ -18,7 +18,7 @@ Demonstrates:
 
 ## Hardware Requirements
 
-- ESP32-S3 (or ESP32/S2/P4) development board
+- ESP32-S3 (or ESP32/S2/P4/C6) development board
 - Single HUB75 RGB LED matrix panel
 - 5V power supply
 

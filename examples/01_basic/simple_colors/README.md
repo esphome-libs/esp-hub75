@@ -19,7 +19,7 @@ The pattern is static (no animation) and demonstrates:
 
 ## Hardware Requirements
 
-- ESP32-S3 (or ESP32/S2/P4) development board
+- ESP32-S3 (or ESP32/S2/P4/C6) development board
 - Single HUB75 RGB LED matrix panel (any size: 32×32, 64×32, 64×64, etc.)
 - 5V power supply (adequate for your panel size)
 - Wiring per your board preset or custom pin configuration

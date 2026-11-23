@@ -114,7 +114,7 @@ This repository includes a standalone test application and examples that can be 
 
 ```bash
 cd esp-hub75
-idf.py set-target esp32s3  # or esp32, esp32s2, esp32p4
+idf.py set-target esp32s3  # or esp32, esp32s2, esp32c6, esp32p4
 idf.py build
 idf.py flash monitor
 ```
@@ -203,7 +203,7 @@ This driver combines best practices from:
 - [mrcodetastic/ESP32-HUB75-MatrixPanel-DMA](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA) - Native CIE LUTs, GDMA, multi-platform
 - [JuPfu/hub75](https://github.com/JuPfu/hub75) - Dual-mode brightness inspiration
 - [liebman/esp-hub75](https://github.com/liebman/esp-hub75) - Rust patterns, IRAM optimization
-- [Espressif PARLIO Example](https://github.com/espressif/esp-idf/tree/v5.4.1/examples/peripherals/parlio) - ESP32-P4 PARLIO
+- [Espressif PARLIO Example](https://github.com/espressif/esp-idf/tree/v5.4.1/examples/peripherals/parlio) - ESP32-C6/P4 PARLIO
 
 ## License
 
