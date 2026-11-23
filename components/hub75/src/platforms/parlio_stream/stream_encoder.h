@@ -19,15 +19,33 @@ class StreamEncoder {
   static constexpr uint16_t LAT = 1U << 9;
   static constexpr unsigned ADDR_SHIFT = 10;
   static constexpr size_t MAX_CHUNK_WORDS = 32764;
+  static constexpr size_t MAX_ROWS = 32;  // Address-line rows; SM5368 has no row limit here
+
+  // SM5368 row-select signals share the A/B/C address pins.
+  static constexpr uint16_t SM5368_CLK = 1U << (ADDR_SHIFT + 0);
+  static constexpr uint16_t SM5368_BK = 1U << (ADDR_SHIFT + 1);
+  static constexpr uint16_t SM5368_DATA = 1U << (ADDR_SHIFT + 2);
+
+  StreamEncoder() { set_row_addressing(nullptr, 0, false); }
+
+  // Address-line values (A = bit 0) held for each row, and whether rows are
+  // selected by SM5368 pulses instead. Call before configure(); rows without
+  // an entry use their binary row number.
+  void set_row_addressing(const uint16_t *addresses, size_t count, bool sm5368) {
+    for (size_t row = 0; row < MAX_ROWS; ++row) {
+      addresses_[row] = static_cast<uint16_t>((row < count ? addresses[row] : row) << ADDR_SHIFT);
+    }
+    sm5368_ = sm5368;
+  }
 
   bool configure(size_t width, size_t row_pairs, uint8_t depth, uint8_t latch_blanking, uint32_t clock_hz,
                  uint32_t min_refresh_hz, size_t chunk_words = 8192) {
     configured_ = false;
     done_ = true;
 
-    if (width == 0 || width > 65535 || row_pairs == 0 || row_pairs > 32 || depth == 0 || depth > 16 || clock_hz == 0 ||
-        min_refresh_hz == 0 || chunk_words < 4 || chunk_words > MAX_CHUNK_WORDS || (chunk_words & 1U) != 0 ||
-        width > chunk_words - 2) {
+    if (width == 0 || width > 65535 || row_pairs == 0 || (!sm5368_ && row_pairs > MAX_ROWS) || depth == 0 ||
+        depth > 16 || clock_hz == 0 || min_refresh_hz == 0 || chunk_words < 4 || chunk_words > MAX_CHUNK_WORDS ||
+        (chunk_words & 1U) != 0 || width > chunk_words - 2 || (sm5368_ && width < 2)) {
       return false;
     }
 
@@ -97,7 +115,7 @@ class StreamEncoder {
 
     const size_t payload_capacity = chunk_words_ - 2;
     size_t produced = 0;
-    uint16_t last_address = static_cast<uint16_t>(row_ << ADDR_SHIFT);
+    uint16_t last_address = row_address();
 
     while (produced < payload_capacity && !done_) {
       // OE blanks LEDs, but never stops their shift registers. A complete row
@@ -110,11 +128,12 @@ class StreamEncoder {
 
       const size_t remaining = phase_words() - phase_offset_;
       const size_t count = std::min(remaining, payload_capacity - produced);
-      last_address = static_cast<uint16_t>(row_ << ADDR_SHIFT);
+      last_address = row_address();
       if (phase_ == Phase::SHIFT) {
         for (size_t i = 0; i < count; ++i) {
           const size_t x = phase_offset_ + i;
-          output[produced + i] = static_cast<uint16_t>(last_address | OE | rgb_word(x) | (x + 1 == width_ ? LAT : 0));
+          output[produced + i] =
+              static_cast<uint16_t>(last_address | OE | rgb_word(x) | (x + 1 == width_ ? LAT : 0) | row_select(x));
         }
       } else {
         const uint16_t word = static_cast<uint16_t>(last_address | (phase_ == Phase::DISPLAY ? 0 : OE));
@@ -202,6 +221,19 @@ class StreamEncoder {
     } while (phase_words() == 0);
   }
 
+  // SM5368 rows are selected by pulses, so the address lines stay low.
+  uint16_t row_address() const { return sm5368_ ? 0 : addresses_[row_]; }
+
+  // SM5368 advances its row on a CLK pulse with BK high; DATA marks row 0.
+  // Emitted once per row, on the last two words of bitplane 0's shift.
+  uint16_t row_select(size_t x) const {
+    if (!sm5368_ || bit_ != 0 || x + 2 < width_) {
+      return 0;
+    }
+
+    return static_cast<uint16_t>((row_ == 0 ? SM5368_DATA : 0) | SM5368_BK | (x + 1 == width_ ? SM5368_CLK : 0));
+  }
+
   uint16_t channel(size_t index) const {
     return depth_ <= 8 ? static_cast<const uint8_t *>(pixels_)[index] : static_cast<const uint16_t *>(pixels_)[index];
   }
@@ -217,6 +249,8 @@ class StreamEncoder {
                                  (((channel(upper + 2) >> bit_) & 1U) << 1) | ((channel(lower + 2) >> bit_) & 1U));
   }
 
+  uint16_t addresses_[MAX_ROWS]{};
+  bool sm5368_{false};
   size_t width_{0};
   size_t rows_{0};
   size_t blanking_{1};

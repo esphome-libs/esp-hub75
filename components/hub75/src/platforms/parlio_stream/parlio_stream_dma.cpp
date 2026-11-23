@@ -24,9 +24,11 @@ static_assert(std::atomic<bool>::is_always_lock_free, "Stream state must not req
 
 ParlioStreamDma::ParlioStreamDma(const Hub75Config &config)
     : PlatformDma(config),
-      dma_width_(
-          get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
-      num_rows_(get_effective_num_rows(config.scan_wiring, config.panel_height)),
+      dma_width_(get_effective_dma_width(config)),
+      num_rows_(get_effective_num_rows(config)),
+      scan_geometry_(resolve_scan_geometry(config)),
+      needs_scan_remap_(scan_geometry_.fold != 1),
+      needs_layout_remap_(config.layout != Hub75PanelLayout::HORIZONTAL),
       rotation_(config.rotation),
       brightness_(config.brightness) {}
 
@@ -37,17 +39,25 @@ bool ParlioStreamDma::init() {
     return running_.load();
   }
 
-  const unsigned scan_divisor = is_four_scan_wiring(config_.scan_wiring) ? 4 : 2;
-  const uint64_t width = uint64_t(config_.panel_width) * config_.layout_rows * config_.layout_cols * (scan_divisor / 2);
+  // Hub75Driver::begin() validates the scan geometry and row decoder pins; these
+  // are the streaming backend's own limits.
   const uint64_t virtual_width = uint64_t(config_.panel_width) * config_.layout_cols;
   const uint64_t virtual_height = uint64_t(config_.panel_height) * config_.layout_rows;
   const uint32_t requested = static_cast<uint32_t>(config_.output_clock_speed);
-  if (config_.row_decoder != Hub75RowDecoder::BINARY || width != dma_width_ || virtual_width > UINT16_MAX ||
-      virtual_height > UINT16_MAX || config_.panel_height % scan_divisor != 0 || dma_width_ <= config_.latch_blanking ||
-      requested == 0) {
-    ESP_LOGE(TAG, "Unsupported row decoder, geometry, or clock");
+  if (scan_geometry_.error != ScanConfigError::NONE || virtual_width > UINT16_MAX || virtual_height > UINT16_MAX ||
+      dma_width_ <= config_.latch_blanking || requested == 0) {
+    ESP_LOGE(TAG, "Unsupported geometry or clock");
     return false;
   }
+
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s, row decoder: %s", dma_width_, num_rows_,
+           scan_type_name(scan_geometry_), row_decoder_name(config_.row_decoder));
+
+  uint16_t addresses[StreamEncoder::MAX_ROWS] = {};
+  for (uint16_t row = 0; row < num_rows_ && row < StreamEncoder::MAX_ROWS; ++row) {
+    addresses[row] = row_address_bits(config_.row_decoder, row, num_rows_);
+  }
+  encoder_.set_row_addressing(addresses, num_rows_, config_.row_decoder == Hub75RowDecoder::SM5368);
 
   uint32_t source_hz = 0;
   const esp_err_t err = esp_clk_tree_src_get_freq_hz(static_cast<soc_module_clk_t>(PARLIO_CLK_SRC_DEFAULT),
@@ -462,11 +472,10 @@ void ParlioStreamDma::clipped_extent(uint16_t x, uint16_t y, uint16_t &w, uint16
 }
 
 void ParlioStreamDma::write_pixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
-  const auto p = transform_coordinate(
-      x, y, rotation_, config_.layout != Hub75PanelLayout::HORIZONTAL,
-      config_.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN, config_.layout, config_.scan_wiring,
-      config_.panel_width, config_.panel_height, config_.layout_rows, config_.layout_cols,
-      config_.panel_width * config_.layout_cols, config_.panel_height * config_.layout_rows, dma_width_, num_rows_);
+  const auto p = transform_coordinate(x, y, rotation_, needs_layout_remap_, needs_scan_remap_, config_.layout,
+                                      scan_geometry_, config_.panel_width, config_.panel_height, config_.layout_rows,
+                                      config_.layout_cols, config_.panel_width * config_.layout_cols,
+                                      config_.panel_height * config_.layout_rows, dma_width_, num_rows_);
   if (p.x >= dma_width_ || p.row >= num_rows_) {
     return;  // Invalid scan/layout combinations must not write beyond the framebuffer.
   }

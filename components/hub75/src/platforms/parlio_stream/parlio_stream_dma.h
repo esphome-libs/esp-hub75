@@ -56,6 +56,9 @@ class ParlioStreamDma : public PlatformDma {
   StreamEncoder encoder_;
   const uint16_t dma_width_;
   const uint16_t num_rows_;
+  const ScanGeometry scan_geometry_;
+  const bool needs_scan_remap_;
+  const bool needs_layout_remap_;
   Hub75Rotation rotation_;
   uint32_t clock_hz_{0};
   uint8_t brightness_;

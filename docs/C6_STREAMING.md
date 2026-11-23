@@ -2,8 +2,8 @@
 
 C6 uses a separate PARLIO backend on ESP-IDF 5.5 or newer. It stores compact RGB
 pixels and continuously expands them into a small set of DMA transactions. The
-P4 hardware-looping backend is unchanged. C6 currently supports binary row
-addressing; shift-register row decoders are rejected during initialization.
+P4 hardware-looping backend is unchanged. C6 supports the same scan geometry
+and row decoders (binary, DIRECT, SM5368) as the other backends.
 
 This implementation requires C6 panel testing. Build and host-test results do not
 establish sustained refresh rate, CPU availability, or visual quality.
