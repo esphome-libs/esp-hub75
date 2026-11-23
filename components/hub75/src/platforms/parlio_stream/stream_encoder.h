@@ -177,7 +177,7 @@ class StreamEncoder {
         if (width_ > available) {
           content += available;  // Blank-fill a chunk before the atomic shift.
         }
-        content += width_ + blanking_ + (uint64_t(dwell) << bit) + 1;
+        content += width_ + 2 * blanking_ + (uint64_t(dwell) << bit);
       }
     }
 
@@ -197,7 +197,9 @@ class StreamEncoder {
       case Phase::DIM_BLANK:
         return (dwell_unit_ << bit_) - static_cast<size_t>((uint64_t(dwell_unit_) << bit_) * brightness_ / 255);
       case Phase::END_BLANK:
-        return 1;
+        // Blank at this row's address before the next row's address appears,
+        // so latch_blanking also covers the address change.
+        return blanking_;
     }
 
     return 0;
