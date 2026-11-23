@@ -84,8 +84,12 @@ bool ParlioStreamDma::init() {
 
   if (!encoder_.configure(dma_width_, num_rows_, HUB75_BIT_DEPTH, config_.latch_blanking, clock_hz_,
                           config_.min_refresh_rate, CHUNK_WORDS)) {
-    ESP_LOGE(TAG, "Geometry/bit depth cannot meet requested wire-time refresh budget");
+    ESP_LOGE(TAG, "Unsupported stream geometry or bit depth");
     return false;
+  }
+  if (!encoder_.meets_refresh()) {
+    ESP_LOGW(TAG, "Cannot achieve target %u Hz, max is %.1f Hz", (unsigned int) config_.min_refresh_rate,
+             double(clock_hz_) / encoder_.frame_words());
   }
 
   init_brightness_coeffs(dma_width_, config_.latch_blanking);

@@ -83,9 +83,10 @@ are always present.
 Brightness is captured at an encoding frame boundary. Display dwell scales by
 bitplane weight; brightness reduces the enabled part of that dwell without
 changing the encoded frame length. Integer dwell counts limit precision at very
-low brightness. Minimum refresh configuration is checked against encoded wire
-time with all requested bitplanes preserved; ISR and scheduling gaps make actual
-refresh lower than that bound.
+low brightness. `min_refresh_rate` is a target for encoded wire time with all
+requested bitplanes preserved: the longest dwell that meets it is used, 0 means no
+target, and an unreachable target uses the shortest dwell and logs a warning. ISR
+and scheduling gaps make actual refresh lower than the wire-time figure.
 
 ## Hardware validation
 

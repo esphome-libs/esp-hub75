@@ -44,8 +44,8 @@ class StreamEncoder {
     done_ = true;
 
     if (width == 0 || width > 65535 || row_pairs == 0 || (!sm5368_ && row_pairs > MAX_ROWS) || depth == 0 ||
-        depth > 16 || clock_hz == 0 || min_refresh_hz == 0 || chunk_words < 4 || chunk_words > MAX_CHUNK_WORDS ||
-        (chunk_words & 1U) != 0 || width > chunk_words - 2 || (sm5368_ && width < 2)) {
+        depth > 16 || clock_hz == 0 || chunk_words < 4 || chunk_words > MAX_CHUNK_WORDS || (chunk_words & 1U) != 0 ||
+        width > chunk_words - 2 || (sm5368_ && width < 2)) {
       return false;
     }
 
@@ -64,10 +64,10 @@ class StreamEncoder {
     // Spend the available clock budget on display dwell, preserving every
     // requested bitplane. The largest base dwell is one shifted row's length.
     // This is a wire-time bound: software/interrupt gaps lower actual refresh.
-    const uint64_t budget = clock_hz / min_refresh_hz;
-    if (words_for_dwell(1) > budget) {
-      return false;
-    }
+    // min_refresh_hz is a target: 0 means none, and an unreachable target falls
+    // back to the shortest dwell (meets_refresh() reports it).
+    const uint64_t budget = min_refresh_hz == 0 ? std::numeric_limits<uint64_t>::max() : clock_hz / min_refresh_hz;
+    meets_refresh_ = words_for_dwell(1) <= budget;
 
     size_t low = 1;
     size_t high = width_;
@@ -159,6 +159,7 @@ class StreamEncoder {
   }
 
   bool frame_done() const { return done_; }
+  bool meets_refresh() const { return meets_refresh_; }
   size_t frame_words() const { return frame_words_; }
   size_t storage_bytes() const { return storage_bytes_; }
   size_t dwell_unit() const { return dwell_unit_; }
@@ -269,6 +270,7 @@ class StreamEncoder {
   Phase phase_{Phase::PRE_BLANK};
   size_t phase_offset_{0};
   bool configured_{false};
+  bool meets_refresh_{false};
   bool done_{true};
 };
 
