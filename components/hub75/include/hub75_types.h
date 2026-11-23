@@ -94,10 +94,10 @@ enum class Hub75ScanWiring {
  */
 enum class Hub75ScanFlags : uint8_t {
   NONE = 0,
-  REVERSE_SLOTS = 1 << 0,       // Reverse the slot order (four-scan: swap halves)
+  REVERSE_SLOTS = 1 << 0,       // Reverse the slot order (four-scan: swap the two slots)
   ALTERNATE_SEGMENTS = 1 << 1,  // Also reverse the slot order on every odd segment
-  REVERSE_EVEN_SLOTS = 1 << 2,  // Reverse pixel order within slots 0 and 2 (four-scan: left half)
-  REVERSE_ODD_SLOTS = 1 << 3,   // Reverse pixel order within slots 1 and 3 (four-scan: right half)
+  REVERSE_EVEN_SLOTS = 1 << 2,  // Reverse pixel order within slots 0 and 2 (four-scan: first slot of each segment)
+  REVERSE_ODD_SLOTS = 1 << 3,   // Reverse pixel order within slots 1 and 3 (four-scan: second slot of each segment)
   REVERSE_BLOCK_ROWS = 1 << 4,  // Reverse row order within each row block
 };
 

@@ -77,9 +77,9 @@ bool Hub75Driver::begin() {
     ESP_LOGE(TAG, "Invalid panel layout");
     return false;
   }
-  const char *scan_error = resolve_scan_geometry(config_).error;
-  if (scan_error != nullptr) {
-    ESP_LOGE(TAG, "Invalid scan configuration: %s", scan_error);
+  const ScanConfigError scan_error = resolve_scan_geometry(config_).error;
+  if (scan_error != ScanConfigError::NONE) {
+    ESP_LOGE(TAG, "Invalid scan configuration: %s", scan_config_error_message(scan_error));
     return false;
   }
 

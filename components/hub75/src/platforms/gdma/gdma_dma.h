@@ -146,7 +146,7 @@ class GdmaDma : public PlatformDma {
   const uint16_t layout_cols_;
   const uint16_t virtual_width_;   // Visual display width: panel_width * layout_cols
   const uint16_t virtual_height_;  // Visual display height: panel_height * layout_rows
-  const uint16_t dma_width_;       // DMA buffer width: panel_width * layout_rows * layout_cols (row-major chaining)
+  const uint16_t dma_width_;       // DMA buffer width: panel_width * scan fold * layout_rows * layout_cols
 
   // Coordinate transformation (immutable, cached from config)
   const ScanGeometry scan_geometry_;

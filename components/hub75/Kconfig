@@ -214,7 +214,7 @@ menu "HUB75 RGB LED Matrix Driver"
                     16 or 32.
 
             config HUB75_SCAN_REVERSE_SLOTS
-                bool "Reverse slot order (four-scan: swap halves)"
+                bool "Reverse slot order (four-scan: swap the two slots)"
                 default n
                 depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
                 help
@@ -230,7 +230,7 @@ menu "HUB75 RGB LED Matrix Driver"
                     every other segment has its row blocks swapped.
 
             config HUB75_SCAN_REVERSE_EVEN_SLOTS
-                bool "Reverse pixels in even slots (four-scan: left half)"
+                bool "Reverse pixels in even slots (four-scan: first slot)"
                 default n
                 depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
                 help
@@ -238,7 +238,7 @@ menu "HUB75 RGB LED Matrix Driver"
                     some segments appear mirrored.
 
             config HUB75_SCAN_REVERSE_ODD_SLOTS
-                bool "Reverse pixels in odd slots (four-scan: right half)"
+                bool "Reverse pixels in odd slots (four-scan: second slot)"
                 default n
                 depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
                 help

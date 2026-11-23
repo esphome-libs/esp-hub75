@@ -126,7 +126,7 @@ class PlatformDma {
    * @param phys_width Physical (unrotated) display width
    * @param phys_height Physical (unrotated) display height
    * @param dma_width DMA buffer width
-   * @param num_rows Number of row pairs (panel_height / 2)
+   * @param num_rows Number of row addresses (panel_height / (2 * scan fold))
    * @return Transformed coordinates with row index and half indicator
    */
   __attribute__((always_inline)) static inline TransformedCoords transform_coordinate(
