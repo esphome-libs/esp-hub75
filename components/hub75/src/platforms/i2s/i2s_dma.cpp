@@ -112,16 +112,15 @@ I2sDma::I2sDma(const Hub75Config &config)
       layout_cols_(config.layout_cols),
       virtual_width_(config.panel_width * config.layout_cols),
       virtual_height_(config.panel_height * config.layout_rows),
-      // Use helper function to compute DMA width (doubles for four-scan panels)
-      dma_width_(
-          get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols)),
-      scan_wiring_(config.scan_wiring),
+      // DMA width: panel_width * fold * layout_rows * layout_cols
+      dma_width_(get_effective_dma_width(config)),
+      scan_geometry_(resolve_scan_geometry(config)),
       layout_(config.layout),
-      needs_scan_remap_(config.scan_wiring != Hub75ScanWiring::STANDARD_TWO_SCAN),
+      needs_scan_remap_(scan_geometry_.fold != 1),
       needs_layout_remap_(config.layout != Hub75PanelLayout::HORIZONTAL),
       rotation_(config.rotation),
-      // Use helper function to compute num_rows (halves for four-scan panels)
-      num_rows_(get_effective_num_rows(config.scan_wiring, config.panel_height)),
+      // Row addresses: panel_height / (2 * fold)
+      num_rows_(get_effective_num_rows(config)),
       dma_buffers_{nullptr, nullptr},
       row_buffers_{nullptr, nullptr},
       descriptors_{nullptr, nullptr},
@@ -131,7 +130,7 @@ I2sDma::I2sDma(const Hub75Config &config)
       basis_brightness_(config.brightness),
       intensity_(1.0f) {
   // Zero-copy architecture: DMA buffers ARE the display memory
-  // Note: For four-scan panels, dma_width_ is doubled and num_rows_ is halved
+  // Note: For folded panels, dma_width_ is multiplied and num_rows_ divided by the scan fold
   // to match the physical shift register layout
 }
 
@@ -255,8 +254,8 @@ bool I2sDma::init() {
 
   ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
            layout_rows_, virtual_width_, virtual_height_);
-  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), four-scan: %s", dma_width_, num_rows_,
-           is_four_scan_wiring(scan_wiring_) ? "yes" : "no");
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan fold: %u", dma_width_, num_rows_,
+           (unsigned int) scan_geometry_.fold);
 
   ESP_LOGI(TAG, "I2S LCD mode initialized successfully, setting up DMA buffers...");
 
@@ -961,7 +960,7 @@ bool I2sDma::build_descriptor_chain() {
     }
   }
 
-  // Invariant: num_rows_ is always > 0 (set from panel_height / 2 in constructor)
+  // Invariant: num_rows_ is always > 0 (resolve_scan_geometry rejects 0; checked in begin())
   assert(num_rows_ > 0 && "num_rows_ must be positive");
   size_t descriptors_per_row = descriptor_count_ / num_rows_;
   size_t total_descriptor_bytes = sizeof(lldesc_t) * descriptor_count_;
@@ -1079,7 +1078,7 @@ HUB75_IRAM void I2sDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_t
       } else {
         // Full coordinate transformation pipeline
         auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                scan_geometry_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = fifo_adjust_x(transformed.x);
         row = transformed.row;
@@ -1215,7 +1214,7 @@ HUB75_IRAM void I2sDma::fill(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
       } else {
         // Full coordinate transformation pipeline
         auto transformed = transform_coordinate(px, py, rotation_, needs_layout_remap_, needs_scan_remap_, layout_,
-                                                scan_wiring_, panel_width_, panel_height_, layout_rows_, layout_cols_,
+                                                scan_geometry_, panel_width_, panel_height_, layout_rows_, layout_cols_,
                                                 virtual_width_, virtual_height_, dma_width_, num_rows_);
         px = fifo_adjust_x(transformed.x);
         row = transformed.row;

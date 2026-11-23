@@ -50,9 +50,8 @@ Hub75Driver::Hub75Driver(const Hub75Config &config) : config_(config), running_(
            (unsigned int) config_.panel_height, (unsigned int) config_.layout_cols, (unsigned int) config_.layout_rows,
            (unsigned int) (config_.panel_width * config_.layout_cols),
            (unsigned int) (config_.panel_height * config_.layout_rows));
-  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), %u row addresses, four-scan: %s", HUB75_BIT_DEPTH,
-           (unsigned int) get_effective_num_rows(config_.scan_wiring, config_.panel_height),
-           is_four_scan_wiring(config_.scan_wiring) ? "yes" : "no");
+  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), %u row addresses, scan fold: %u", HUB75_BIT_DEPTH,
+           (unsigned int) get_effective_num_rows(config_), (unsigned int) resolve_scan_geometry(config_).fold);
 }
 
 Hub75Driver::~Hub75Driver() { end(); }
@@ -76,6 +75,11 @@ bool Hub75Driver::begin() {
   }
   if (config_.layout_rows == 0 || config_.layout_cols == 0) {
     ESP_LOGE(TAG, "Invalid panel layout");
+    return false;
+  }
+  const char *scan_error = resolve_scan_geometry(config_).error;
+  if (scan_error != nullptr) {
+    ESP_LOGE(TAG, "Invalid scan configuration: %s", scan_error);
     return false;
   }
 

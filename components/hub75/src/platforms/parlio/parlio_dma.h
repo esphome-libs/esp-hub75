@@ -92,7 +92,7 @@ class ParlioDma : public PlatformDma {
   const uint16_t dma_width_;       // DMA buffer width: panel_width * layout_rows * layout_cols (row-major chaining)
 
   // Coordinate transformation (immutable, cached from config)
-  const Hub75ScanWiring scan_wiring_;
+  const ScanGeometry scan_geometry_;
   const Hub75PanelLayout layout_;
 
   // Optimization flags (immutable, for branch prediction)
@@ -102,7 +102,7 @@ class ParlioDma : public PlatformDma {
   // Display rotation (mutable, can change at runtime)
   Hub75Rotation rotation_;
 
-  const uint16_t num_rows_;  // Computed: panel_height / 2
+  const uint16_t num_rows_;  // Computed: panel_height / (2 * scan fold)
 
   // Double buffering: Array + index architecture
   // [0] = buffer A (always allocated), [1] = buffer B (nullptr if single-buffer mode)

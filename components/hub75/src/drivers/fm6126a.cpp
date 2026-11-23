@@ -80,8 +80,7 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
 esp_err_t DriverInit::initialize(const Hub75Config &config) {
   // Every panel in the layout and both halves of a four-scan panel share one serial
   // shift chain, so register writes must clock through the full DMA row width.
-  const uint16_t pixels_per_row =
-      get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols);
+  const uint16_t pixels_per_row = get_effective_dma_width(config);
 
   switch (config.shift_driver) {
     case Hub75ShiftDriver::GENERIC:

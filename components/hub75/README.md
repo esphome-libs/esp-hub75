@@ -70,6 +70,8 @@ void app_main() {
     config.scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;  // Most panels
     config.shift_driver = Hub75ShiftDriver::FM6126A;          // Or GENERIC
     config.row_decoder = Hub75RowDecoder::BINARY;             // Default row addressing
+    // For folded (1/4, 1/8, ...) panels no scan_wiring preset covers, see scan_rate,
+    // scan_segment_width and scan_flags in docs/TROUBLESHOOTING.md
 
     // Set GPIO pins
     config.pins.r1 = 25;

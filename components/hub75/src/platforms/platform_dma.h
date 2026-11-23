@@ -118,7 +118,7 @@ class PlatformDma {
    * @param needs_layout_remap Whether layout remapping is needed
    * @param needs_scan_remap Whether scan pattern remapping is needed
    * @param layout Panel layout type
-   * @param scan_wiring Scan wiring pattern
+   * @param scan_geometry Resolved scan geometry (see resolve_scan_geometry)
    * @param panel_width Single panel width
    * @param panel_height Single panel height
    * @param layout_rows Number of panel rows (layout_rows)
@@ -131,7 +131,7 @@ class PlatformDma {
    */
   __attribute__((always_inline)) static inline TransformedCoords transform_coordinate(
       uint16_t px, uint16_t py, Hub75Rotation rotation, bool needs_layout_remap, bool needs_scan_remap,
-      Hub75PanelLayout layout, Hub75ScanWiring scan_wiring, uint16_t panel_width, uint16_t panel_height,
+      Hub75PanelLayout layout, const ScanGeometry &scan_geometry, uint16_t panel_width, uint16_t panel_height,
       uint16_t layout_rows, uint16_t layout_cols, uint16_t phys_width, uint16_t phys_height, uint16_t dma_width,
       uint16_t num_rows) {
     Coords c = {.x = px, .y = py};
@@ -147,9 +147,8 @@ class PlatformDma {
     }
 
     // Step 3: Scan pattern remapping (if non-standard panel)
-    // Pass panel_height to enable correct segment size calculation for four-scan panels
     if (needs_scan_remap) {
-      c = ScanPatternRemap::remap(c, scan_wiring, panel_width, panel_height);
+      c = ScanPatternRemap::remap(c, scan_geometry);
     }
 
     return {.x = c.x, .y = c.y, .row = static_cast<uint16_t>(c.y % num_rows), .is_lower = (c.y >= num_rows)};
