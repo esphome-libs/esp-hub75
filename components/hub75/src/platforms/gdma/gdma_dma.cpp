@@ -601,6 +601,9 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
     return;
   }
 
+  // Source rows stay buffer-width apart however the draw is clipped
+  const uint16_t source_width = w;
+
   // Clip to display bounds
   if (x + w > rotated_width) [[unlikely]] {
     w = rotated_width - x;
@@ -613,6 +616,8 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
   const size_t pixel_stride = (format == Hub75PixelFormat::RGB888)   ? 3
                               : (format == Hub75PixelFormat::RGB565) ? 2
                                                                      : /* RGB888_32 */ 4;
+
+  const size_t source_row_skip = static_cast<size_t>(source_width - w) * pixel_stride;
 
   // Check if we can use identity fast path (no coordinate transforms needed)
   const bool identity_transform = (rotation_ == Hub75Rotation::ROTATE_0) && !needs_layout_remap_ && !needs_scan_remap_;
@@ -689,6 +694,7 @@ HUB75_IRAM void GdmaDma::draw_pixels(uint16_t x, uint16_t y, uint16_t w, uint16_
       HUB75_PROFILE_STAGE(PROFILE_BITPLANE);
       HUB75_PROFILE_PIXEL();
     }
+    pixel_ptr += source_row_skip;
   }
   if (!config_.double_buffer) {
     flush_cache_to_dma(active_idx_);
