@@ -13,10 +13,6 @@ namespace hub75 {
 
 static const char *const TAG = "DP3246";
 
-#define CLK_PULSE \
-  gpio_set_level((gpio_num_t) pins.clk, 1); \
-  gpio_set_level((gpio_num_t) pins.clk, 0);
-
 // LAT cycle counts at the tail of each shift. The 3-cycle blank shape is
 // DP3246-specific (FM6126A uses a 1-cycle latch for blanks); REG1/REG2 widths
 // match the FM6126A-family register-commit convention.
@@ -40,7 +36,7 @@ static void shift_with_latch(const Hub75Pins &pins, uint16_t pixels_per_row, con
     if (i >= lat_start) {
       gpio_set_level((gpio_num_t) pins.lat, 1);
     }
-    CLK_PULSE;
+    pulse_clock(pins.clk);
   }
   gpio_set_level((gpio_num_t) pins.lat, 0);
 }
@@ -92,7 +88,7 @@ void DriverInit::dp3246_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
 
   // 5. Send REG2 (LAT high for the last 12 clocks to commit the register)
   shift_with_latch(pins, pixels_per_row, REG2, LAT_CYCLES_REG2);
-  CLK_PULSE;  // DP3246 expects an extra clock after dropping LAT post-REG2
+  pulse_clock(pins.clk);  // DP3246 expects an extra clock after dropping LAT post-REG2
 
   // 6. Drive RGB lines low so the trailing blank sweep doesn't leave stale data
   for (uint8_t pin : {pins.r1, pins.r2, pins.g1, pins.g2, pins.b1, pins.b2}) {
@@ -104,7 +100,7 @@ void DriverInit::dp3246_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
 
   // 8. Enable display
   gpio_set_level((gpio_num_t) pins.oe, 0);
-  CLK_PULSE;
+  pulse_clock(pins.clk);
 
   ESP_LOGI(TAG, "DP3246 initialized successfully");
 }
