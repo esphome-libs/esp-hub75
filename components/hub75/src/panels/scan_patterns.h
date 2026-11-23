@@ -28,6 +28,7 @@ struct Coords {
 enum class ScanConfigError : uint8_t {
   NONE,
   UNKNOWN_WIRING,
+  ZERO_PANEL_SIZE,
   ODD_HEIGHT,
   RATE_CONFLICTS_WITH_WIRING,
   HEIGHT_NOT_MULTIPLE_OF_RATE,
@@ -50,6 +51,8 @@ inline constexpr const char *scan_config_error_message(ScanConfigError error) {
       return "ok";
     case ScanConfigError::UNKNOWN_WIRING:
       return "unknown scan_wiring";
+    case ScanConfigError::ZERO_PANEL_SIZE:
+      return "panel_width and panel_height must be non-zero";
     case ScanConfigError::ODD_HEIGHT:
       return "panel_height must be even";
     case ScanConfigError::RATE_CONFLICTS_WITH_WIRING:
@@ -226,6 +229,11 @@ inline constexpr ScanGeometry resolve_scan_geometry(const Hub75Config &config) {
   const uint16_t width = config.panel_width;
   const uint16_t height = config.panel_height;
   ScanGeometry g;
+
+  // Checked first: the segment width defaults to panel_width and is used as a divisor.
+  if (width == 0 || height == 0) {
+    return scan_geometry_error(ScanConfigError::ZERO_PANEL_SIZE);
+  }
 
   // Preset defaults. Presets keep their fixed row-block sizes so existing
   // configurations remap exactly as before.
