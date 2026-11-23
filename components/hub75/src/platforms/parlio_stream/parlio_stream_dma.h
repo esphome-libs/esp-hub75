@@ -39,6 +39,7 @@ class ParlioStreamDma : public PlatformDma {
  private:
   static constexpr size_t SLOT_COUNT = 3;
   static constexpr size_t CHUNK_WORDS = 4096;
+  static constexpr unsigned OE_DATA_LINE = 8;  // StreamEncoder::OE
 
   static void worker_entry(void *context);
   static bool IRAM_ATTR on_trans_done(parlio_tx_unit_handle_t, const parlio_tx_done_event_data_t *, void *context);

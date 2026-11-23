@@ -11,7 +11,9 @@
 #include <esp_heap_caps.h>
 #include <esp_idf_version.h>
 #include <esp_log.h>
+#include <esp_rom_gpio.h>
 #include <hal/parlio_ll.h>
+#include <soc/gpio_sig_map.h>
 
 #if !CONFIG_PARLIO_TX_ISR_CACHE_SAFE
 #error "C6 streaming requires CONFIG_PARLIO_TX_ISR_CACHE_SAFE in the ESP-IDF build"
@@ -141,6 +143,13 @@ bool ParlioStreamDma::configure_unit() {
     cfg.data_gpio_nums[i] = static_cast<gpio_num_t>(pins[i]);
   }
 
+  // The SDK routes data pins to the peripheral as soon as the unit exists, but
+  // only writes the idle value once a transaction starts, so OE would sit low
+  // (panel lit) until then. Keep OE a plain GPIO held high; run_worker()
+  // connects it once the stream is running.
+  cfg.data_gpio_nums[OE_DATA_LINE] = GPIO_NUM_NC;
+  blank_output();
+
   cfg.clk_out_gpio_num = static_cast<gpio_num_t>(config_.pins.clk);
   cfg.valid_gpio_num = GPIO_NUM_NC;
   cfg.trans_queue_depth = SLOT_COUNT;
@@ -218,6 +227,8 @@ void ParlioStreamDma::stop_transfer() {
   // The callback's task handle stays valid until the peripheral and its ISR
   // have been removed. The producer is suspended and cannot submit again.
   if (unit_) {
+    // Blank first: disabling freezes the stream mid-word, possibly with OE low.
+    blank_output();
     if (enabled_) {
       ESP_ERROR_CHECK(parlio_tx_unit_disable(unit_));
       enabled_ = false;
@@ -226,7 +237,6 @@ void ParlioStreamDma::stop_transfer() {
     // A failed teardown cannot safely release callback state or DMA payloads.
     ESP_ERROR_CHECK(parlio_del_tx_unit(unit_));
     unit_ = nullptr;
-    blank_output();
   }
 
   if (worker_) {
@@ -238,9 +248,8 @@ void ParlioStreamDma::stop_transfer() {
 }
 
 void ParlioStreamDma::blank_output() {
-  // Disabling PARLIO stops clocks but does not promise to apply idle_value.
-  // Detach OE from the peripheral and keep the panel blank even if stopped
-  // midway through an enabled display interval. A new unit restores routing.
+  // Detach OE from the peripheral and drive it high, so the panel stays blank
+  // whatever word the stream was on. run_worker() reconnects it.
   const auto oe = static_cast<gpio_num_t>(config_.pins.oe);
   gpio_reset_pin(oe);
   gpio_set_level(oe, 1);
@@ -340,7 +349,11 @@ void ParlioStreamDma::run_worker() {
     const esp_err_t err = parlio_tx_unit_enable(unit_);
     enabled_ = err == ESP_OK;
     ok = enabled_;
-    if (!ok) {
+    if (ok) {
+      // Every frame starts with OE-high blanking, so connecting OE after the
+      // stream starts can only shorten the first frame's first dwell.
+      esp_rom_gpio_connect_out_signal(config_.pins.oe, PARL_TX_DATA8_IDX, false, false);
+    } else {
       ESP_LOGE(TAG, "Failed to start PARLIO: %s", esp_err_to_name(err));
     }
   } else {
@@ -381,9 +394,9 @@ void ParlioStreamDma::run_worker() {
   }
 
   if (!ok && enabled_) {
+    blank_output();
     ESP_ERROR_CHECK(parlio_tx_unit_disable(unit_));
     enabled_ = false;
-    blank_output();
   }
 
   finish_worker();
