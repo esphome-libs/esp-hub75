@@ -65,7 +65,7 @@ enum class Hub75ClockSpeed : uint32_t {
  *   BITSWAP      full-width segments, y bits 3 and 4 (the 8-row block index) swapped
  */
 enum class Hub75ScanWiring {
-  STANDARD_TWO_SCAN,          // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
+  STANDARD_TWO_SCAN,          // Standard two-scan, height / 2 row addresses (e.g. 1/8, 1/16, 1/32; default)
   SCAN_1_4_16PX_FULL,         // 1/4 scan, 16-pixel high panels
   SCAN_1_8_32PX_INTERLEAVED,  // 1/8 scan, 32-pixel high panels (16-pixel interleaved segments)
   SCAN_1_8_32PX_FULL,         // 1/8 scan, 32-pixel high panels (full-width 64-pixel segments, e.g. P4-1921)
@@ -112,7 +112,7 @@ enum class Hub75ShiftDriver {
   FM6126A,   // FM6126A / ICN2038S (very common in modern panels!)
   ICN2038S,  // Alias for FM6126A
   FM6124,    // FM6124 family
-  MBI5124,   // MBI5124 (requires positive clock edge)
+  MBI5124,   // MBI5124 (requires clk_phase_inverted)
   DP3246     // DP3246 (special timing requirements)
 };
 
@@ -186,7 +186,7 @@ struct Hub75Pins {
   int8_t b = -1;
   int8_t c = -1;
   int8_t d = -1;
-  int8_t e = -1;  // -1 if not used (for panels ≤32 rows)
+  int8_t e = -1;  // -1 if not used (panels with 16 or fewer row addresses)
 
   // Control signals
   int8_t lat = -1;  // Latch

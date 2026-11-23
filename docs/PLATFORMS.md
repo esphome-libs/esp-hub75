@@ -315,10 +315,9 @@ padding = base_padding + (2^(bit - lsbMsbTransitionBit - 1) × width)
 
 **Single Contiguous Buffer**:
 ```cpp
-dma_buffer_ = heap_caps_malloc(
-    total_bytes,
-    MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM  // ← PSRAM!
-);
+// MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM with CONFIG_HUB75_EXTERNAL_FRAMEBUFFERS,
+// MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL otherwise
+dma_buffers_[0] = (uint16_t *) heap_caps_calloc(total_words, sizeof(uint16_t), DMA_MEM_CAPS);
 ```
 
 **Metadata Array**: `BitPlaneBuffer[]` tracks offsets within buffer

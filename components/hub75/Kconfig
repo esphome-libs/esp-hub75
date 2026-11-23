@@ -123,7 +123,7 @@ menu "HUB75 RGB LED Matrix Driver"
 
                 The scan rate (number of row addresses) is derived from the
                 height and the Scan Wiring Pattern: height / 2 for standard
-                panels (e.g. 32 -> 1/16, 64 -> 1/32), height / 4 for the
+                panels (e.g. 16 -> 1/8, 32 -> 1/16, 64 -> 1/32), height / 4 for the
                 four-scan wiring patterns.
 
         choice HUB75_SCAN_WIRING
@@ -288,7 +288,7 @@ menu "HUB75 RGB LED Matrix Driver"
                 help
                     Initializes DP3246 column driver chips. Row addressing
                     must be configured separately to match the panel.
-                    Auto-enables CLK_PHASE_INVERTED (rising-edge clock).
+                    Auto-enables CLK_PHASE_INVERTED.
 
                     Note: runtime 3-cycle LAT widening is not yet implemented;
                     only the bit-bang init sequence runs. Panels may show
@@ -734,8 +734,9 @@ menu "HUB75 RGB LED Matrix Driver"
             help
                 Address line E (MSB).
 
-                Required for 64-row panels (1/32 scan).
-                Set to -1 for 32-row or 16-row panels.
+                Required when the panel has more than 16 row addresses,
+                e.g. 64-row (1/32 scan) or 40-row (1/20 scan) standard panels.
+                Set to -1 for 32-row or 16-row standard panels.
 
         comment "Control Signals"
 
