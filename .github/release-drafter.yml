@@ -11,6 +11,8 @@ categories:
 
   # Dependency bumps are always patch, even if Dependabot labels them `minor`
   # or `major`. `exclusive` stops later resolver categories matching them.
+  # The library is 0.x, so `breaking-change` bumps the minor version; use
+  # `major` only for 1.0.
   - type: "version-resolver"
     semver-increment: "patch"
     exclusive: true
@@ -19,14 +21,13 @@ categories:
   - type: "version-resolver"
     semver-increment: "major"
     when:
-      labels:
-        - "major"
-        - "breaking-change"
+      label: "major"
   - type: "version-resolver"
     semver-increment: "minor"
     when:
       labels:
         - "minor"
+        - "breaking-change"
         - "new-feature"
   - type: "version-resolver"
     semver-increment: "patch"
