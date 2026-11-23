@@ -36,7 +36,15 @@ jobs:
       - name: Bump version
         env:
           VERSION: ${{ steps.drafter.outputs.resolved_version }}
+        # Runs only when the resolved version is higher than library.json's, so a
+        # manual bump ahead of the draft is never rolled back.
         run: |
+          current=$(jq -r .version library.json)
+          if [ "$current" = "$VERSION" ] \
+             || [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" = "$current" ]; then
+            echo "library.json is at $current; resolved $VERSION is not higher, not bumping."
+            exit 0
+          fi
           jq --arg v "$VERSION" '.version = $v' library.json > library.json.tmp
           mv library.json.tmp library.json
           uv version --no-sync "$VERSION"

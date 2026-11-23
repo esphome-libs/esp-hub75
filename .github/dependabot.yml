@@ -1,35 +1,45 @@
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "daily"
+      interval: daily
       time: "06:00"
-      timezone: "America/Los_Angeles"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+      timezone: America/Los_Angeles
     commit-message:
-      prefix: "ci"
-      include: "scope"
+      prefix: "deps(actions):"
     labels:
-      - "dependencies"
-
-  - package-ecosystem: "uv"
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
+      - dependencies
+    cooldown:
+      default-days: 2
     open-pull-requests-limit: 5
-    commit-message:
-      prefix: "ci"
-      include: "scope"
-    labels:
-      - "dependencies"
     groups:
       minor-and-patch:
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
+      major:
+        update-types:
+          - major
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+      time: "06:00"
+      timezone: America/Los_Angeles
+    commit-message:
+      prefix: "deps:"
+    labels:
+      - dependencies
+    cooldown:
+      default-days: 2
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+      major:
+        update-types:
+          - major
