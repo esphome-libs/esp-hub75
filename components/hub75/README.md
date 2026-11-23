@@ -4,7 +4,7 @@ Complete API documentation and configuration reference for the HUB75 DMA driver 
 
 ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
 
 ## Key Features
 
@@ -24,8 +24,8 @@ ESP-IDF component for driving HUB75 RGB LED matrix panels via DMA. Supports ESP3
 
 ```yaml
 dependencies:
-  hub75:
-    version: "^1.0.0"
+  esphome/esp-hub75:
+    version: "^0.4.0"
 ```
 
 Browse versions on the [ESP Component Registry](https://components.espressif.com/components/esphome/esp-hub75).
@@ -62,7 +62,7 @@ cp -r /path/to/esp-hub75/components/hub75 my_project/components/
 ```cpp
 #include "hub75.h"
 
-void app_main() {
+extern "C" void app_main() {
     // Configure for your panel
     Hub75Config config{};
     config.panel_width = 64;
@@ -84,14 +84,16 @@ void app_main() {
     config.pins.b = 19;
     config.pins.c = 5;
     config.pins.d = 17;
-    config.pins.e = -1;
+    config.pins.e = 18;  // Needed when the panel has more than 16 row addresses (e.g. 64 rows); -1 otherwise
     config.pins.lat = 4;
     config.pins.oe = 15;
     config.pins.clk = 16;
 
     // Create and start driver
-    Hub75Driver driver(config);
-    driver.begin();  // Starts continuous refresh
+    static Hub75Driver driver(config);
+    if (!driver.begin()) {  // Starts continuous refresh; fails (and logs why) on an invalid config
+        return;
+    }
 
     // Draw pixels - changes appear automatically!
     driver.set_pixel(10, 10, 255, 0, 0);  // Red
@@ -177,7 +179,7 @@ Gamma correction mode is **compile-time only** (configured via menuconfig):
 
 Configure via:
 - `idf.py menuconfig` → HUB75 → Color → Gamma Correction Mode
-- Or CMake: `target_compile_definitions(app PRIVATE HUB75_GAMMA_MODE=1)`
+- Or, without menuconfig (e.g. PlatformIO), a global define: `build_flags = -DHUB75_GAMMA_MODE=1`
 
 **Dual-Mode Brightness System:**
 - **Basis brightness** (0-255): Adjusts hardware OE (output enable) timing in DMA buffers
