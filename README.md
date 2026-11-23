@@ -5,7 +5,7 @@
 
 High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ESP32, ESP32-S2, ESP32-S3, ESP32-C6, and ESP32-P4.
 
-**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.1+). Tested with 4.4.8, 5.5.5, and 6.1.1.
+**Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
 
 ## Features
 
@@ -35,8 +35,8 @@ Add to your project's `idf_component.yml`:
 
 ```yaml
 dependencies:
-  hub75:
-    version: "^0.1.0"
+  esphome/esp-hub75:
+    version: "^0.4.0"
 ```
 
 Browse on the [ESP Component Registry](https://components.espressif.com/components/esphome/esp-hub75).
@@ -56,7 +56,7 @@ Add to `platformio.ini`:
 
 ```ini
 lib_deps =
-    esphome/esp-hub75@^0.1.0
+    esphome/esp-hub75@^0.4.0
 ```
 
 Browse on the [PlatformIO Registry](https://registry.platformio.org/libraries/esphome/esp-hub75).
@@ -70,7 +70,7 @@ See [Component Documentation](components/hub75/README.md) for manual installatio
 ```cpp
 #include "hub75.h"
 
-void app_main() {
+extern "C" void app_main() {
     // Configure your panel
     Hub75Config config{};
     config.panel_width = 64;
@@ -85,8 +85,10 @@ void app_main() {
     config.pins.lat = 47; config.pins.oe = 14; config.pins.clk = 2;
 
     // Initialize and draw
-    Hub75Driver driver(config);
-    driver.begin();
+    static Hub75Driver driver(config);
+    if (!driver.begin()) {  // Fails (and logs why) on an invalid config, e.g. a missing address pin
+        return;
+    }
     driver.set_pixel(10, 10, 255, 0, 0);  // Red pixel at (10,10)
     driver.fill(0, 0, 32, 32, 0, 0, 255); // Blue 32x32 rectangle at (0,0)
 }
