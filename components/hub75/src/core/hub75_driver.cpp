@@ -272,4 +272,4 @@ uint16_t Hub75Driver::get_height() const {
   return RotationTransform::get_rotated_height(phys_w, phys_h, config_.rotation);
 }
 
-bool Hub75Driver::is_running() const { return running_; }
+bool Hub75Driver::is_running() const { return running_ && dma_ != nullptr && dma_->is_running(); }

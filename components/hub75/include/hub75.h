@@ -204,7 +204,8 @@ class Hub75Driver {
 
   /**
    * @brief Check if driver is running
-   * @return true if refresh loop is active
+   * @return true if refresh loop is active (false after begin() if refresh stopped on its own, e.g. a C6 stream
+   *         submission failure; call end() and begin() to restart)
    */
   bool is_running() const;
 
