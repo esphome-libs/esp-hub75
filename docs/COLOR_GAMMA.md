@@ -245,11 +245,7 @@ Bit 31      30                 20   19              10   9             0
 
 ### Gamma LUT Lookups
 
-**Location**: IRAM (if `HUB75_IRAM_OPTIMIZATION` enabled)
-
-**Cost**: ~3 array lookups per pixel (R, G, B)
-
-**Optimization**: LUTs cached in IRAM for fast access (no flash cache misses)
+**Cost**: ~3 array lookups per pixel (R, G, B), done in the IRAM-placed pixel write path (`HUB75_IRAM`)
 
 ### Color Conversion
 
@@ -274,19 +270,6 @@ Bit 31      30                 20   19              10   9             0
 - 12-bit @ 60 Hz
 
 (Approximate, varies with lsbMsbTransitionBit auto-adjustment)
-
----
-
-## Temporal Dithering (Not Yet Implemented)
-
-> **Note**: Temporal dithering is planned but not yet implemented. This section describes the intended functionality for future reference.
-
-**Technique**: Alternate between two close color values across frames to simulate intermediate colors.
-
-**Example**: To display RGB(100, 100, 100) with limited precision:
-- Frame 1: RGB(99, 99, 99)
-- Frame 2: RGB(101, 101, 101)
-- Perceived: RGB(100, 100, 100) average
 
 ---
 

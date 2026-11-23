@@ -24,32 +24,6 @@ Or: **HUB75 Display Configuration** (panel/pin configuration)
 - **Memory impact**: Doubles framebuffer memory (e.g., 64×64 = +16 KB)
 - **Use when**: Frequent full-screen updates or complex animations
 
-### HUB75_TEMPORAL_DITHER (Not Yet Implemented)
-- **Type**: bool
-- **Default**: No
-- **Description**: Planned feature - currently has no effect
-- **Status**: Not yet implemented
-
-### HUB75_IRAM_OPTIMIZATION
-- **Type**: bool
-- **Default**: Yes
-- **Description**: Places pixel functions in IRAM
-- **Memory impact**: ~2-4 KB IRAM
-- **Recommendation**: Keep enabled unless IRAM critically constrained
-
-### HUB75_DEBUG_TIMING
-- **Type**: bool
-- **Default**: No
-- **Description**: Enables timing analysis logs (BCM calculations, refresh rate)
-- **Use when**: Debugging performance or refresh rate issues
-
-### HUB75_DEBUG_DESCRIPTORS
-- **Type**: bool
-- **Default**: No
-- **Depends on**: HUB75_DEBUG_TIMING
-- **Description**: Dumps full DMA descriptor chain at init (very verbose)
-- **Use when**: Debugging DMA-related issues
-
 ---
 
 ## Display Configuration

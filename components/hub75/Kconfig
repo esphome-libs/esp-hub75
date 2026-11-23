@@ -807,16 +807,6 @@ menu "HUB75 RGB LED Matrix Driver"
                 Recommended for applications with frequent full-screen updates
                 or animations that need to be prepared off-screen.
 
-        config HUB75_TEMPORAL_DITHER
-            bool "Enable temporal dithering"
-            default n
-            help
-                Improves color depth perception through temporal dithering.
-                Adds slight CPU overhead during pixel writes.
-
-                Useful for achieving better color gradients when using lower
-                bit depths (8-bit). Has minimal impact on 10/12-bit modes.
-
         config HUB75_CLK_PHASE_INVERTED
             bool "Invert clock phase"
             default y if HUB75_DRIVER_MBI5124
@@ -830,16 +820,6 @@ menu "HUB75 RGB LED Matrix Driver"
                 need this.
 
                 Leave disabled unless your panel specifically requires it.
-
-        config HUB75_IRAM_OPTIMIZATION
-            bool "Place hot functions in IRAM"
-            default y
-            help
-                Places pixel-setting and color conversion functions in IRAM
-                to avoid flash cache stalls during rendering.
-
-                Recommended for best performance. Uses ~2-4 KB of IRAM.
-                Disable only if IRAM space is critically constrained.
 
         config HUB75_EXTERNAL_FRAMEBUFFERS
             bool "Use External Framebuffers"
@@ -911,35 +891,6 @@ menu "HUB75 RGB LED Matrix Driver"
             bool
         config GAMMA_2_2
             bool
-
-    endmenu
-
-    # ========================================
-    # Debug Options
-    # ========================================
-
-    menu "Debug"
-
-        config HUB75_DEBUG_TIMING
-            bool "Enable timing analysis logs"
-            default n
-            help
-                Logs BCM timing calculations, refresh rate predictions,
-                descriptor counts, and lsbMsbTransitionBit values at startup.
-
-                Useful for debugging performance issues or understanding
-                why a particular refresh rate was selected.
-
-        config HUB75_DEBUG_DESCRIPTORS
-            bool "Dump DMA descriptor chain"
-            default n
-            depends on HUB75_DEBUG_TIMING
-            help
-                Logs the full DMA descriptor chain layout at initialization.
-                Shows descriptor addresses, buffer pointers, and repetition counts.
-
-                VERY VERBOSE - use only for debugging DMA-related issues.
-                Output can be several hundred lines for typical configurations.
 
     endmenu
 
