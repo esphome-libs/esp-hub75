@@ -275,7 +275,7 @@ Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4 with platform-specific optimiza
 **Common quick fixes:**
 - **Black screen** → Try `shift_driver = Hub75ShiftDriver::FM6126A` (most modern panels)
 - **Wrong colors** → Check R1/G1/B1/R2/G2/B2 pin mapping
-- **Scrambled display** → Try `FOUR_SCAN_32PX_HIGH` scan wiring for 32px panels with 1/8 scan
+- **Scrambled display** → Try `SCAN_1_8_32PX_INTERLEAVED` or `SCAN_1_8_32PX_FULL` scan wiring for 32px panels with 1/8 scan
 - **Rows shift/jump incorrectly** → If panel uses SM5368-style row logic, try `row_decoder = Hub75RowDecoder::SM5368` on ESP32-S3 GDMA
 
 **For complete debugging guide** (ghosting, flickering, multi-panel issues, platform-specific problems, error messages), see **[Troubleshooting Guide](../../docs/TROUBLESHOOTING.md)**.

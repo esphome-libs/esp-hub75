@@ -133,8 +133,8 @@ menu "HUB75 RGB LED Matrix Driver"
                 Internal panel shift register wiring pattern.
 
                 STANDARD works for 95% of panels. If your display shows
-                scrambled/garbled output with correct pins, try one of the
-                1/4 or 1/8 scan variants.
+                scrambled/garbled output with correct pins, try the four-scan
+                variant (1/4, 1/8, 1/10 or 1/16) for your panel's height.
 
                 These patterns are for panels with non-standard internal
                 wiring where shift registers are arranged differently. The
@@ -147,13 +147,13 @@ menu "HUB75 RGB LED Matrix Driver"
                     Standard two-scan wiring (no coordinate remapping needed).
                     Works with most HUB75 panels.
 
-            config HUB75_WIRING_SCAN_1_4_16PX
+            config HUB75_WIRING_SCAN_1_4_16PX_FULL
                 bool "1/4 Scan (16px high panels)"
                 help
                     For 16-pixel high panels with 1/4 scan (4 row addresses).
                     Uses panel-width pixel segments for coordinate remapping.
 
-            config HUB75_WIRING_SCAN_1_8_32PX
+            config HUB75_WIRING_SCAN_1_8_32PX_INTERLEAVED
                 bool "1/8 Scan (32px, 16-pixel interleaved segments)"
                 help
                     For 32-pixel high panels with 1/8 scan (8 row addresses).
@@ -172,17 +172,18 @@ menu "HUB75 RGB LED Matrix Driver"
 
                     Example: 64x32 panel -> DMA buffer 128x8
 
-            config HUB75_WIRING_SCAN_1_8_40PX
+            config HUB75_WIRING_SCAN_1_10_40PX_FULL
                 bool "1/10 Scan (40px high panels)"
                 help
                     For 40-pixel high panels with 1/10 scan (10 row addresses).
                     Uses 10-pixel row block coordinate remapping.
 
-            config HUB75_WIRING_SCAN_1_8_64PX
-                bool "1/16 Scan (64px high panels)"
+            config HUB75_WIRING_SCAN_1_16_64PX_BITSWAP
+                bool "1/16 Scan (64px high panels, bit-swapped row blocks)"
                 help
                     For 64-pixel high panels with 1/16 scan (16 row addresses).
-                    Uses panel-width pixel segments for coordinate remapping.
+                    Uses panel-width pixel segments, with y-coordinate bits 3 and 4
+                    (the 8-row block index) swapped.
         endchoice
 
         choice HUB75_SHIFT_DRIVER

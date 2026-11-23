@@ -109,15 +109,14 @@ the panel's PCB, usually in the model name as `4S`, `8S`, `10S`, `16S`, `20S` or
 
 | Panel height | Scan rate | `scan_wiring` | Menuconfig option |
 |---|---|---|---|
-| 16 px | 1/4 | `SCAN_1_4_16PX_HIGH` | 1/4 Scan (16px high panels) |
-| 32 px | 1/8 | `SCAN_1_8_32PX_HIGH` | 1/8 Scan (32px, 16-pixel interleaved segments) |
+| 16 px | 1/4 | `SCAN_1_4_16PX_FULL` | 1/4 Scan (16px high panels) |
+| 32 px | 1/8 | `SCAN_1_8_32PX_INTERLEAVED` | 1/8 Scan (32px, 16-pixel interleaved segments) |
 | 32 px | 1/8 | `SCAN_1_8_32PX_FULL` | 1/8 Scan (32px, full-width segments) |
-| 40 px | 1/10 | `SCAN_1_8_40PX_HIGH` | 1/10 Scan (40px high panels) |
-| 64 px | 1/16 | `SCAN_1_8_64PX_HIGH` | 1/16 Scan (64px high panels) |
+| 40 px | 1/10 | `SCAN_1_10_40PX_FULL` | 1/10 Scan (40px high panels) |
+| 64 px | 1/16 | `SCAN_1_16_64PX_BITSWAP` | 1/16 Scan (64px high panels, bit-swapped row blocks) |
 
 There are two 32 px options. If one of them shows the image broken into strips,
-try the other. The `SCAN_1_8_` prefix on the 40 px and 64 px enum names does not
-match their scan rate; the table above gives the actual rate.
+try the other.
 
 **2. Wrong row decoder**
 
