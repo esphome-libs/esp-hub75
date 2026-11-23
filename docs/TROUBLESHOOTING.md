@@ -8,7 +8,7 @@ Before deep debugging, verify:
 - [ ] 5V power supply connected to panel and adequate amperage (3-5A per 64×64 panel)
 - [ ] ESP32 GND connected to power supply GND (common ground)
 - [ ] Correct board preset or custom pins configured in menuconfig
-- [ ] Panel dimensions match menuconfig settings (width, height, scan pattern)
+- [ ] Panel dimensions match menuconfig settings (width, height, scan wiring)
 - [ ] Firmware flashed successfully (`idf.py flash` completed)
 - [ ] Serial monitor shows driver initialization success
 
@@ -31,7 +31,7 @@ Panel completely dark, no LEDs lit.
 **2. Wrong shift driver**
 ```
 Solution: Try FM6126A driver
-Menuconfig: HUB75 Display Configuration → Panel Settings → Shift Driver → FM6126A
+Menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Shift Driver IC → FM6126A / ICN2038S
 ```
 
 Many modern panels (2018+) use FM6126A or ICN2038S chips requiring initialization sequence.
@@ -41,18 +41,14 @@ Many modern panels (2018+) use FM6126A or ICN2038S chips requiring initializatio
 - Check `printPinConfig()` output in serial monitor
 - Manually verify each GPIO matches panel connector
 
-**4. E pin not configured (64-row panels)**
-- 64-row panels (1/32 scan) REQUIRE E address line
+**4. E pin not configured**
+- Panels with more than 16 row addresses (e.g. 1/20 or 1/32 scan) REQUIRE the E address line
 - Set `HUB75_PIN_E` to valid GPIO (not -1)
 
 **5. Driver initialization failed**
-```
-Check serial output:
-E (xxx) driver: Failed to initialize HUB75 driver!
-```
-- GPIO conflict (pins used by flash/PSRAM/USB)
-- Insufficient memory
-- Platform-specific init failure
+
+If the serial output shows `Failed to initialize HUB75 driver!`, see
+[Common Error Messages](#common-error-messages) for the specific causes.
 
 ---
 
@@ -100,25 +96,35 @@ Display shows scrambled patterns, wrong pixel positions, or fragmented image.
 
 #### Causes & Solutions
 
-**1. Wrong scan pattern**
-```
-Panel Height → Scan Pattern
-16 pixels → SCAN_1_8 (1/8 scan)
-32 pixels → SCAN_1_16 (1/16 scan)
-64 pixels → SCAN_1_32 (1/32 scan)
-```
+**1. Wrong scan wiring**
 
-**Verify**: Count physical LED rows on panel (usually labeled on PCB).
+The scan rate (the number of row addresses) is not set directly. The driver derives
+it from `panel_height` and `scan_wiring`. Compare it with the scan rate printed on
+the panel's PCB, usually in the model name as `4S`, `8S`, `10S`, `16S`, `20S` or `32S`
+(`8S` = 1/8 scan):
 
-**2. Wrong scan wiring pattern**
-95% of panels use STANDARD. If scrambled with correct scan pattern:
+- **Scan rate = height / 2** (e.g. 64×32 at 1/16, 64×64 at 1/32): use `STANDARD_TWO_SCAN`.
+  This covers most panels.
+- **Scan rate = height / 4**: the panel needs a four-scan wiring. Pick the entry for its height:
 
-```
-Try: FOUR_SCAN variants
-- FOUR_SCAN_16PX_HIGH (16-pixel panels)
-- FOUR_SCAN_32PX_HIGH (32-pixel panels)
-- FOUR_SCAN_64PX_HIGH (64-pixel panels)
-```
+| Panel height | Scan rate | `scan_wiring` | Menuconfig option |
+|---|---|---|---|
+| 16 px | 1/4 | `SCAN_1_4_16PX_HIGH` | 1/4 Scan (16px high panels) |
+| 32 px | 1/8 | `SCAN_1_8_32PX_HIGH` | 1/8 Scan (32px, 16-pixel interleaved segments) |
+| 32 px | 1/8 | `SCAN_1_8_32PX_FULL` | 1/8 Scan (32px, full-width segments) |
+| 40 px | 1/10 | `SCAN_1_8_40PX_HIGH` | 1/10 Scan (40px high panels) |
+| 64 px | 1/16 | `SCAN_1_8_64PX_HIGH` | 1/16 Scan (64px high panels) |
+
+There are two 32 px options. If one of them shows the image broken into strips,
+try the other. The `SCAN_1_8_` prefix on the 40 px and 64 px enum names does not
+match their scan rate; the table above gives the actual rate.
+
+**2. Wrong row decoder**
+
+If rows show up in the wrong order or only one row lights, check the chips next to
+the input connector. Panels with SM5368 row drivers need
+`row_decoder = Hub75RowDecoder::SM5368` (menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Row Decoder).
+This is currently supported on ESP32-S3 only.
 
 **3. Multi-panel layout mismatch**
 ```
@@ -142,7 +148,7 @@ Driver auto-adjusts `lsbMsbTransitionBit` to meet `min_refresh_rate`.
 
 ```
 Solution: Increase min_refresh_rate
-Menuconfig: Panel Settings → Minimum Refresh Rate → 90 or 120 Hz
+Menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Minimum Refresh Rate → 90 or 120 Hz
 ```
 
 **Trade-off**: May reduce effective bit depth on lower bits.
@@ -159,7 +165,7 @@ Solution: Reduce bit depth or lower refresh target
 **3. Signal integrity issues (long cables)**
 ```
 Solution: Reduce clock speed
-Menuconfig: Panel Settings → Clock Speed → 10 MHz
+Menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Output Clock Speed → 10 MHz
 ```
 
 **4. Power supply instability**
@@ -189,7 +195,7 @@ config.latch_blanking = 2;  // Default is 1, try 2-4
 
 Gives LAT signal more time to settle.
 
-**2. LSB ghosting (ESP32-S3)**
+**2. LSB ghosting (ESP32, ESP32-S2, ESP32-S3)**
 Driver already implements previous row addressing for LSB bit planes.
 
 **Verify**: Ghosting should only occur on very dark colors (LSB bits).
@@ -259,7 +265,7 @@ Solution:
 
 ```
 Solution:
-Menuconfig: Multi-Panel Layout → Layout Columns → 2 (or 3, 4...)
+Menuconfig: Component config → HUB75 RGB LED Matrix Driver → Multi-Panel Layout → Layout Columns → 2 (or 3, 4...)
 Rebuild firmware
 ```
 
@@ -348,34 +354,14 @@ Solution:
 
 **Symptom**: Flash access errors
 
-**Cause**: GPIO 26-37 used (flash/PSRAM pins)
+**Cause**: GPIO 26-32 used (SPI flash/PSRAM pins), or GPIO 33-37 used on a module with octal PSRAM
 
 ```
-Solution: Use GPIO 1-25 or 38-48
+Solution: Move the pins off GPIO 26-37 (the ESP32-S3 has no GPIO 22-25).
+Also avoid GPIO 19/20 if you need USB, and the strapping pins (0, 3, 45, 46).
 ```
 
 ### ESP32-P4
-
-**Symptom**: Black screen (PARLIO specific)
-
-**Cause**: Unit not enabled before transmit, or cache not synced
-
-```
-Debug:
-Check initialization order:
-1. parlio_new_tx_unit()
-2. parlio_tx_unit_enable()  ← MUST be before transmit!
-3. parlio_tx_unit_transmit()
-```
-
-**Symptom**: Colors incorrect
-
-**Cause**: Clock gating not working or MSB bit inverted
-
-```
-Verify: SOC_PARLIO_TX_CLK_SUPPORT_GATING defined for P4
-Check: MSB (bit 15) set correctly in pixel data
-```
 
 **Symptom**: Slow updates
 
@@ -474,7 +460,7 @@ Board presets are platform-specific (e.g., Adafruit only on ESP32-S3).
 ```
 Solutions:
 1. Disable IRAM optimization (saves ~2-4 KB IRAM):
-   Component config → HUB75 → IRAM Optimization → No
+   Component config → HUB75 RGB LED Matrix Driver → Features → Place hot functions in IRAM → No
 
 2. Reduce bit depth (saves buffer memory):
    8-bit uses less than 10/12-bit
@@ -494,7 +480,7 @@ Before enabling external buffers, check the [PSRAM mode and speed requirements](
 
 **Menuconfig**:
 ```
-Component config → HUB75 → Debug Options:
+Component config → HUB75 RGB LED Matrix Driver → Debug:
 - Enable timing analysis logs → Yes
 - Dump DMA descriptor chain → Yes (very verbose)
 ```
@@ -514,7 +500,7 @@ Add to your code:
 printPinConfig(config.pins);
 ```
 
-Output shows assigned GPIOs for all 13 pins.
+Output shows the assigned GPIO for all 14 HUB75 signals.
 
 ### Test with Simple Example
 
@@ -528,7 +514,7 @@ Run `simple_colors` example first:
 Test one change at a time:
 1. Start with GENERIC shift driver, STANDARD scan wiring
 2. Get basic display working (even if colors wrong)
-3. Then try FM6126A, different scan patterns, etc.
+3. Then try FM6126A, different scan wirings, etc.
 
 ### Check Hardware Basics
 
@@ -557,7 +543,7 @@ When reporting issues, include:
 
 2. **Configuration**:
    - Board preset or custom pin mapping
-   - Panel settings (width, height, scan pattern, bit depth)
+   - Panel settings (width, height, scan wiring, row decoder, bit depth)
    - Layout (if multi-panel)
    - Shift driver setting
 
@@ -576,18 +562,14 @@ When reporting issues, include:
 
 ### "Failed to initialize HUB75 driver!"
 
-**Possible causes**:
-- Pin conflict
-- Insufficient memory
-- Platform-specific init failure
+Printed by the examples when `begin()` fails. The driver logs the specific reason just before it:
 
-**Debug**:
-```
-Enable detailed logging (see above)
-Check serial for specific error before this message
-```
+- `Invalid panel dimensions` / `Invalid panel layout`: a width, height, `layout_rows` or `layout_cols` is zero
+- `Shift driver initialization failed`: unknown `shift_driver` value
+- `Row decoder mode is not supported on ... backend yet`: `row_decoder = SM5368` on a target other than ESP32-S3
+- `Failed to initialize DMA engine`: see the platform log lines above it (allocation failures are covered below)
 
-### "GPIO XX is input-only, cannot use for output"
+### Pin on GPIO 34-39 (ESP32)
 
 **Cause**: ESP32 GPIO 34-39 are input-only
 
@@ -595,7 +577,7 @@ Check serial for specific error before this message
 Solution: Use different GPIO for this signal
 ```
 
-### "Flash operation failed" during init
+### Crash or flash errors at init (ESP32)
 
 **Cause**: Used GPIO 6-11 (connected to flash)
 
@@ -603,9 +585,10 @@ Solution: Use different GPIO for this signal
 Solution: Avoid GPIO 6-11 on ESP32
 ```
 
-### "DMA buffer allocation failed"
+### "Failed to allocate ..." (buffers or descriptors)
 
-**Cause**: Insufficient DMA-capable memory
+**Cause**: Insufficient DMA-capable memory. (`Failed to allocate GDMA channel` is
+different: another driver is already using every GDMA channel.)
 
 ```
 Solutions:
