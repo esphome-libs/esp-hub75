@@ -85,7 +85,7 @@ enum class Hub75ScanWiring {
 /**
  * @brief Fine-tuning flags for four-scan and eight-scan coordinate remapping
  *
- * Folded panels shift two (four-scan) or four (eight-scan) row blocks through one
+ * Four-scan and eight-scan panels shift two or four row blocks through one
  * chain. Each segment of the panel width appears once per block, in a "slot":
  * the chain carries [segment 0: slot 0, slot 1, ...][segment 1: slot 0, ...]...
  * By default the first row block lands in the last slot for four-scan panels and
@@ -208,7 +208,7 @@ struct Hub75Config {
   // Scan wiring pattern (coordinate remapping for non-standard panels)
   // Note: The scan rate (number of row addresses) is derived from panel_height and
   // scan_wiring: panel_height / 2 for standard panels, panel_height / 4 for the
-  // four-scan presets. Set scan_rate (below) to describe other folded panels.
+  // four-scan presets. Set scan_rate (below) to describe other four- and eight-scan panels.
   Hub75ScanWiring scan_wiring = Hub75ScanWiring::STANDARD_TWO_SCAN;
 
   // Shift driver chip type (determines initialization sequence)
@@ -278,11 +278,11 @@ struct Hub75Config {
   // (four-scan) or panel_height / 8 (eight-scan) to describe a panel no preset covers.
   uint8_t scan_rate = 0;
 
-  // Width in pixels of each segment in the folded shift chain (0 = scan_wiring's default,
+  // Width in pixels of each segment in the shift chain (0 = scan_wiring's default,
   // or panel_width). Must divide panel_width. Common values: 1, 4, 8, 16, 32.
   uint16_t scan_segment_width = 0;
 
-  // Fine-tuning for folded panels (see Hub75ScanFlags)
+  // Fine-tuning for four- and eight-scan panels (see Hub75ScanFlags)
   Hub75ScanFlags scan_flags = Hub75ScanFlags::NONE;
 };
 

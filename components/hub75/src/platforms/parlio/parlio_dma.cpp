@@ -90,7 +90,7 @@ ParlioDma::ParlioDma(const Hub75Config &config)
       intensity_(1.0f),
       transfer_started_(false) {
   // Initialize transmit config
-  // Note: For folded panels, dma_width_ is multiplied and num_rows_ divided by the scan fold
+  // Note: For four- and eight-scan panels, dma_width_ is multiplied and num_rows_ divided by scan_geometry_.fold
   // to match the physical shift register layout
   transmit_config_.idle_value = 1 << OE_BIT;  // make sure nothing lights up when in idle
   transmit_config_.bitscrambler_program = nullptr;
@@ -110,8 +110,7 @@ bool ParlioDma::init() {
   );
   ESP_LOGI(TAG, "Panel: %dx%d, Layout: %dx%d, Virtual: %dx%d", panel_width_, panel_height_, layout_cols_, layout_rows_,
            virtual_width_, virtual_height_);
-  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan fold: %u", dma_width_, num_rows_,
-           (unsigned int) scan_geometry_.fold);
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
   ESP_LOGI(TAG, "Bit depth: %d", bit_depth_);
 
   if (config_.row_decoder != Hub75RowDecoder::BINARY) {

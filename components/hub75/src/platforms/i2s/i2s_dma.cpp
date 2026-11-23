@@ -130,7 +130,7 @@ I2sDma::I2sDma(const Hub75Config &config)
       basis_brightness_(config.brightness),
       intensity_(1.0f) {
   // Zero-copy architecture: DMA buffers ARE the display memory
-  // Note: For folded panels, dma_width_ is multiplied and num_rows_ divided by the scan fold
+  // Note: For four- and eight-scan panels, dma_width_ is multiplied and num_rows_ divided by scan_geometry_.fold
   // to match the physical shift register layout
 }
 
@@ -254,8 +254,7 @@ bool I2sDma::init() {
 
   ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
            layout_rows_, virtual_width_, virtual_height_);
-  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan fold: %u", dma_width_, num_rows_,
-           (unsigned int) scan_geometry_.fold);
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
 
   ESP_LOGI(TAG, "I2S LCD mode initialized successfully, setting up DMA buffers...");
 

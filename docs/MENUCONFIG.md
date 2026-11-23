@@ -121,7 +121,7 @@ Choose which example to build in main/:
 - **Note**: Four-scan wirings automatically adjust DMA buffer dimensions (doubled width, halved row count)
 
 ### Custom Scan Mapping
-For folded panels that no `HUB75_SCAN_WIRING` preset covers. See
+For four-scan and eight-scan panels that no `HUB75_SCAN_WIRING` preset covers. See
 [Scrambled / Garbled Display](TROUBLESHOOTING.md#scrambled--garbled-display) for a tuning procedure.
 
 - `HUB75_SCAN_RATE` (int, 0-32, default 0): row addresses from the PCB marking (`8S` = 8).

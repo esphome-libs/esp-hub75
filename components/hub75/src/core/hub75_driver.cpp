@@ -50,8 +50,8 @@ Hub75Driver::Hub75Driver(const Hub75Config &config) : config_(config), running_(
            (unsigned int) config_.panel_height, (unsigned int) config_.layout_cols, (unsigned int) config_.layout_rows,
            (unsigned int) (config_.panel_width * config_.layout_cols),
            (unsigned int) (config_.panel_height * config_.layout_rows));
-  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), %u row addresses, scan fold: %u", HUB75_BIT_DEPTH,
-           (unsigned int) get_effective_num_rows(config_), (unsigned int) resolve_scan_geometry(config_).fold);
+  ESP_LOGI(TAG, "Config: %u-bit depth (compile-time), %u row addresses, scan: %s", HUB75_BIT_DEPTH,
+           (unsigned int) get_effective_num_rows(config_), scan_type_name(resolve_scan_geometry(config_)));
 }
 
 Hub75Driver::~Hub75Driver() { end(); }

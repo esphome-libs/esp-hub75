@@ -206,7 +206,7 @@ menu "HUB75 RGB LED Matrix Driver"
                 range 0 128
                 depends on HUB75_SCAN_RATE != 0 || !HUB75_WIRING_STANDARD
                 help
-                    Width of each segment in the folded shift chain. Must divide
+                    Width of each segment of the panel's shift chain. Must divide
                     the panel width. 0 uses the wiring pattern's default, or the
                     full panel width for a custom scan rate.
 

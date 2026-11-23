@@ -63,7 +63,8 @@ inline constexpr const char *scan_config_error_message(ScanConfigError error) {
     case ScanConfigError::TOO_MANY_ROW_ADDRESSES:
       return "binary row addressing supports at most 32 row addresses (address lines A-E)";
     case ScanConfigError::DMA_WIDTH_OVERFLOW:
-      return "DMA row width (panel_width * fold * layout_rows * layout_cols) exceeds 65535";
+      return "DMA row width exceeds 65535 (panel_width * layout_rows * layout_cols, x2 for four-scan, x4 for "
+             "eight-scan)";
     case ScanConfigError::SEGMENT_OR_FLAGS_WITHOUT_FOLD:
       return "scan_segment_width and scan_flags need a four- or eight-scan scan_rate";
     case ScanConfigError::SEGMENT_DOES_NOT_DIVIDE_WIDTH:
@@ -72,7 +73,7 @@ inline constexpr const char *scan_config_error_message(ScanConfigError error) {
       return "scan_wiring's default segment width doesn't divide panel_width (set scan_segment_width, or use a "
              "different scan_wiring)";
     case ScanConfigError::FOLDED_PANEL_TOO_TALL:
-      return "folded panels support at most 256 pixel rows";
+      return "four- and eight-scan panels support at most 256 pixel rows";
     case ScanConfigError::ALTERNATE_NEEDS_SEGMENTS:
       return "ALTERNATE_SEGMENTS needs a scan_segment_width smaller than panel_width";
     case ScanConfigError::ROWS_OUT_OF_RANGE:
@@ -113,6 +114,11 @@ struct ScanGeometry {
   uint16_t num_rows = 0;            // Row addresses
   ScanConfigError error = ScanConfigError::NONE;  // Why the configuration is invalid, if it is
 };
+
+// Scan type for log messages
+inline constexpr const char *scan_type_name(const ScanGeometry &g) {
+  return g.fold == 4 ? "eight-scan" : (g.fold == 2 ? "four-scan" : "standard");
+}
 
 // log2(value) if value is a power of two, otherwise ScanGeometry::NO_SHIFT
 inline constexpr uint8_t pow2_shift(uint16_t value) {

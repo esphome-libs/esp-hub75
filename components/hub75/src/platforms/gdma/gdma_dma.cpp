@@ -114,7 +114,7 @@ GdmaDma::GdmaDma(const Hub75Config &config)
       basis_brightness_(config.brightness),  // Use config value (default: 128)
       intensity_(1.0f) {
   // Zero-copy architecture: DMA buffers ARE the display memory
-  // Note: For folded panels, dma_width_ is multiplied and num_rows_ divided by the scan fold
+  // Note: For four- and eight-scan panels, dma_width_ is multiplied and num_rows_ divided by scan_geometry_.fold
   // to match the physical shift register layout
 }
 
@@ -212,8 +212,7 @@ bool GdmaDma::init() {
   ESP_LOGI(TAG, "GDMA EOF callback registered successfully");
   ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
            layout_rows_, virtual_width_, virtual_height_);
-  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan fold: %u", dma_width_, num_rows_,
-           (unsigned int) scan_geometry_.fold);
+  ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
   ESP_LOGI(TAG, "Row decoder: %s", config_.row_decoder == Hub75RowDecoder::SM5368 ? "SM5368" : "binary");
 
   ESP_LOGI(TAG, "LCD_CAM + GDMA initialized successfully");
