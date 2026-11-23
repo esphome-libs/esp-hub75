@@ -82,7 +82,10 @@ void DriverInit::fm6126a_init(const Hub75Pins &pins, uint16_t pixels_per_row) {
 }
 
 esp_err_t DriverInit::initialize(const Hub75Config &config) {
-  uint16_t pixels_per_row = config.panel_width * config.layout_cols;
+  // Every panel in the layout and both halves of a four-scan panel share one serial
+  // shift chain, so register writes must clock through the full DMA row width.
+  const uint16_t pixels_per_row =
+      get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows, config.layout_cols);
 
   switch (config.shift_driver) {
     case Hub75ShiftDriver::GENERIC:
@@ -100,9 +103,7 @@ esp_err_t DriverInit::initialize(const Hub75Config &config) {
       if (!config.clk_phase_inverted) {
         ESP_LOGW(TAG, "DP3246: clk_phase_inverted should be true (rising-edge clock)");
       }
-      // Program the entire physical shift chain, including vertical panels and four-scan expansion.
-      dp3246_init(config.pins, get_effective_dma_width(config.scan_wiring, config.panel_width, config.layout_rows,
-                                                       config.layout_cols));
+      dp3246_init(config.pins, pixels_per_row);
       return ESP_OK;
 
     case Hub75ShiftDriver::MBI5124:
