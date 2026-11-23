@@ -83,6 +83,48 @@ bool Hub75Driver::begin() {
     return false;
   }
 
+  // Row decoder checks. A valid scan geometry has at least one row address, and at
+  // most 32 with binary addressing.
+  const uint16_t num_rows = get_effective_num_rows(config_);
+  switch (config_.row_decoder) {
+    case Hub75RowDecoder::BINARY: {
+      // A row number needs ceil(log2(num_rows)) address lines, starting at A
+      const int8_t address_pins[] = {config_.pins.a, config_.pins.b, config_.pins.c, config_.pins.d, config_.pins.e};
+      int lines = 0;
+      while ((1u << lines) < num_rows) {
+        lines++;
+      }
+      for (int i = 0; i < lines; i++) {
+        if (address_pins[i] < 0) {
+          ESP_LOGE(TAG, "%u row addresses need address pins A-%c, but pin %c is unset", (unsigned int) num_rows,
+                   'A' + lines - 1, 'A' + i);
+          return false;
+        }
+      }
+      break;
+    }
+    case Hub75RowDecoder::SM5368:
+      if (config_.pins.a < 0 || config_.pins.b < 0 || config_.pins.c < 0) {
+        ESP_LOGE(TAG, "SM5368 row decoder needs pins A, B and C");
+        return false;
+      }
+      break;
+    case Hub75RowDecoder::DIRECT: {
+      if (num_rows != 2 && num_rows != 4) {
+        ESP_LOGE(TAG, "DIRECT row decoder needs 2 or 4 row addresses (panel has %u)", (unsigned int) num_rows);
+        return false;
+      }
+      if (config_.pins.a < 0 || config_.pins.b < 0 || (num_rows == 4 && (config_.pins.c < 0 || config_.pins.d < 0))) {
+        ESP_LOGE(TAG, "DIRECT row decoder needs one address pin per row (A-B for 2 rows, A-D for 4)");
+        return false;
+      }
+      break;
+    }
+    default:
+      ESP_LOGE(TAG, "Unknown row decoder: %d", (int) config_.row_decoder);
+      return false;
+  }
+
   // Initialize shift driver chips (panel-level, platform-agnostic)
   // Must happen before DMA starts transmitting data
   esp_err_t err = DriverInit::initialize(config_);

@@ -71,7 +71,6 @@ enum HUB75WordBits : uint16_t {
 
 // Address field (not individual bits)
 constexpr int ADDR_SHIFT = 6;
-constexpr uint16_t ADDR_MASK = 0x1F;  // 5-bit address (0-31)
 constexpr uint16_t SM5368_CLK_MASK = 1u << (ADDR_SHIFT + 0);
 constexpr uint16_t SM5368_BK_MASK = 1u << (ADDR_SHIFT + 1);
 constexpr uint16_t SM5368_DATA_MASK = 1u << (ADDR_SHIFT + 2);
@@ -213,7 +212,7 @@ bool GdmaDma::init() {
   ESP_LOGI(TAG, "Panel config: %dx%d pixels, %dx%d layout, virtual: %dx%d", panel_width_, panel_height_, layout_cols_,
            layout_rows_, virtual_width_, virtual_height_);
   ESP_LOGI(TAG, "DMA config: %dx%d (width x rows), scan: %s", dma_width_, num_rows_, scan_type_name(scan_geometry_));
-  ESP_LOGI(TAG, "Row decoder: %s", config_.row_decoder == Hub75RowDecoder::SM5368 ? "SM5368" : "binary");
+  ESP_LOGI(TAG, "Row decoder: %s", row_decoder_name(config_.row_decoder));
 
   ESP_LOGI(TAG, "LCD_CAM + GDMA initialized successfully");
   ESP_LOGI(TAG, "Clock: %.2f MHz (requested %u MHz)", actual_clock_hz_ / 1000000.0f,
@@ -896,7 +895,7 @@ void GdmaDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
   }
 
   for (int row = 0; row < num_rows_; row++) {
-    const uint16_t row_addr = row & ADDR_MASK;
+    const uint16_t row_addr = row_address_bits(config_.row_decoder, row, num_rows_);
     const bool is_sm5368 = config_.row_decoder == Hub75RowDecoder::SM5368;
 
     for (int bit = 0; bit < bit_depth_; bit++) {
@@ -927,7 +926,7 @@ void GdmaDma::initialize_buffer_internal(RowBitPlaneBuffer *buffers) {
       if (!is_sm5368) {
         if (bit == 0) {
           // LSB bit plane uses previous row (wraps row 0 to last row)
-          addr_for_buffer = ((row == 0 ? num_rows_ : row) - 1) & ADDR_MASK;
+          addr_for_buffer = row_address_bits(config_.row_decoder, (row == 0 ? num_rows_ : row) - 1, num_rows_);
           ESP_LOGD(TAG, "Row %d Bit 0: Using previous row address 0x%02X (current: 0x%02X)", row, addr_for_buffer,
                    row_addr);
         } else {

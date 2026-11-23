@@ -44,6 +44,7 @@ Many modern panels (2018+) use FM6126A or ICN2038S chips requiring initializatio
 **4. E pin not configured**
 - Panels with more than 16 row addresses (e.g. 1/20 or 1/32 scan) REQUIRE the E address line
 - Set `HUB75_PIN_E` to valid GPIO (not -1)
+- `begin()` fails and logs `32 row addresses need address pins A-E, but pin E is unset` when it's missing
 
 **5. Driver initialization failed**
 
@@ -149,9 +150,11 @@ If `begin()` fails, the log line `Invalid scan configuration: ...` says which va
 **2. Wrong row decoder**
 
 If rows show up in the wrong order or only one row lights, check the chips next to
-the input connector. Panels with SM5368 row drivers need
-`row_decoder = Hub75RowDecoder::SM5368` (menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Row Decoder).
-This is currently supported on ESP32-S3 only.
+the input connector (menuconfig: Component config → HUB75 RGB LED Matrix Driver → Panel Settings → Row Decoder):
+
+- SM5368 row drivers: `row_decoder = Hub75RowDecoder::SM5368`.
+- No decoder chip, with row drivers (often 4953 MOSFETs) wired straight to A-D, on a
+  panel with 2 or 4 row addresses: `row_decoder = Hub75RowDecoder::DIRECT`.
 
 **3. Multi-panel layout mismatch**
 ```
@@ -593,7 +596,11 @@ Printed by the examples when `begin()` fails. The driver logs the specific reaso
 
 - `Invalid panel dimensions` / `Invalid panel layout`: a width, height, `layout_rows` or `layout_cols` is zero
 - `Shift driver initialization failed`: unknown `shift_driver` value
-- `Row decoder mode is not supported on ... backend yet`: `row_decoder = SM5368` on a target other than ESP32-S3
+- `Invalid scan configuration: <reason>`: the panel size, `scan_wiring`, `scan_rate`, `scan_segment_width` or `scan_flags` don't describe a valid mapping, or binary addressing would need more than 32 row addresses. The reason names the problem; see [Scrambled / Garbled Display](#scrambled--garbled-display)
+- `DIRECT row decoder needs 2 or 4 row addresses`: `row_decoder = DIRECT` on a panel whose row-address count is not 2 or 4
+- `DIRECT row decoder needs one address pin per row` / `SM5368 row decoder needs pins A, B and C`: an address pin the decoder drives is unset (-1)
+- `N row addresses need address pins A-X, but pin Y is unset`: binary addressing needs enough address lines for the row count (A-D for 16 row addresses, A-E for 32; e.g. a 64-pixel-tall two-scan panel has 32 row addresses and needs pin E). Y is the first missing pin.
+- `Unknown row decoder`: `row_decoder` holds a value that isn't a `Hub75RowDecoder` option
 - `Failed to initialize DMA engine`: see the platform log lines above it (allocation failures are covered below)
 
 ### Pin on GPIO 34-39 (ESP32)

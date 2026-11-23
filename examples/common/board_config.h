@@ -73,6 +73,8 @@ static inline Hub75Config getMenuConfigSettings() {
   // Row decoder
 #if defined(CONFIG_HUB75_ROW_DECODER_SM5368)
   config.row_decoder = Hub75RowDecoder::SM5368;
+#elif defined(CONFIG_HUB75_ROW_DECODER_DIRECT)
+  config.row_decoder = Hub75RowDecoder::DIRECT;
 #else
   config.row_decoder = Hub75RowDecoder::BINARY;
 #endif

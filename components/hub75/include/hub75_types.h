@@ -123,10 +123,13 @@ enum class Hub75ShiftDriver {
  * Most HUB75 panels use binary ABCDE row addressing.
  * Some panels use SM5368-style shift row selection where A/B/C act as
  * row clock, BK, and row data respectively.
+ * Panels with 2 or 4 row addresses and direct row drivers (no decoder chip,
+ * e.g. MOSFETs driven straight from A-D) use one line per row.
  */
 enum class Hub75RowDecoder {
   BINARY,  // Standard ABCDE binary row addressing (default)
   SM5368,  // A=row_clk, B=BK, C=row_data
+  DIRECT,  // One active-low line per row: A/B for 2 rows, A-D for 4 rows
 };
 
 /**
