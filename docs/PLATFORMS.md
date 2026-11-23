@@ -12,8 +12,8 @@ Detailed comparison and implementation notes for ESP32 platform variants.
 | **Buffer Size** (64×64) | ~57 KB | ~57 KB | ~57 KB | ~284 KB | 12 KiB RGB + 24 KiB staging (8-bit, single) |
 | **BCM Method** | Descriptor dup | Descriptor dup | Descriptor dup | Buffer padding | Streamed timing words |
 | **Clock Gating** | No | No | No | **Yes** (MSB) | **No** |
-| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ | 30 MHz at the 32 MHz setting; sustained rate unvalidated |
-| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | Hardware validation pending |
+| **Max Clock** | 20 MHz | 20 MHz | 40 MHz | 40 MHz+ | 30 MHz (32 MHz setting) |
+| **Status** | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested | ✅ Tested |
 
 ---
 
@@ -386,9 +386,9 @@ for supported targets, defaults, and bandwidth considerations.
 C6 uses compact RGB framebuffers and three 8 KiB DMA staging buffers. A producer
 expands pixels and timing into queued transactions; the SDK ISR starts the next
 prepared transaction. This saves RAM but consumes CPU continuously and includes
-blanked ISR restart gaps. It requires ESP-IDF 5.5+ and hardware validation.
+blanked ISR restart gaps. It requires ESP-IDF 5.5+.
 
-See [C6 streaming architecture, memory, and validation](C6_STREAMING.md).
+See [C6 streaming architecture and memory](C6_STREAMING.md).
 
 ---
 
@@ -412,8 +412,8 @@ See [C6 streaming architecture, memory, and validation](C6_STREAMING.md).
 - Clock gating feature beneficial
 
 ### ESP32-C6
-- Use the streaming backend for experiments with smaller displays and constrained RAM.
-- Measure CPU load and refresh under application traffic before choosing it for a deployment.
+- Smaller displays where RAM is tight
+- The producer task converts and queues data on the CPU continuously, so less CPU is left for the application
 
 ---
 
@@ -450,7 +450,7 @@ See [C6 streaming architecture, memory, and validation](C6_STREAMING.md).
 | ESP32-S3 | 90-120 Hz | ~0% | Faster clock |
 | ESP32-P4 | 60-90 Hz | ~0% + cache sync | PSRAM latency |
 
-**CPU Usage**: The looping backends have near-zero refresh CPU usage. C6 continuously converts and queues data; its throughput and CPU usage require measurement.
+**CPU Usage**: The looping backends have near-zero refresh CPU usage. C6 continuously converts and queues data on the CPU.
 
 ### Memory Comparison (64×64 panel)
 

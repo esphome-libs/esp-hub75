@@ -5,9 +5,6 @@ pixels and continuously expands them into a small set of DMA transactions. The
 P4 hardware-looping backend is unchanged. C6 supports the same scan geometry
 and row decoders (binary, DIRECT, SM5368) as the other backends.
 
-This implementation requires C6 panel testing. Build and host-test results do not
-establish sustained refresh rate, CPU availability, or visual quality.
-
 ## Memory and conversion
 
 The framebuffer contains gamma-corrected RGB channel values in physical panel
@@ -31,9 +28,8 @@ storage, not the staging storage.
 
 Conversion runs continuously, including for a static image. The encoder copies
 RGB bits into shift words and fills repeated timing words. At 20 MHz with a
-16-bit bus, the maximum stream rate is 40 MB/s. That is a bandwidth calculation,
-not a measured C6 conversion rate. Smaller pixel storage trades RAM for ongoing
-CPU work.
+16-bit bus, the maximum stream rate is 40 MB/s. Smaller pixel storage trades RAM
+for ongoing CPU work.
 
 ## DMA handoff and interrupts
 
@@ -92,17 +88,3 @@ low brightness. `min_refresh_rate` is a target for encoded wire time with all
 requested bitplanes preserved: the longest dwell that meets it is used, 0 means no
 target, and an unreachable target uses the shortest dwell and logs a warning. ISR
 and scheduling gaps make actual refresh lower than the wire-time figure.
-
-## Hardware validation
-
-Before relying on C6 output, measure with the intended panel and application:
-
-- Check CLK, LAT, OE, and row addresses across DMA boundaries with a logic analyzer.
-  Confirm blank boundaries and correct pixel loading after each boundary.
-- Measure sustained refresh, CPU load, and queue starvation at 8, 10, and 20 MHz,
-  including Wi-Fi and normal drawing. The buffer budget alone does not prove that
-  the producer meets its deadlines.
-- Exercise repeated flips, low brightness, brightness zero, rotations, panel
-  layouts, and supported scan wiring. Check for frame mixing and row ghosting.
-- Exercise flash operations and stop/start. Verify delayed output stays blank,
-  and no callback accesses released buffers or task handles.

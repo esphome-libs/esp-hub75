@@ -7,7 +7,7 @@ High-performance DMA-based driver for HUB75 RGB LED matrix panels, supporting ES
 
 **Requires ESP-IDF 4.4.8+** (ESP32-C6/P4 require 5.5+). Tested with 4.4.8, 5.5.5, and 6.1.1.
 
-ESP32-C6 uses a [streaming backend](docs/C6_STREAMING.md) with compact pixel storage and continuous CPU conversion. C6 hardware validation is pending.
+ESP32-C6 uses a [streaming backend](docs/C6_STREAMING.md) with compact pixel storage and continuous CPU conversion.
 
 ## Features
 

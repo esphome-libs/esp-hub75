@@ -269,7 +269,7 @@ Supports ESP32, ESP32-S2, ESP32-S3, and ESP32-P4 with platform-specific optimiza
 - **ESP32/ESP32-S2** (I2S): ~57 KB SRAM, proven stability
 - **ESP32-S3** (GDMA): ~57 KB SRAM, faster clock (40 MHz), ghosting fix
 - **ESP32-P4** (PARLIO): ~284 KB PSRAM + ~16 KB SRAM, frees internal memory for apps
-- **ESP32-C6** (PARLIO streaming): Compact RGB storage plus 24 KiB DMA staging; continuous CPU conversion. See [C6 streaming](../../docs/C6_STREAMING.md). Hardware validation pending.
+- **ESP32-C6** (PARLIO streaming): Compact RGB storage plus 24 KiB DMA staging; continuous CPU conversion. See [C6 streaming](../../docs/C6_STREAMING.md).
 
 **For detailed platform comparison, memory calculations, and implementation specifics**, see **[Platform Details](../../docs/PLATFORMS.md)**.
 
