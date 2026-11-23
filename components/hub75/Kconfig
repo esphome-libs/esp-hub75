@@ -121,12 +121,10 @@ menu "HUB75 RGB LED Matrix Driver"
             help
                 Height of a single panel in pixels.
 
-                Common values:
-                  - 16 pixels (1/8 scan)
-                  - 32 pixels (1/16 scan)
-                  - 64 pixels (1/32 scan)
-
-                Height determines the required scan pattern.
+                The scan rate (number of row addresses) is derived from the
+                height and the Scan Wiring Pattern: height / 2 for standard
+                panels (e.g. 32 -> 1/16, 64 -> 1/32), height / 4 for the
+                four-scan wiring patterns.
 
         choice HUB75_SCAN_WIRING
             prompt "Scan Wiring Pattern"
@@ -175,15 +173,15 @@ menu "HUB75 RGB LED Matrix Driver"
                     Example: 64x32 panel -> DMA buffer 128x8
 
             config HUB75_WIRING_SCAN_1_8_40PX
-                bool "1/8 Scan (40px high panels)"
+                bool "1/10 Scan (40px high panels)"
                 help
-                    For 40-pixel high panels with 1/8 scan wiring.
+                    For 40-pixel high panels with 1/10 scan (10 row addresses).
                     Uses 10-pixel row block coordinate remapping.
 
             config HUB75_WIRING_SCAN_1_8_64PX
-                bool "1/8 Scan (64px high panels)"
+                bool "1/16 Scan (64px high panels)"
                 help
-                    For 64-pixel high panels with 1/8 scan wiring.
+                    For 64-pixel high panels with 1/16 scan (16 row addresses).
                     Uses panel-width pixel segments for coordinate remapping.
         endchoice
 
