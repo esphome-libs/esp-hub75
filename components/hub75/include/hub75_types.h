@@ -56,19 +56,30 @@ enum class Hub75ClockSpeed : uint32_t {
  *
  * This determines coordinate remapping for panels with non-standard internal wiring.
  * Most panels use STANDARD_TWO_SCAN (no remapping needed).
+ *
+ * Names follow SCAN_1_<scan rate>_<panel height>PX_<segment layout>. The scan rate is
+ * the number of row addresses, usually printed on the PCB (e.g. "8S" = 1/8). The segment
+ * layout describes how pixels are split across the doubled-width shift chain:
+ *   FULL         full panel-width segments
+ *   INTERLEAVED  panel_width / 4 segments (16 px on a 64-wide panel)
+ *   BITSWAP      full-width segments, y bits 3 and 4 (the 8-row block index) swapped
  */
 enum class Hub75ScanWiring {
-  STANDARD_TWO_SCAN,   // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
-  SCAN_1_4_16PX_HIGH,  // 1/4 scan, 16-pixel high panels
-  SCAN_1_8_32PX_HIGH,  // 1/8 scan, 32-pixel high panels (16-pixel interleaved segments)
-  SCAN_1_8_32PX_FULL,  // 1/8 scan, 32-pixel high panels (full-width 64-pixel segments, e.g. P4-1921)
-  SCAN_1_8_40PX_HIGH,  // 1/8 scan, 40-pixel high panels
-  SCAN_1_8_64PX_HIGH,  // 1/8 scan, 64-pixel high panels
+  STANDARD_TWO_SCAN,          // Standard 1/16 or 1/32 scan (default, no coordinate remapping)
+  SCAN_1_4_16PX_FULL,         // 1/4 scan, 16-pixel high panels
+  SCAN_1_8_32PX_INTERLEAVED,  // 1/8 scan, 32-pixel high panels (16-pixel interleaved segments)
+  SCAN_1_8_32PX_FULL,         // 1/8 scan, 32-pixel high panels (full-width 64-pixel segments, e.g. P4-1921)
+  SCAN_1_10_40PX_FULL,        // 1/10 scan, 40-pixel high panels
+  SCAN_1_16_64PX_BITSWAP,     // 1/16 scan, 64-pixel high panels (8-row blocks bit-swapped)
 
   // Deprecated aliases (kept for backwards compatibility)
-  FOUR_SCAN_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_HIGH")]] = SCAN_1_4_16PX_HIGH,
-  FOUR_SCAN_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_HIGH")]] = SCAN_1_8_32PX_HIGH,
-  FOUR_SCAN_64PX_HIGH [[deprecated("Use SCAN_1_8_64PX_HIGH")]] = SCAN_1_8_64PX_HIGH,
+  SCAN_1_4_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_FULL")]] = SCAN_1_4_16PX_FULL,
+  SCAN_1_8_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_INTERLEAVED")]] = SCAN_1_8_32PX_INTERLEAVED,
+  SCAN_1_8_40PX_HIGH [[deprecated("Use SCAN_1_10_40PX_FULL")]] = SCAN_1_10_40PX_FULL,
+  SCAN_1_8_64PX_HIGH [[deprecated("Use SCAN_1_16_64PX_BITSWAP")]] = SCAN_1_16_64PX_BITSWAP,
+  FOUR_SCAN_16PX_HIGH [[deprecated("Use SCAN_1_4_16PX_FULL")]] = SCAN_1_4_16PX_FULL,
+  FOUR_SCAN_32PX_HIGH [[deprecated("Use SCAN_1_8_32PX_INTERLEAVED")]] = SCAN_1_8_32PX_INTERLEAVED,
+  FOUR_SCAN_64PX_HIGH [[deprecated("Use SCAN_1_16_64PX_BITSWAP")]] = SCAN_1_16_64PX_BITSWAP,
 };
 
 /**
